@@ -10,6 +10,7 @@ import SwiftData
 
 @Model
 class MxItems3 {
+		var inactive: Bool = false
 		var createdAt: Date = Date()
 		var updatedAt: Date = Date()
 		var vehicleId: String = ""
@@ -36,17 +37,17 @@ class MxItems3 {
 		var part3Id: String = ""
 		var part3Qty: Float = 0
 		var part3cost: Float = 0
-	var part3Unit: String = ""
+		var part3Unit: String = ""
 		var part4: String = ""
 		var part4Id: String = ""
 		var part4Qty: Float = 0
 		var part4cost: Float = 0
-	var part4Unit: String = ""
+		var part4Unit: String = ""
 		var part5: String = ""
 		var part5Id: String = ""
 		var part5Qty: Float = 0
 		var part5cost: Float = 0
-	var part5Unit: String = ""
+		var part5Unit: String = ""
 	@Attribute(.externalStorage)
 	var image1: Data?
 	var image1Description: String = ""
@@ -59,6 +60,7 @@ class MxItems3 {
 
 
 	init(
+		inactive: Bool = false,
 		createdAt: Date,
 		updatedAt: Date,
 		vehicleId: String,
@@ -105,6 +107,7 @@ class MxItems3 {
 
 	)
 	{
+		self.inactive = inactive
 		self.createdAt = createdAt
 		self.updatedAt = updatedAt
 		self.vehicleId = vehicleId

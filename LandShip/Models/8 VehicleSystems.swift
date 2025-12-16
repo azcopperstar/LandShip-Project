@@ -11,6 +11,7 @@ import SwiftData
 @Model
 class VehicleSystems1 {
 	
+		var inactive: Bool = false
 		var createdAt: Date = Date()
 		var updatedAt: Date = Date()
 		var vehicleId: String = ""
@@ -37,6 +38,7 @@ class VehicleSystems1 {
 
 
 	init (
+		inactive: Bool = false,
 		createdAt: Date = Date(),
 		updatedAt: Date = Date(),
 		vehicleId: String,
@@ -60,6 +62,7 @@ class VehicleSystems1 {
 
 	)
 	{
+		self.inactive = inactive
 		self.createdAt = createdAt
 		self.updatedAt = updatedAt
 		self.vehicleId = vehicleId

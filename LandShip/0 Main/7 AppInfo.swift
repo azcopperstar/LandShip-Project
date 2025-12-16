@@ -32,9 +32,13 @@ struct AppTitleView: View {
 		VStack(spacing: 0) {
 			Text(" \(AppInfo.displayName)")
 				.font(.headline)
-			Text("v\(AppInfo.version) ")
+			Text("\(VersionStrings.fullVersionStringWithAppName)")
 				.font(.caption2)
 				.foregroundStyle(.secondary)
+				.baselineOffset(6)
+//			Text("v\(AppInfo.version) ")
+//				.font(.caption2)
+//				.foregroundStyle(.secondary)
 		}
 	}
 }

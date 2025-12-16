@@ -73,6 +73,25 @@
    </AnalyzeAction>
    <ArchiveAction
       buildConfiguration = "Release"
+      customArchiveName = "LandShip"
       revealArchiveInOrganizer = "YES">
+      <PreActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Run Script"
+               scriptText = "set -euo pipefail&#10;&#10;echo &quot;==============================&quot;&#10;echo &quot;[ChangelogGen] Pre-Archive Start&quot;&#10;echo &quot;Timestamp: $(date)&quot;&#10;echo &quot;Scheme: ${SCHEME_NAME:-unknown}&quot;&#10;echo &quot;Configuration: ${CONFIGURATION:-unknown}&quot;&#10;echo &quot;Project: ${PROJECT_NAME:-unknown}&quot;&#10;echo &quot;==============================&quot;&#10;&#10;ROOT=&quot;${PROJECT_DIR:-$SRCROOT}&quot;&#10;SCRIPT=&quot;${ROOT}/run-changelog-gen.sh&quot;&#10;&#10;if [[ -f &quot;${SCRIPT}&quot; ]]; then&#10;  echo &quot;[ChangelogGen] Running via /bin/sh: ${SCRIPT}&quot;&#10;  # You can add --dry-run for testing visibility:&#10;  # /bin/sh &quot;${SCRIPT}&quot; --root &quot;${ROOT}&quot; --changelog &quot;${ROOT}/CHANGELOG.md&quot; --dry-run&#10;  /bin/sh &quot;${SCRIPT}&quot; --root &quot;${ROOT}&quot; --changelog &quot;${ROOT}/CHANGELOG.md&quot;&#10;  STATUS=$?&#10;  if [[ $STATUS -eq 0 ]]; then&#10;    echo &quot;------------------------------&quot;&#10;    echo &quot;[ChangelogGen] Completed successfully&quot;&#10;    echo &quot;Changelog path: ${ROOT}/CHANGELOG.md&quot;&#10;    echo &quot;------------------------------&quot;&#10;  else&#10;    echo &quot;------------------------------&quot;&#10;    echo &quot;[ChangelogGen] Failed with status ${STATUS}&quot;&#10;    echo &quot;------------------------------&quot;&#10;    exit $STATUS&#10;  fi&#10;else&#10;  echo &quot;------------------------------&quot;&#10;  echo &quot;[ChangelogGen] Script not found at: ${SCRIPT}&quot;&#10;  echo &quot;------------------------------&quot;&#10;  exit 1&#10;fi&#10;&#10;echo &quot;==============================&quot;&#10;echo &quot;[ChangelogGen] Pre-Archive End&quot;&#10;echo &quot;==============================&quot;&#10;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "E89F2A482E2BF9C800EE079C"
+                     BuildableName = "LandShip.app"
+                     BlueprintName = "LandShip"
+                     ReferencedContainer = "container:LandShip.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PreActions>
    </ArchiveAction>
 </Scheme>

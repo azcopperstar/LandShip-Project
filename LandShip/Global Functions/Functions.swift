@@ -10,6 +10,113 @@ import SwiftData
 import SwiftUI
 
 
+// MARK: - Unit Localization Helpers
+private enum UnitMapping {
+    static func unit(for abbreviation: String) -> Dimension? {
+        switch abbreviation.lowercased() {
+        // Length
+        case "ft": return UnitLength.feet
+        case "in": return UnitLength.inches
+        case "mm": return UnitLength.millimeters
+        case "cm": return UnitLength.centimeters
+        case "m":  return UnitLength.meters
+        case "km": return UnitLength.kilometers
+        case "mi": return UnitLength.miles
+
+        // Area
+        case "ft²", "ft^2": return UnitArea.squareFeet
+        case "in²", "in^2": return UnitArea.squareInches
+        case "cm²", "cm^2": return UnitArea.squareCentimeters
+        case "m²",  "m^2":  return UnitArea.squareMeters
+
+        // Mass
+        case "lb": return UnitMass.pounds
+        case "oz": return UnitMass.ounces
+        case "mg": return UnitMass.milligrams
+        case "g":  return UnitMass.grams
+        case "kg": return UnitMass.kilograms
+        case "t":  return UnitMass.metricTons
+        case "st": return UnitMass.stones
+
+        // Pressure
+        case "psi": return UnitPressure.poundsForcePerSquareInch
+        case "pa":  return UnitPressure.newtonsPerMetersSquared
+
+        // Speed
+        case "mph": return UnitSpeed.milesPerHour
+        case "kph": return UnitSpeed.kilometersPerHour
+        case "kt":  return UnitSpeed.knots
+
+        // Volume
+        case "gal":   return UnitVolume.gallons
+        case "qt":    return UnitVolume.quarts
+        case "pt":    return UnitVolume.pints
+        case "c":     return UnitVolume.cups
+        case "fl oz": return UnitVolume.fluidOunces
+        case "ml":    return UnitVolume.milliliters
+        case "l":     return UnitVolume.liters
+
+        default:
+            return nil
+        }
+    }
+}
+
+// MARK: - Cached Formatters
+private enum Formatters {
+    // Number formatters
+    static let currencyUS: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.locale = Locale(identifier: "en_US")
+        return f
+    }()
+
+    static let plainYear: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .none
+        return f
+    }()
+
+    // Date formatters
+    static let HHmm_ddMMMyyyy: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm\nddMMMyyyy"
+        return f
+    }()
+
+    static let ddMMM_yyyy_HHmm: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "ddMMM\nyyyy\nHH:mm"
+        return f
+    }()
+
+    static let ddMMM_yyyy: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "ddMMM\nyyyy"
+        return f
+    }()
+
+    static let ddMMMyyyy: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "ddMMMyyyy"
+        return f
+    }()
+
+    static let ddMMMyyyy_HHmm: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "ddMMMyyyy HH:mm"
+        return f
+    }()
+
+    static let ddMMMyyyy_HHmmss: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "ddMMMyyyyHHmmss"
+        return f
+    }()
+}
+
+
 struct RecordID: Codable, Hashable {
 	var id = UUID()
 	let recordID: String
@@ -23,6 +130,8 @@ struct VehicleDetails: Codable, Hashable {
 	let fuelCapacity: Int
 	let fuelType: String
 }
+
+
 
 struct CheckboxToggleStyle: ToggleStyle {
 	func makeBody(configuration: Configuration) -> some View {
@@ -62,7 +171,23 @@ struct QueryView<Model: PersistentModel, Content: View>: View {
 	}
 }
 
+// Provide a local shim for Functions.cleanOptional so this view compiles even if
+// the global Functions type doesn't define it. Returns a trimmed string or "—"
+// when the input is nil or empty.
+private extension Functions {
+	func cleanOptional(inputString: String?) -> String {
+		let trimmed = (inputString ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+		return trimmed.isEmpty ? "—" : trimmed
+	}
+	
+	func cleanOptional(inputString: String) -> String {
+		let trimmed = inputString.trimmingCharacters(in: .whitespacesAndNewlines)
+		return trimmed.isEmpty ? "—" : trimmed
+	}
+}
+
 class Functions {
+	
 	
 	func getFuelLevel(unit: Float) -> String {
 		switch unit {
@@ -100,14 +225,14 @@ class Functions {
 			case "km": return "Kilometers"
 				// mass
 			case "lb": return "Pounds"
-			case "oz": return "Onces"
+			case "oz": return "Ounces"
 			case "mg": return "Milligrams"
 			case "g": return "Grams"
 			case "kg": return "Kilograms"
 			case "T": return "Tons"
 			case "st": return "Stones"
 				// pressure
-			case "PSI": return "Pound Square Inch"
+			case "PSI": return "Pounds per Square Inch"
 			case "Pa": return "Pascals"
 				// speed
 			case "mph": return "Miles per Hour"
@@ -118,8 +243,8 @@ class Functions {
 			case "qt": return "Quarts"
 			case "pt": return "Pints"
 			case "c": return "Cups"
-			case "fl oz": return "Fluid Onces"
-			case "ml": return "Millileters"
+			case "fl oz": return "Fluid Ounces"
+			case "ml": return "Milliliters"
 			case "l": return "Liters"
 				
 			default: return ""
@@ -127,54 +252,68 @@ class Functions {
 	}
 	
 	func formatYear(year: Int) -> String {
-		//		let yearFormatted = year.formatted(.year.grouping(.never))
-		let formatter = NumberFormatter()
-		formatter.numberStyle = .none
-		return formatter.string(from: NSNumber(value: year)) ?? "0000"
+		return Formatters.plainYear.string(from: NSNumber(value: year)) ?? "0000"
 	}
 	
 	func formatCurrency(dollars: Float) -> String {
-		let formatter = NumberFormatter()
-		formatter.numberStyle = .currency
-		formatter.locale = Locale(identifier: "en_US") // USD
-		return formatter.string(from: NSNumber(value: dollars)) ?? "$0.00"
+		return Formatters.currencyUS.string(from: NSNumber(value: dollars)) ?? "$0.00"
 	}
 	
 	func formatDate_HHmm_DDMMMyyyy(date: Date) -> String {
-		let formatter = DateFormatter()
-		formatter.dateFormat = "HH:mm\nddMMMyyyy"
-		return formatter.string(from: date).uppercased()
+		return Formatters.HHmm_ddMMMyyyy.string(from: date).uppercased()
 	}
 	
 	func formatDate_DDMMM_yyyy_HHmm(date: Date) -> String {
-		let formatter = DateFormatter()
-		formatter.dateFormat = "ddMMM\nyyyy\nHH:mm"
-		return formatter.string(from: date).uppercased()
+		return Formatters.ddMMM_yyyy_HHmm.string(from: date).uppercased()
 	}
 	func formatDate_DDMMM_yyyy(date: Date) -> String {
-		let formatter = DateFormatter()
-		formatter.dateFormat = "ddMMM\nyyyy"
-		return formatter.string(from: date).uppercased()
+		return Formatters.ddMMM_yyyy.string(from: date).uppercased()
 	}
 	func formatDate_DDMMMyy(date: Date) -> String {
-		let formatter = DateFormatter()
-		formatter.dateFormat = "ddMMMyyyy"
-		return formatter.string(from: date).uppercased()
+		return Formatters.ddMMMyyyy.string(from: date).uppercased()
 	}
 	func formatDate_DDMMMyy_HHmm(date: Date) -> String {
-		let formatter = DateFormatter()
-		formatter.dateFormat = "ddMMMyyyy HH:mm"
-		return formatter.string(from: date).uppercased()
+		return Formatters.ddMMMyyyy_HHmm.string(from: date).uppercased()
 	}
 	func formatDate_DDMMMyy_HHmmss(date: Date) -> String {
-		let formatter = DateFormatter()
-		formatter.dateFormat = "ddMMMyyyyHHmmss"
-		return formatter.string(from: date).uppercased()
+		return Formatters.ddMMMyyyy_HHmmss.string(from: date).uppercased()
 	}
+
+    /// Localized date-time formatting using a template, respecting the provided locale.
+    /// - Parameters:
+    ///   - date: The date to format.
+    ///   - locale: The desired locale. Defaults to `.current`.
+    ///   - template: A Unicode date format template (e.g., "ddMMMyyyy HHmm").
+    /// - Returns: A localized string derived from the template, or a reasonable fallback.
+    func localizedDateTimeString(date: Date, locale: Locale = .current, template: String = "ddMMMyyyy HHmm") -> String {
+        let format = DateFormatter.dateFormat(fromTemplate: template, options: 0, locale: locale) ?? "ddMMMyyyy HH:mm"
+        let df = DateFormatter()
+        df.locale = locale
+        df.dateFormat = format
+        return df.string(from: date)
+    }
 	
-	func cleanOptional(inputString: String) -> String {
-		// remove the 'Optional("xxxx")' from strings
-		return inputString.replacingOccurrences(of: "Optional(\"", with: "").replacingOccurrences(of: "\")", with: "")
+	/// Returns a localized display name for a unit abbreviation, if supported by Foundation units.
+	/// - Parameters:
+	///   - abbreviation: A unit abbreviation such as "ft", "cm", "PSI", "mph".
+	///   - locale: The desired locale. Defaults to `.current`.
+	/// - Returns: Localized unit display name (e.g., "Feet") or `nil` if unsupported.
+	func localizedUnitName(for abbreviation: String, locale: Locale = .current) -> String? {
+		guard let dim = UnitMapping.unit(for: abbreviation) else { return nil }
+		let formatter = MeasurementFormatter()
+		formatter.unitOptions = .providedUnit
+		formatter.unitStyle = .long
+		formatter.locale = locale
+		return formatter.string(from: dim)
+	}
+	/// Returns a user-facing unit name, preferring localization and falling back to the legacy mapping.
+	/// - Parameters:
+	///   - unit: A unit abbreviation such as "ft", "cm", "PSI", "mph".
+	///   - locale: The desired locale. Defaults to `.current`.
+	/// - Returns: A localized display name if available; otherwise the legacy English mapping.
+	func getUnitsDisplayName(unit: String, locale: Locale = .current) -> String {
+		if let localized = localizedUnitName(for: unit, locale: locale) { return localized }
+		return getUnits(unit: unit)
 	}
 	
 	//	func FormatCurrency(number: Double) -> String {
@@ -235,5 +374,74 @@ extension Functions {
 		}
 		return []
 	}
+}
+
+// MARK: - App Version utilities
+/// Provides app name, version, build, and a full version string that conditionally appends a "beta" suffix.
+///
+/// Usage:
+///   let version = AppVersion.current
+///   version.fullVersionString          // "v1.2.3 (45) beta"
+///   version.displayStringWithAppName   // "MyApp v1.2.3 (45) beta"
+struct AppVersion: Hashable {
+    let appName: String
+    let version: String
+    let build: String
+    let isBeta: Bool
+
+    /// Returns: "v<version> (<build>)" + optional " beta"
+    var fullVersionString: String {
+        "v\(version) (\(build))\(isBeta ? " beta" : "")"
+    }
+
+    /// Returns: "<appName> v<version> (<build>)" + optional " beta"
+    var displayStringWithAppName: String {
+        "\(appName) \(fullVersionString)"
+    }
+
+    /// Convenience to access the current app bundle's version info.
+    static var current: AppVersion { AppVersion() }
+
+    /// Initializes from a bundle. Optionally allow forcing beta via compile-time flag.
+    init(bundle: Bundle = .main) {
+        let name = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+            ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
+            ?? "App"
+        let ver = (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? ""
+        let bld = (bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? ""
+
+        // TestFlight detection
+        // iOS 18+: Avoid deprecated receipt URL API. Consider adopting StoreKit's AppTransaction/Transaction APIs asynchronously if needed.
+        var isTestFlight: Bool
+//        if #available(iOS 18.0, *) {
+            // TODO: Adopt StoreKit's AppTransaction.shared / Transaction.all to detect TestFlight if needed.
+//            isTestFlight = false
+//        } else {
+            // Pre–iOS 18: sandbox receipt indicates TestFlight install
+            isTestFlight = bundle.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+//        }
+
+        // Allow build-time override using a custom Swift flag (e.g., -D BETA)
+        #if BETA
+        let forcedBeta = true
+        #else
+        let forcedBeta = false
+        #endif
+
+        self.appName = name
+        self.version = ver
+        self.build = bld
+        self.isBeta = isTestFlight || forcedBeta
+    }
+}
+
+/// Convenience string accessors built on top of AppVersion
+struct VersionStrings {
+    /// The resolved application name (Display Name -> Name -> "App")
+    static var appName: String { AppVersion.current.appName }
+    /// e.g., "v1.2.3 (45) beta"
+    static var fullVersionString: String { AppVersion.current.fullVersionString }
+    /// e.g., "MyApp v1.2.3 (45) beta"
+    static var fullVersionStringWithAppName: String { AppVersion.current.displayStringWithAppName }
 }
 

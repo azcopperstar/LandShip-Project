@@ -3,7 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Approve use of camera in LandShip</string>
+	<string>Approve use of camera in VehicleTrax for images in forms...</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Approve use of location services in VehicleTrax to auto-fill location fields in forms...</string>
 	<key>CFBundleGetInfoString</key>
 	<string></string>
 	<key>NSServices</key>

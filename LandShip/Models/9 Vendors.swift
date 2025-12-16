@@ -11,6 +11,7 @@ import SwiftData
 @Model
 class Vendors1 {
 
+		var inactive: Bool = false
 		var createdAt: Date = Date()
 		var updatedAt: Date = Date()
 		var vendorName: String = ""
@@ -38,6 +39,7 @@ class Vendors1 {
 
 	
 	init (
+		inactive: Bool = false,
 		createdAt: Date,
 		updatedAt: Date,
 		vendorName: String,
@@ -62,6 +64,7 @@ class Vendors1 {
 
 	)
 	{
+		self.inactive = inactive
 		self.createdAt = createdAt
 		self.updatedAt = updatedAt
 		self.vendorName = vendorName

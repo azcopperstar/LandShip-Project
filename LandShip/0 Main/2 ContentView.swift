@@ -52,6 +52,7 @@ struct ContentView: View {
 	@State private var showingPreferences = false // Reserved for future use if needed
 	@State private var showingSettingsSheet = false
 	@State private var showingHelpSheet = false
+	// Removed showingUpgrades property as per instructions
 	
 	// Hidden Debug Tools sheet (appears on long-press of title)
 	@State private var showingDebugTools = false
@@ -76,12 +77,16 @@ struct ContentView: View {
 		return .vehicles
 #endif
 	}()
+    @State private var detailPath = NavigationPath()
+    @State private var splitResetID = UUID()
 	
 	// MARK: - Backup / Restore state
 	
 	@State private var isExportingBackup: Bool = false
 	@State private var backupDocument: BackupDocument = .empty
 	@State private var backupErrorMessage: String?
+    @State private var backupSuccessMessage: String?
+    @State private var isBackupSuccessPresented: Bool = false
 	
 	@State private var isImportingRestore: Bool = false
 	@State private var pendingRestoreURL: URL?
@@ -103,74 +108,58 @@ struct ContentView: View {
 	private static var didLogLaunch = false
 	
 	// MARK: - Body
-	
-	var body: some View {
-		NavigationSplitView(
-			columnVisibility: $splitVisibility,
-			preferredCompactColumn: $preferredCompactColumn
-		) {
-			let sidebarList = SidebarView(
-				sidebarSelection: $sidebarSelection,
-				showingSettingsSheet: $showingSettingsSheet,
-				showingHelpSheet: $showingHelpSheet,
-				onBackupTapped: handleBackupTapped,
-				onRestoreTapped: { isImportingRestore = true }
-			)
-				.listStyle(.sidebar)
-				.navigationSplitViewColumnWidth(min: 180, ideal: 200)
-				.toolbar {
-					ToolbarItem(placement: .principal) {
-						// Hidden long-press to open Debug Tools (available in all builds)
-						AppTitleView()
-							.simultaneousGesture(
-								LongPressGesture(minimumDuration: 2.0)
-									.onEnded { _ in
-										showingDebugTools = true
-										InAppLogger.shared.log("DebugTools opened via long-press")
-									}
-							)
-							.accessibilityHint("Long-press for debug tools")
-					}
-				}
-			sidebarList
-			
-		} content: {
-			Group {
-				switch sidebarSelection {
-					case .vehicles:
-						ChooseVehicle(trackVehicleSelected: $trackVehicleSelected)
-					case .parts:
-						DisplayParts(trackVehicleSelected: $trackVehicleSelected)
-					case .fuelLog:
-						DisplayFuelLog(trackVehicleSelected: $trackVehicleSelected)
-					case .tripLog:
-						DisplayTripLog(trackVehicleSelected: $trackVehicleSelected)
-					case .records:
-						DisplayRecords(trackVehicleSelected: $trackVehicleSelected)
-					case .items:
-						DisplayItems(trackVehicleSelected: $trackVehicleSelected)
-					case .systems:
-						DisplaySystems(trackVehicleSelected: $trackVehicleSelected)
-					case .vendors:
-						DisplayVendors()
-					case .settings:
-						ContentUnavailableView("Settings opens in a sheet", systemImage: "gearshape")
-					case .backup:
-						ContentUnavailableView("Use Backup in Data Management", systemImage: "square.and.arrow.up")
-					case .restore:
-						ContentUnavailableView("Use Restore in Data Management", systemImage: "square.and.arrow.down")
-					case .none:
-						ContentPlaceholderView()
-				}
-			}
-			.navigationSplitViewColumnWidth(min: 160, ideal: 300)
-		} detail: {
-			DetailPlaceholderView()
-		}
-#if os(macOS)
-		.splitViewAutosave("MainSplit")
+
+    // Extracted root NavigationSplitView to reduce type-checking complexity
+    private var splitRoot: some View {
+        NavigationSplitView(
+            columnVisibility: $splitVisibility,
+            preferredCompactColumn: $preferredCompactColumn
+        ) {
+            SidebarView(
+                sidebarSelection: $sidebarSelection,
+                showingSettingsSheet: $showingSettingsSheet,
+                showingHelpSheet: $showingHelpSheet,
+                onBackupTapped: handleBackupTapped,
+                onRestoreTapped: { isImportingRestore = true }
+            )
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    // Hidden long-press to open Debug Tools (available in all builds)
+                    AppTitleView()
+                        .simultaneousGesture(
+                            LongPressGesture(minimumDuration: 2.0)
+                                .onEnded { _ in
+                                    showingDebugTools = true
+                                    InAppLogger.shared.log("DebugTools opened via long-press")
+                                }
+                        )
+                        .accessibilityHint("Long-press for debug tools")
+                }
+            }
+#if !os(macOS)
+            // Removed the toolbar block containing the Upgrades button as per instructions
 #endif
-		
+        } content: {
+            MiddleColumnView(
+                sidebarSelection: $sidebarSelection,
+                trackVehicleSelected: $trackVehicleSelected
+            )
+        } detail: {
+            DetailColumnView(
+                detailPath: $detailPath,
+                selectionID: sidebarSelection
+            )
+        }
+#if os(macOS)
+        .splitViewAutosave("MainSplit")
+#endif
+        .id(splitResetID)
+    }
+
+	var body: some View {
+        splitRoot
 		.sheet(isPresented: $showingSettingsSheet) {
 			SettingsEditorView()
 		}
@@ -189,6 +178,8 @@ struct ContentView: View {
 		}
 #endif
 		
+		// Removed the purchases sheet block as per instructions
+		
 		// Backup export
 		.fileExporter(
 			isPresented: $isExportingBackup,
@@ -196,15 +187,18 @@ struct ContentView: View {
 			contentType: .folder,
 			defaultFilename: BackupService.defaultBackupFilename()
 		) { result in
-			switch result {
-				case .success:
-					break
-				case .failure(let error):
-					backupErrorMessage = error.localizedDescription
-					isBackupErrorPresented = true
-					InAppLogger.shared.log("Backup export failed: \(error.localizedDescription)")
-			}
-		}
+            switch result {
+                case .success(let url):
+                    let summary = BackupService.summarizeBackupFolder(at: url)
+                    backupSuccessMessage = summary
+                    isBackupSuccessPresented = true
+                    InAppLogger.shared.log("Backup export succeeded: \(url.lastPathComponent)")
+                case .failure(let error):
+                    backupErrorMessage = error.localizedDescription
+                    isBackupErrorPresented = true
+                    InAppLogger.shared.log("Backup export failed: \(error.localizedDescription)")
+            }
+        }
 		
 		// Restore import
 		.fileImporter(
@@ -256,6 +250,11 @@ struct ContentView: View {
 		} message: {
 			Text(backupErrorMessage ?? "")
 		}
+        .alert("Backup Complete", isPresented: $isBackupSuccessPresented) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(backupSuccessMessage ?? "")
+        }
 		.alert("Restore Failed", isPresented: $isRestoreErrorPresented) {
 			Button("OK", role: .cancel) { }
 		} message: {
@@ -324,7 +323,11 @@ struct ContentView: View {
 		.onChangeCompat(of: splitVisibility) { _, newValue in
 			columnVisibilityRawValue = raw(from: newValue)
 		}
-		
+        .onChangeCompat(of: sidebarSelection) { _, _ in
+            // Clear the detail navigation when switching sections to avoid stale detail views
+            detailPath = NavigationPath()
+            splitResetID = UUID()
+        }
 #if !os(macOS)
 		.navigationBarTitleDisplayMode(.inline)
 #endif
@@ -387,6 +390,19 @@ private extension View {
 	}
 }
 
+private extension View {
+    /// Convenience to apply the recommended list row adjustments for card-styled rows.
+    /// Use on the same view you call `.cardStyle(...)` within a List row.
+    func cardListRowDefaults() -> some View {
+        self
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+    }
+}
+
 // MARK: - Extracted subviews
 
 private struct SidebarView: View {
@@ -398,6 +414,12 @@ private struct SidebarView: View {
 	
 	var body: some View {
 		List(selection: $sidebarSelection) {
+			Section(header: CenteredSectionHeader(title: "")) {
+				Label("Dashboard", systemImage: "rectangle.grid.2x2")
+					.sidebarRowStyle(selected: sidebarSelection == .dashboard)
+					.tag(SidebarItem.dashboard)
+			}
+
 			Section(header: CenteredSectionHeader(title: "Garage")) {
 				Label("Vehicles", systemImage: "truck.pickup.side.front.open")
 					.sidebarRowStyle(selected: sidebarSelection == .vehicles)
@@ -406,7 +428,7 @@ private struct SidebarView: View {
 					.sidebarRowStyle(selected: sidebarSelection == .parts)
 					.tag(SidebarItem.parts)
 			}
-			
+
 			Section(header: CenteredSectionHeader(title: "Data Tracking")) {
 				Label("Fuel Log", systemImage: "fuelpump.arrowtriangle.left")
 					.sidebarRowStyle(selected: sidebarSelection == .fuelLog)
@@ -477,11 +499,64 @@ private struct SidebarView: View {
 	}
 }
 
-/// Placeholder for the middle column when no section is selected (primarily iPhone on first launch).
+/// Extracted middle column content to reduce type-checking complexity
+private struct MiddleColumnView: View {
+    @Binding var sidebarSelection: SidebarItem?
+    @Binding var trackVehicleSelected: String
+
+    var body: some View {
+        Group {
+            switch sidebarSelection {
+                case .dashboard:
+                    DashboardView()
+                case .vehicles:
+                    ChooseVehicle(trackVehicleSelected: $trackVehicleSelected)
+                case .parts:
+                    DisplayParts(trackVehicleSelected: $trackVehicleSelected)
+                case .fuelLog:
+                    DisplayFuelLog(trackVehicleSelected: $trackVehicleSelected)
+                case .tripLog:
+                    DisplayTripLog(trackVehicleSelected: $trackVehicleSelected)
+                case .records:
+                    DisplayRecords(trackVehicleSelected: $trackVehicleSelected)
+                case .items:
+                    DisplayItems(trackVehicleSelected: $trackVehicleSelected)
+                case .systems:
+                    DisplaySystems(trackVehicleSelected: $trackVehicleSelected)
+                case .vendors:
+                    DisplayVendors()
+                case .settings:
+                    ContentUnavailableView("Settings opens in a sheet", systemImage: "gearshape")
+                case .backup:
+                    ContentUnavailableView("Use Backup in Data Management", systemImage: "square.and.arrow.up")
+                case .restore:
+                    ContentUnavailableView("Use Restore in Data Management", systemImage: "square.and.arrow.down")
+                case .none:
+                    ContentPlaceholderView()
+            }
+        }
+        .navigationSplitViewColumnWidth(min: 160, ideal: 300)
+    }
+}
+
+/// Placeholder for the middle column when no section is selected.
 private struct ContentPlaceholderView: View {
-	var body: some View {
-		ContentUnavailableView("Category", systemImage: "sidebar.left")
-	}
+    var body: some View {
+        ContentUnavailableView("Select a section", systemImage: "sidebar.leading")
+    }
+}
+
+/// Extracted detail column container to reduce type-checking complexity
+private struct DetailColumnView: View {
+    @Binding var detailPath: NavigationPath
+    var selectionID: SidebarItem?
+
+    var body: some View {
+        NavigationStack(path: $detailPath) {
+            DetailPlaceholderView()
+        }
+        .id(selectionID)
+    }
 }
 
 /// Placeholder for the trailing detail column when nothing is selected.
@@ -773,4 +848,14 @@ private struct ActivityView: UIViewControllerRepresentable {
 	func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 #endif
+
+
+
+
+
+
+
+
+
+
 

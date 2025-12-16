@@ -11,6 +11,7 @@ import SwiftData
 @Model
 class TripLog2	{
 	
+	var inactive: Bool = false
 	var vehicleId: String = ""
 	var logName: String = ""
 	var tripNotes: String = ""
@@ -57,6 +58,7 @@ class TripLog2	{
 
 
 	init(
+		inactive: Bool = false,
 		vehicleId: String = "",
 		logName: String = "",
 		tripNotes: String = "",
@@ -99,6 +101,7 @@ class TripLog2	{
 		image3Description: String = ""
 
 	){
+		self.inactive = inactive
 		self.vehicleId = vehicleId
 		self.logName = logName
 		self.tripNotes = tripNotes

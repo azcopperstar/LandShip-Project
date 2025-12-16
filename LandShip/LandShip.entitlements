@@ -14,5 +14,13 @@
 	<array>
 		<string>CloudKit</string>
 	</array>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.aeronauticaltrax.LandShip</string>
+	</array>
 </dict>
 </plist>

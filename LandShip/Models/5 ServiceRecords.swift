@@ -13,6 +13,7 @@ extension ServiceRecords1: Identifiable {}
 @Model
 class ServiceRecords1 {
 
+		var inactive: Bool = false
 		var createdAt: Date = Date()
 		var updatedAt: Date = Date()
 		var mxDate: Date = Date()
@@ -55,8 +56,15 @@ class ServiceRecords1 {
 	@Attribute(.externalStorage)
 	var image3: Data?
 	var image3Description: String = ""
+	@Attribute(.externalStorage)
+	var image4: Data?
+	var image4Description: String = ""
+	@Attribute(.externalStorage)
+	var image5: Data?
+	var image5Description: String = ""
 
 	init(
+		inactive: Bool = false,
 		createdAt: Date = Date(),
 		updatedAt: Date = Date(),
 		mxDate: Date = Date(),
@@ -95,10 +103,15 @@ class ServiceRecords1 {
 		image2: Data? = nil,
 		image2Description: String = "",
 		image3: Data? = nil,
-		image3Description: String = ""
+		image3Description: String = "",
+		image4: Data? = nil,
+		image4Description: String = "",
+		image5: Data? = nil,
+		image5Description: String = ""
 
 	)
 	{
+		self.inactive = inactive
 		self.createdAt = createdAt
 		self.updatedAt = updatedAt
 		self.mxDate = mxDate
@@ -144,6 +157,10 @@ class ServiceRecords1 {
 		self.image2Description = image2Description
 		self.image3 = image3
 		self.image3Description = image3Description
+		self.image4 = image3
+		self.image4Description = image3Description
+		self.image5 = image3
+		self.image5Description = image3Description
 
 	}
 }

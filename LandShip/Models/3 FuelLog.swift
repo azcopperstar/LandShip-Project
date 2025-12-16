@@ -9,7 +9,8 @@ import Foundation
 import SwiftData
 
 @Model
-class FuelLog1	{
+class FuelLog1 {
+	var inactive: Bool = false
 	var logId: String = ""
 	var vehicleId: String = ""
 	var logName: String = ""
@@ -25,6 +26,7 @@ class FuelLog1	{
 	var fuelAdded: Float = 0.0
 	var defAdded: Float = 0.0
 	var oilAdded: Float = 0.0
+	var oilChecked: Bool = false
 	var fuelLevelStart1: Float = 1.0
 	var fuelLevelEnd1: Float = 1.0
 	var fuelLevelStartFraction: String = ""
@@ -43,6 +45,7 @@ class FuelLog1	{
 	var image3Description: String = ""
 
 	init(
+		inactive: Bool = false,
 		logId: String = "",
 		vehicleId: String = "",
 		logName: String = "",
@@ -58,6 +61,7 @@ class FuelLog1	{
 		fuelAdded: Float = 0.0,
 		defAdded: Float = 0.0,
 		oilAdded: Float = 0.0,
+		oilChecked: Bool = false,
 		fuelLevelStart1: Float = 1.0,
 		fuelLevelEnd1: Float = 1.0,
 		fuelLevelStart: String = "",
@@ -71,8 +75,8 @@ class FuelLog1	{
 		image2Description: String = "",
 		image3: Data? = nil,
 		image3Description: String = ""
-
-	){
+	) {
+		self.inactive = inactive
 		self.logId = logId
 		self.vehicleId = vehicleId
 		self.logName = logName
@@ -88,6 +92,7 @@ class FuelLog1	{
 		self.fuelAdded = fuelAdded
 		self.defAdded = defAdded
 		self.oilAdded = oilAdded
+		self.oilChecked = oilChecked
 		self.fuelLevelStart1 = fuelLevelStart1
 		self.fuelLevelEnd1 = fuelLevelEnd1
 		self.fuelLevelStartFraction = fuelLevelStart

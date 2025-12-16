@@ -9,6 +9,7 @@ import Foundation
 
 // Sidebar item identifiers for selection
 enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
+	case dashboard
 	case vehicles
 	case parts
 	case fuelLog

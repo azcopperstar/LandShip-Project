@@ -35,7 +35,7 @@ struct LandShipApp: App {
 #else
 	private let buildConfiguration = "RELEASE"
 #endif
-	
+
 	private static func isTestFlightBuild() -> Bool {
 #if os(iOS)
 		// Heuristic: TestFlight builds usually have a "sandboxReceipt".

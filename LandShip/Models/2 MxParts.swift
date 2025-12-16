@@ -11,6 +11,7 @@ import SwiftData
 @Model
 class MxParts1 {
 	
+		var inactive: Bool = false
 		var createdAt: Date = Date()
 		var updatedAt: Date = Date()
 		var vehicleId: String = ""
@@ -41,6 +42,7 @@ class MxParts1 {
 
 
 	init (
+		inactive: Bool = false,
 		createdAt: Date = Date(),
 		updatedAt: Date = Date(),
 		vehicleId: String,
@@ -64,9 +66,9 @@ class MxParts1 {
 		image2Description: String = "",
 		image3: Data? = nil,
 		image3Description: String = ""
-
 	)
 	{
+		self.inactive = inactive
 		self.createdAt = createdAt
 		self.updatedAt = updatedAt
 		self.vehicleId = vehicleId
@@ -90,6 +92,5 @@ class MxParts1 {
 		self.image2Description = image2Description
 		self.image3 = image3
 		self.image3Description = image3Description
-
 	}
 }
