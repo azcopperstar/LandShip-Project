@@ -17,7 +17,7 @@ struct BackupDocument: FileDocument {
 	static var readableContentTypes: [UTType] { [.folder] }
 	static var writableContentTypes: [UTType] { [.folder] }
 
-	private var rootWrapper: FileWrapper
+	nonisolated(unsafe) private var rootWrapper: FileWrapper
 
 	init(root: FileWrapper) {
 		self.rootWrapper = root
@@ -575,5 +575,41 @@ enum BackupService {
         }
         let formatted = String(format: value < 10 && unitIndex > 0 ? "%.1f" : "%.0f", value)
         return "\(formatted) \(units[unitIndex])"
+    }
+}
+
+// MARK: - BackupSummarySheet (post-export dialog)
+
+/// Scrollable presentation of the backup summary text, so the full file list
+/// remains reachable (and the close button stays accessible) regardless of
+/// how many files were backed up.
+struct BackupSummarySheet: View {
+    var message: String
+    var onDismiss: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                Text(message)
+                    .font(.callout)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+            }
+            .navigationTitle("Backup Complete")
+            .toolbar {
+#if os(macOS)
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { onDismiss() }
+                        .keyboardShortcut("w", modifiers: .command)
+                        .keyboardShortcut(.cancelAction)
+                }
+#else
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Done") { onDismiss() }
+                }
+#endif
+            }
+        }
     }
 }

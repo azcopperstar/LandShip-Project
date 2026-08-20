@@ -12,6 +12,7 @@ import SwiftData
 class Vehicle8	{
 	var inactive: Bool = false
 	var name: String = ""
+	var displayName: String = ""
 	var manufacturer: String = ""
 	var model: String = ""
 	var year: Int = 0
@@ -21,6 +22,8 @@ class Vehicle8	{
 	var engHours: Float = 0.0
 	var transmission: String = ""
 	var engine: String = ""
+	var engineSerialNumber: String = ""
+	var transmissionSerialNumber: String = ""
 	var fuelType: String = ""
 	var doors: Int = 0
 	var seats: Int = 0
@@ -74,8 +77,60 @@ class Vehicle8	{
 	var tirePressureRear: Int = 0
 	var tirePressureTag: Int = 0
 	var tirePressurePusher: Int = 0
+	var wheelStudSize: String = ""
+	var wheelNutSocket: String = ""
+	var wheelNutTorque: String = ""
 	var availablePayload: Int = 0
-	
+	var scaleWeightFrontAxle: Int = 0
+	var scaleWeightRearAxle: Int = 0
+	var scaleWeightPusherAxle: Int = 0
+	var scaleWeightTagAxle: Int = 0
+	var scaleWeightTrailerAxle: Int = 0
+	var sortOrder: Int = 0
+
+	// MARK: - Linked Vehicle Records
+	// Allows multiple Vehicle8 records to represent different aspects of the same physical
+	// vehicle (e.g. chassis, body/house, engine). One record is the "master"; others link to
+	// it via `linkedMasterVehicleId` (matching the master's `name`). A vehicle is considered
+	// the master simply by having other vehicles link to it - no separate flag is stored.
+	var linkedMasterVehicleId: String = ""
+	var vehicleAspect: String = ""
+	// Raw values of the user-selected LinkableVehicleField cases to mirror from the master.
+	var linkedSyncFieldsRaw: [String] = []
+
+	var linkedSyncFields: Set<LinkableVehicleField> {
+		get { Set(linkedSyncFieldsRaw.compactMap(LinkableVehicleField.init(rawValue:))) }
+		set { linkedSyncFieldsRaw = newValue.map(\.rawValue) }
+	}
+
+	/// Copies the values for each selected `linkedSyncFields` case from `master` onto this record.
+	func applyLinkedFields(from master: Vehicle8) {
+		for field in linkedSyncFields {
+			switch field {
+				case .odometer:
+					mileage = master.mileage
+					mileageVirtual = master.mileageVirtual
+				case .engineHours:
+					engHours = master.engHours
+				case .location:
+					locationId = master.locationId
+				case .owner:
+					ownerId = master.ownerId
+				case .insurance:
+					insuranceCompany = master.insuranceCompany
+					insurancePolicyNumber = master.insurancePolicyNumber
+					insurancePolicyHolder = master.insurancePolicyHolder
+					insuranceExpiration = master.insuranceExpiration
+				case .vin:
+					vin = master.vin
+				case .licensePlate:
+					licensePlate = master.licensePlate
+				case .titleNumber:
+					titleNumber = master.titleNumber
+			}
+		}
+	}
+
 	@Attribute(.externalStorage)
 	var image1: Data?
 	var image1Description: String = ""
@@ -88,6 +143,7 @@ class Vehicle8	{
 
 	init(inactive: Bool = false,
 			 name: String = "",
+			 displayName: String = "",
 			 manufacturer: String = "",
 			 model: String = "",
 			 year: Int = 2024,
@@ -97,6 +153,8 @@ class Vehicle8	{
 			 engHours: Float = 0.0,
 			 transmission: String = "",
 			 engine: String = "",
+			 engineSerialNumber: String = "",
+			 transmissionSerialNumber: String = "",
 			 fuelType: String = "",
 			 doors: Int = 0,
 			 seats: Int = 0,
@@ -151,7 +209,20 @@ class Vehicle8	{
 			 tirePressureRear: Int = 0,
 			 tirePressureTag: Int = 0,
 			 tirePressurePusher: Int = 0,
+			 wheelStudSize: String = "",
+			 wheelNutSocket: String = "",
+			 wheelNutTorque: String = "",
 			 availablePayload: Int = 0,
+			 scaleWeightFrontAxle: Int = 0,
+			 scaleWeightRearAxle: Int = 0,
+			 scaleWeightPusherAxle: Int = 0,
+			 scaleWeightTagAxle: Int = 0,
+			 scaleWeightTrailerAxle: Int = 0,
+			 sortOrder: Int = 0,
+
+			 linkedMasterVehicleId: String = "",
+			 vehicleAspect: String = "",
+			 linkedSyncFieldsRaw: [String] = [],
 
 			 image1: Data? = nil,
 			 image1Description: String = "",
@@ -162,6 +233,7 @@ class Vehicle8	{
 	) {
 		self.inactive = inactive
 		self.name = name
+		self.displayName = displayName.isEmpty ? name : displayName
 		self.manufacturer = manufacturer
 		self.model = model
 		self.year = year
@@ -171,6 +243,8 @@ class Vehicle8	{
 		self.engHours = engHours
 		self.transmission = transmission
 		self.engine = engine
+		self.engineSerialNumber = engineSerialNumber
+		self.transmissionSerialNumber = transmissionSerialNumber
 		self.fuelType = fuelType
 		self.doors = doors
 		self.seats = seats
@@ -225,7 +299,20 @@ class Vehicle8	{
 		self.tirePressureRear = tirePressureRear
 		self.tirePressureTag = tirePressureTag
 		self.tirePressurePusher = tirePressurePusher
+		self.wheelStudSize = wheelStudSize
+		self.wheelNutSocket = wheelNutSocket
+		self.wheelNutTorque = wheelNutTorque
 		self.availablePayload = availablePayload
+		self.scaleWeightFrontAxle = scaleWeightFrontAxle
+		self.scaleWeightRearAxle = scaleWeightRearAxle
+		self.scaleWeightPusherAxle = scaleWeightPusherAxle
+		self.scaleWeightTagAxle = scaleWeightTagAxle
+		self.scaleWeightTrailerAxle = scaleWeightTrailerAxle
+		self.sortOrder = sortOrder
+
+		self.linkedMasterVehicleId = linkedMasterVehicleId
+		self.vehicleAspect = vehicleAspect
+		self.linkedSyncFieldsRaw = linkedSyncFieldsRaw
 
 		self.image1 = image1
 		self.image1Description = image1Description

@@ -48,6 +48,10 @@ class MxItems3 {
 		var part5Qty: Float = 0
 		var part5cost: Float = 0
 		var part5Unit: String = ""
+		// User-defined numeric tracking field to complement Miles/engHours (e.g. "Water Gallons" in "gal")
+		var customMeasureLabel: String = ""
+		var customMeasureUnit: String = ""
+		var customMeasureValue: Float = 0
 	@Attribute(.externalStorage)
 	var image1: Data?
 	var image1Description: String = ""
@@ -98,6 +102,9 @@ class MxItems3 {
 		part5Qty: Float,
 		part5cost: Float,
 		part5Unit: String,
+		customMeasureLabel: String = "",
+		customMeasureUnit: String = "",
+		customMeasureValue: Float = 0,
 		image1: Data? = nil,
 		image1Description: String = "",
 		image2: Data? = nil,
@@ -145,6 +152,9 @@ class MxItems3 {
 		self.part5Qty = part5Qty
 		self.part5cost = part5cost
 		self.part5Unit = part1Unit
+		self.customMeasureLabel = customMeasureLabel
+		self.customMeasureUnit = customMeasureUnit
+		self.customMeasureValue = customMeasureValue
 		self.image1 = image1
 		self.image1Description = image1Description
 		self.image2 = image2

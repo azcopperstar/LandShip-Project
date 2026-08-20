@@ -82,6 +82,14 @@ struct EditVehicle: View {
 	}
 	@State private var inactive: Bool = false
 	@State private var name: String = ""
+	/// The vehicle's name as of the last save, used to detect renames and to know which
+	/// old value to search for when updating other records that reference this vehicle by name.
+	@State private var originalName: String = ""
+	@State private var showingRenameChoice: Bool = false
+	/// True until this vehicle's first successful save. Suppresses the rename-warning dialog
+	/// on a brand-new record's initial save, since nothing can yet reference its placeholder name.
+	@State private var isNewUnsavedRecord: Bool = false
+	@State private var nameValidationError: String? = nil
 	@State private var manufacturer: String = ""
 	@State private var model: String = ""
 	@State private var year: Int = 0
@@ -91,6 +99,8 @@ struct EditVehicle: View {
 	@State private var engHours: Float = 0.0
 	@State private var transmission: String = ""
 	@State private var engine: String = ""
+	@State private var engineSerialNumber: String = ""
+	@State private var transmissionSerialNumber: String = ""
 	@State private var fuelType: String = ""
 	@State private var doors: Int = 0
 	@State private var seats: Int = 0
@@ -142,11 +152,34 @@ struct EditVehicle: View {
 	@State private var insurancePolicyHolder: String = ""
 	@State private var insuranceExpiration: Date = Date()
 	
+	@State private var warranties: [VehicleWarranty] = []
+	@State private var warrantyToEdit: VehicleWarranty? = nil
+	@State private var showingAddWarranty: Bool = false
+	@State private var scaleTickets: [VehicleScaleTicket] = []
+	@State private var showingAddScaleTicket: Bool = false
+	@State private var scaleTicketToEdit: VehicleScaleTicket? = nil
+
+	@State private var serialItems: [VehicleSerialItem] = []
+	@State private var showingAddSerialItem: Bool = false
+	@State private var newSerialItemName: String = ""
+	@State private var newSerialItemSerial: String = ""
+	@State private var editingSerialItem: VehicleSerialItem? = nil
+	@State private var editSerialItemName: String = ""
+	@State private var editSerialItemSerial: String = ""
+	
 	@State private var tirePressureFront: Int = 0
 	@State private var tirePressureRear: Int = 0
 	@State private var tirePressureTag: Int = 0
 	@State private var tirePressurePusher: Int = 0
+	@State private var wheelStudSize: String = ""
+	@State private var wheelNutSocket: String = ""
+	@State private var wheelNutTorque: String = ""
 	@State private var availablePayload: Int = 0
+	@State private var scaleWeightFrontAxle: Int = 0
+	@State private var scaleWeightRearAxle: Int = 0
+	@State private var scaleWeightPusherAxle: Int = 0
+	@State private var scaleWeightTagAxle: Int = 0
+	@State private var scaleWeightTrailerAxle: Int = 0
 	
 	@State private var image1: Data?
 	@State private var image2: Data?
@@ -154,6 +187,15 @@ struct EditVehicle: View {
 	@State private var image1Description: String = ""
 	@State private var image2Description: String = ""
 	@State private var image3Description: String = ""
+
+	// MARK: - Linked Vehicle Records
+	@State private var linkedMasterVehicleId: String = ""
+	@State private var vehicleAspect: String = ""
+	@State private var linkedSyncFields: Set<LinkableVehicleField> = []
+	@State private var showingLinkedFieldsPicker: Bool = false
+	@State private var allVehiclesForLinking: [Vehicle8] = []
+	@State private var linkedAspectVehicles: [Vehicle8] = []
+	@State private var masterVehicle: Vehicle8? = nil
 
 	// MARK: - Next Service Due (per this vehicle)
 	struct UpcomingDue: Identifiable {
@@ -171,13 +213,17 @@ struct EditVehicle: View {
 	}
 	@State private var nextTwoDue: [UpcomingDue] = []
 	
-	init(dataSet: Vehicle8, trackVehicleSelected: Binding<String>, startEditing: Bool = false) {
+	init(dataSet: Vehicle8, trackVehicleSelected: Binding<String>, startEditing: Bool = false, isNewRecord: Bool = false) {
 		// Properly initialize @State
 		self._dataSet = State(initialValue: dataSet)
 		self._trackVehicleSelected = trackVehicleSelected
-		
+
 		self._inactive = State.init(initialValue: dataSet.inactive)
-		self._name = State.init(initialValue: dataSet.name)
+		// A brand-new record's `name` is a throwaway UUID (used only as a unique placeholder
+		// key) - show a blank field with a "(New Vehicle)" prompt instead of that UUID.
+		self._name = State.init(initialValue: isNewRecord ? "" : dataSet.name)
+		self._originalName = State.init(initialValue: dataSet.name)
+		self._isNewUnsavedRecord = State.init(initialValue: isNewRecord)
 		self._manufacturer = State.init(initialValue: dataSet.manufacturer)
 		self._model = State.init(initialValue: dataSet.model)
 		self._year = State.init(initialValue: dataSet.year)
@@ -187,6 +233,8 @@ struct EditVehicle: View {
 		self._engHours = State.init(initialValue: Float(dataSet.engHours))
 		self._transmission = State.init(initialValue: dataSet.transmission)
 		self._engine = State.init(initialValue: dataSet.engine)
+		self._engineSerialNumber = State.init(initialValue: dataSet.engineSerialNumber)
+		self._transmissionSerialNumber = State.init(initialValue: dataSet.transmissionSerialNumber)
 		self._fuelType = State.init(initialValue: dataSet.fuelType)
 		self._doors = State.init(initialValue: dataSet.doors)
 		self._seats = State.init(initialValue: dataSet.seats)
@@ -237,7 +285,15 @@ struct EditVehicle: View {
 		self._tirePressureRear = State.init(initialValue: dataSet.tirePressureRear)
 		self._tirePressureTag = State.init(initialValue: dataSet.tirePressureTag)
 		self._tirePressurePusher = State.init(initialValue: dataSet.tirePressurePusher)
+		self._wheelStudSize = State.init(initialValue: dataSet.wheelStudSize)
+		self._wheelNutSocket = State.init(initialValue: dataSet.wheelNutSocket)
+		self._wheelNutTorque = State.init(initialValue: dataSet.wheelNutTorque)
 		self._availablePayload = State.init(initialValue: dataSet.availablePayload)
+		self._scaleWeightFrontAxle = State.init(initialValue: dataSet.scaleWeightFrontAxle)
+		self._scaleWeightRearAxle = State.init(initialValue: dataSet.scaleWeightRearAxle)
+		self._scaleWeightPusherAxle = State.init(initialValue: dataSet.scaleWeightPusherAxle)
+		self._scaleWeightTagAxle = State.init(initialValue: dataSet.scaleWeightTagAxle)
+		self._scaleWeightTrailerAxle = State.init(initialValue: dataSet.scaleWeightTrailerAxle)
 		
 		self._image1 = State.init(initialValue: dataSet.image1)
 		self._image2 = State.init(initialValue: dataSet.image2)
@@ -245,7 +301,11 @@ struct EditVehicle: View {
 		self._image1Description = State.init(initialValue: dataSet.image1Description)
 		self._image2Description = State.init(initialValue: dataSet.image2Description)
 		self._image3Description = State.init(initialValue: dataSet.image3Description)
-		
+
+		self._linkedMasterVehicleId = State.init(initialValue: dataSet.linkedMasterVehicleId)
+		self._vehicleAspect = State.init(initialValue: dataSet.vehicleAspect)
+		self._linkedSyncFields = State.init(initialValue: dataSet.linkedSyncFields)
+
 		// Start in edit mode if requested
 		self._isEditing = State(initialValue: startEditing)
 	}
@@ -256,7 +316,25 @@ struct EditVehicle: View {
 				CardView {
 					VStack {
 						SectionText(label: "GENERAL INFORMATION")
-						HStack{LabelDataTextview(label: "Name", data: $name)}
+						HStack{LabelDataTextview(label: "Name", data: $name, prompt: "(New Vehicle)")}
+							.onChange(of: name) { _, _ in nameValidationError = nil }
+						if let nameValidationError {
+							HStack(alignment: .top, spacing: 6) {
+								Image(systemName: "exclamationmark.triangle.fill")
+									.foregroundStyle(.red)
+								Text(nameValidationError)
+									.font(.caption)
+									.foregroundStyle(.red)
+							}
+						} else if !isNewUnsavedRecord, name != originalName, !originalName.isEmpty {
+							HStack(alignment: .top, spacing: 6) {
+								Image(systemName: "exclamationmark.triangle.fill")
+									.foregroundStyle(.orange)
+								Text("Changing this name will break links to this vehicle's Fuel Log, Trip Log, Service Records, Parts, Maintenance Items, Systems, Additions, Subscriptions, Projects, CheckLists, Warranties, Serial Items, Scale Tickets, and any linked vehicle records — unless you choose to update them when you save.")
+									.font(.caption)
+									.foregroundStyle(.secondary)
+							}
+						}
 						HStack{
 							Text("Model Year:")
 								.textLabelModified()
@@ -278,7 +356,90 @@ struct EditVehicle: View {
 					}
 				}
 			
-				
+				CardView {
+					VStack {
+						SectionText(label: "COMPONENT SERIAL NUMBERS")
+						HStack {
+							Text("Add Component")
+								.textLabelModified()
+							Spacer()
+							Button { showingAddSerialItem.toggle() } label: {
+								Image(systemName: "plus.capsule")
+							}
+						}
+						if showingAddSerialItem {
+							HStack{LabelDataTextview(label: "Component Name", data: $newSerialItemName)}
+							HStack{LabelDataTextview(label: "Serial Number", data: $newSerialItemSerial)}
+							HStack {
+								Spacer()
+								Button("Add Item") {
+									let item = VehicleSerialItem(
+										vehicleId: dataSet.name,
+										itemName: newSerialItemName,
+										serialNumber: newSerialItemSerial
+									)
+									modelContext.insert(item)
+									try? modelContext.save()
+									newSerialItemName = ""
+									newSerialItemSerial = ""
+									showingAddSerialItem = false
+									loadSerialItems()
+								}
+								.buttonStyle(.bordered)
+								.disabled(newSerialItemName.isEmpty)
+							}
+						}
+						ForEach(serialItems) { item in
+							if editingSerialItem === item {
+								HStack{LabelDataTextview(label: "Component Name", data: $editSerialItemName)}
+								HStack{LabelDataTextview(label: "Serial Number", data: $editSerialItemSerial)}
+								HStack {
+									Spacer()
+									Button("Save") {
+										item.itemName = editSerialItemName
+										item.serialNumber = editSerialItemSerial
+										try? modelContext.save()
+										editingSerialItem = nil
+										loadSerialItems()
+									}
+									.buttonStyle(.bordered)
+									.disabled(editSerialItemName.isEmpty)
+									Button("Cancel") { editingSerialItem = nil }
+										.buttonStyle(.bordered)
+								}
+								Divider()
+							} else {
+								HStack {
+									VStack(alignment: .leading, spacing: 2) {
+										Text(item.itemName).font(.subheadline)
+										Text(item.serialNumber).font(.caption).foregroundStyle(.secondary)
+									}
+									Spacer()
+									Button {
+										editSerialItemName = item.itemName
+										editSerialItemSerial = item.serialNumber
+										editingSerialItem = item
+										showingAddSerialItem = false
+									} label: {
+										Image(systemName: "pencil.circle").imageScale(.large)
+									}
+									.buttonStyle(.plain)
+									Button {
+										modelContext.delete(item)
+										try? modelContext.save()
+										loadSerialItems()
+									} label: {
+										Image(systemName: "trash").foregroundStyle(.red)
+									}
+									.buttonStyle(.plain)
+								}
+								.padding(.vertical, 2)
+								Divider()
+							}
+						}
+					}
+				}
+
 				
 				CardView {
 					VStack {
@@ -296,18 +457,89 @@ struct EditVehicle: View {
 							.frame(maxWidth: .infinity, alignment: .trailing)
 						}
 						HStack{LabelDataTextview(label: "Engine", data: $engine)}
+						HStack{LabelDataTextview(label: "Engine Serial #", data: $engineSerialNumber)}
 						HStack{LabelDataTextview(label: "Transmission", data: $transmission)}
+						HStack{LabelDataTextview(label: "Trans. Serial #", data: $transmissionSerialNumber)}
 					}
 				}
 		
 				CardView {
 					VStack {
 						SectionText(label: "VEHICLE DETAILS")
-						HStack{LabelDataTextview_Numberpad_Int(label: "Odometer", data: $mileage)}
-						HStack{LabelDataTextview_Numberpad_Int(label: "Odometer (Virtual)", data: $mileageVirtual)}
-						HStack{LabelDataTextview_Numberpad_Float(label: "Engine Hours", data: $engHours)}
+						if linkedSyncFields.contains(.odometer), let master = masterVehicle {
+							HStack{LabelDataText(label: "Odometer (synced w/ master)", data: "\(master.mileage) \(unit(UnitIndex.distance))")}
+						} else {
+							HStack{LabelDataTextview_Numberpad_Int(label: "Odometer", data: $mileage)}
+							HStack{LabelDataTextview_Numberpad_Int(label: "Odometer (Virtual)", data: $mileageVirtual)}
+						}
+						if linkedSyncFields.contains(.engineHours), let master = masterVehicle {
+							HStack{LabelDataText(label: "Engine Hours (synced w/ master)", data: "\(master.engHours) hrs")}
+						} else {
+							HStack{LabelDataTextview_Numberpad_Float(label: "Engine Hours", data: $engHours)}
+						}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Doors", data: $doors)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Seats", data: $seats)}
+					}
+				}
+
+				// NEW: Linked Vehicle Records (Edit mode)
+				CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						SectionText(label: "LINKED VEHICLE RECORDS")
+						Text("Link separate vehicle records that represent different aspects of the same physical vehicle (e.g. Chassis, Engine, Body/House). One record is the master; linked records can mirror its odometer and engine hours.")
+							.font(.caption)
+							.foregroundStyle(.secondary)
+
+						if !linkedAspectVehicles.isEmpty {
+							Text("This is the master record for:")
+								.font(.subheadline).bold()
+							ForEach(linkedAspectVehicles) { child in
+								HStack {
+									VStack(alignment: .leading, spacing: 2) {
+										Text(child.vehicleAspect.isEmpty ? child.name : child.vehicleAspect)
+											.font(.subheadline)
+										Text(child.name).font(.caption).foregroundStyle(.secondary)
+									}
+									Spacer()
+								}
+								.padding(.vertical, 2)
+								Divider()
+							}
+							Text("A master record cannot also link to another vehicle's master.")
+								.font(.caption)
+								.foregroundStyle(.secondary)
+						} else {
+							HStack{LabelDataTextview(label: "Vehicle Aspect", data: $vehicleAspect)}
+							HStack {
+								Text("Master Vehicle")
+									.textLabelModified()
+								Picker("", selection: $linkedMasterVehicleId) {
+									Text("None (Standalone)").tag("")
+									ForEach(availableMasterCandidates) { v in
+										Text(v.displayName.isEmpty ? v.name : v.displayName).tag(v.name)
+									}
+								}
+								.pickerStyle(.automatic)
+								.frame(maxWidth: .infinity, alignment: .trailing)
+							}
+							if !linkedMasterVehicleId.isEmpty {
+								Button {
+									showingLinkedFieldsPicker = true
+								} label: {
+									HStack {
+										Text("Synced Fields")
+											.textLabelModified()
+										Spacer()
+										Text(linkedSyncFields.isEmpty ? "None Selected" : "\(linkedSyncFields.count) Selected")
+											.foregroundStyle(.secondary)
+										Image(systemName: "chevron.right")
+											.font(.caption)
+											.foregroundStyle(.secondary)
+									}
+								}
+								.buttonStyle(.plain)
+							}
+						}
 					}
 				}
 
@@ -358,6 +590,9 @@ struct EditVehicle: View {
 						HStack{LabelDataTextview_Numberpad_Int(label: "Pressure Rear (\(unit(UnitIndex.pressure)))", data: $tirePressureRear)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Pressure Tag Axle (\(unit(UnitIndex.pressure)))", data: $tirePressureTag)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Pressure Pusher Axle (\(unit(UnitIndex.pressure)))", data: $tirePressurePusher)}
+						HStack{LabelDataTextview(label: "Wheel Stud Size", data: $wheelStudSize)}
+						HStack{LabelDataTextview(label: "Wheel Nut Socket", data: $wheelNutSocket)}
+						HStack{LabelDataTextview(label: "Wheel Nut Torque", data: $wheelNutTorque)}
 					}
 					VStack {
 						SectionText(label: "DIMENSIONS")
@@ -379,6 +614,57 @@ struct EditVehicle: View {
 						HStack{LabelDataTextview_Numberpad_Int(label: "UVW (\(unit(UnitIndex.mass)))", data: $uvw)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "CCC (\(unit(UnitIndex.mass)))", data: $ccc)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Payload (\(unit(UnitIndex.mass)))", data: $availablePayload)}
+						SectionText(label: "SCALE WEIGHT READINGS")
+						HStack{LabelDataTextview_Numberpad_Int(label: "Steer Axle (\(unit(UnitIndex.mass)))", data: $scaleWeightFrontAxle)}
+						HStack{LabelDataTextview_Numberpad_Int(label: "Drive Axle(s) (\(unit(UnitIndex.mass)))", data: $scaleWeightRearAxle)}
+						HStack{LabelDataTextview_Numberpad_Int(label: "Pusher Axle (\(unit(UnitIndex.mass)))", data: $scaleWeightPusherAxle)}
+						HStack{LabelDataTextview_Numberpad_Int(label: "Tag Axle (\(unit(UnitIndex.mass)))", data: $scaleWeightTagAxle)}
+						HStack{LabelDataTextview_Numberpad_Int(label: "Trailer Axle(s) (\(unit(UnitIndex.mass)))", data: $scaleWeightTrailerAxle)}
+						let totalVehicleWt = scaleWeightFrontAxle + scaleWeightRearAxle + scaleWeightPusherAxle + scaleWeightTagAxle
+						let totalRollingWt = totalVehicleWt + scaleWeightTrailerAxle
+						if totalVehicleWt > 0 {
+							HStack{LabelDataText(label: "Total Vehicle Weight", data: "\(totalVehicleWt) \(unit(UnitIndex.mass))")}
+						}
+						if totalRollingWt > 0 {
+							HStack{LabelDataText(label: "Total Rolling Weight", data: "\(totalRollingWt) \(unit(UnitIndex.mass))")}
+						}
+						HStack {
+							SectionText(label: "WEIGHT SCALE TICKETS")
+							Spacer()
+							Button {
+								showingAddScaleTicket = true
+							} label: {
+								Image(systemName: "plus.capsule")
+							}
+						}
+						if scaleTickets.isEmpty {
+							Text("No scale tickets recorded.")
+								.font(.subheadline)
+								.foregroundStyle(.secondary)
+						} else {
+							ForEach(scaleTickets) { ticket in
+								HStack(alignment: .top) {
+									VStack(alignment: .leading, spacing: 2) {
+										Text(functions.formatDate_DDMMMyy(date: ticket.date)).font(.subheadline).bold()
+										if !ticket.location.isEmpty {
+											Text(ticket.location).font(.caption).foregroundStyle(.secondary)
+										}
+										if ticket.grossWeight > 0 {
+											Text("Gross: \(ticket.grossWeight) lbs").font(.caption)
+										}
+									}
+									Spacer()
+									Button {
+										scaleTicketToEdit = ticket
+									} label: {
+										Image(systemName: "pencil.circle").imageScale(.large)
+									}
+									.buttonStyle(.plain)
+								}
+								.padding(.vertical, 4)
+								Divider()
+							}
+						}
 					}
 				}
 
@@ -419,6 +705,59 @@ struct EditVehicle: View {
 				}
 						
 				CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						HStack {
+							SectionText(label: "WARRANTIES")
+							Spacer()
+							Button {
+								showingAddWarranty = true
+							} label: {
+								Image(systemName: "plus.capsule")
+							}
+						}
+						if warranties.isEmpty {
+							Text("No warranties recorded.")
+								.font(.subheadline)
+								.foregroundStyle(.secondary)
+						} else {
+							ForEach(warranties) { w in
+								HStack(alignment: .top) {
+									VStack(alignment: .leading, spacing: 2) {
+										Text(w.warrantyName).font(.subheadline).bold()
+										if !w.warrantyType.isEmpty {
+											Text(w.warrantyType).font(.caption).foregroundStyle(.blue)
+										}
+										if !w.warrantyProvider.isEmpty {
+											Text(w.warrantyProvider).font(.caption).foregroundStyle(.secondary)
+										}
+										if w.warrantyLengthMonths > 0 {
+											Text("\(w.warrantyLengthMonths) months").font(.caption).foregroundStyle(.secondary)
+										}
+										if w.warrantyMileageLimit > 0 {
+											let miRemaining = w.warrantyMileageLimit - mileage
+											Text(miRemaining > 0 ? "\(miRemaining) mi remaining" : "Mileage exceeded")
+												.font(.caption)
+												.foregroundStyle(warrantyMileageColor(remaining: miRemaining))
+										}
+										Text("Exp: \(functions.formatDate_DDMMMyy(date: w.warrantyExpirationDate))")
+											.font(.caption).foregroundStyle(warrantyExpirationColor(date: w.warrantyExpirationDate))
+									}
+									Spacer()
+									Button {
+										warrantyToEdit = w
+									} label: {
+										Image(systemName: "pencil.circle").imageScale(.large)
+									}
+									.buttonStyle(.plain)
+								}
+								.padding(.vertical, 4)
+								Divider()
+							}
+						}
+					}
+				}
+
+				CardView {
 					VStack {
 						SectionText(label: "ONLINE SERVICE (OnStar...)")
 						HStack{LabelDataTextview(label: "Provider", data: $onlineServiceProvider)}
@@ -452,15 +791,38 @@ struct EditVehicle: View {
 							.frame(maxWidth: .infinity, alignment: .leading)
 					}
 				}
-
 			}
 			.onAppear {
+				// Keep the shared "currently viewed vehicle" binding in sync so the title bar
+				// (PageTitle_Col3_Photo) reflects this record instead of whichever vehicle was
+				// selected before - otherwise a newly created vehicle's edit screen would show
+				// the previously selected vehicle's name in the title.
+				trackVehicleSelected = dataSet.name
 				loadUnits()
 				recomputeNextDue()
+				loadWarranties()
+				loadSerialItems()
+				loadScaleTickets()
+				loadLinkedVehicles()
 			}
 			.onChange(of: mileage) { _, _ in recomputeNextDue() }
 			.onChange(of: engHours) { _, _ in recomputeNextDue() }
 			.frame(maxWidth: .infinity, maxHeight: .infinity)
+			.sheet(isPresented: $showingAddWarranty, onDismiss: loadWarranties) {
+				EditWarranty(vehicleId: dataSet.name)
+			}
+			.sheet(item: $warrantyToEdit, onDismiss: loadWarranties) { w in
+				EditWarranty(vehicleId: dataSet.name, warranty: w)
+			}
+			.sheet(isPresented: $showingAddScaleTicket, onDismiss: { loadScaleTickets(); syncWeightsFromModel() }) {
+				EditScaleTicket(vehicleId: dataSet.name)
+			}
+			.sheet(item: $scaleTicketToEdit, onDismiss: { loadScaleTickets(); syncWeightsFromModel() }) { ticket in
+				EditScaleTicket(vehicleId: dataSet.name, ticket: ticket)
+			}
+			.sheet(isPresented: $showingLinkedFieldsPicker) {
+				LinkedFieldsPickerSheet(selection: $linkedSyncFields)
+			}
 
 			// title area
 			.safeAreaInset(edge: .top) {
@@ -477,9 +839,44 @@ struct EditVehicle: View {
 				}
 				ToolbarItem(placement: .automatic) {
 					Button("Save") {
-						isEditing.toggle()
-						updateItem()}
+						let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+						guard !trimmedName.isEmpty else {
+							nameValidationError = "Vehicle name cannot be blank."
+							return
+						}
+						guard !isNameTaken(trimmedName) else {
+							nameValidationError = "That name is already used by another vehicle."
+							return
+						}
+						nameValidationError = nil
+						name = trimmedName
+						if !isNewUnsavedRecord, name != originalName {
+							showingRenameChoice = true
+						} else {
+							isEditing.toggle()
+							updateItem()
+							isNewUnsavedRecord = false
+						}
+					}
 					.buttonStyle(GrowingButton(buttonColor: Color.red))
+					.confirmationDialog(
+						"Vehicle Name Changed",
+						isPresented: $showingRenameChoice,
+						titleVisibility: .visible
+					) {
+						Button("Update Linked Records") {
+							renameLinkedRecords(from: originalName, to: name)
+							isEditing.toggle()
+							updateItem()
+						}
+						Button("Save Without Updating Links", role: .destructive) {
+							isEditing.toggle()
+							updateItem()
+						}
+						Button("Cancel", role: .cancel) { }
+					} message: {
+						Text("Renaming \"\(originalName)\" to \"\(name)\" will break its links to other records unless they're updated to the new name. Update them now?")
+					}
 				}
 			}//end of form/list
 			
@@ -517,6 +914,17 @@ struct EditVehicle: View {
 
 				CardView {
 					VStack {
+						SectionText(label: "COMPONENT SERIAL NUMBERS")
+						if !serialItems.isEmpty {
+							ForEach(serialItems) { item in
+								HStack{LabelDataText(label: item.itemName, data: item.serialNumber)}
+							}
+						}
+					}
+				}
+
+				CardView {
+					VStack {
 						SectionText(label: "MECHANICAL DETAILS")
 						if dataSet.fuelType != "" {
 							HStack{LabelDataText(label: "Fuel Type", data: "\(dataSet.fuelType)")}
@@ -526,6 +934,12 @@ struct EditVehicle: View {
 						}
 						if dataSet.transmission != "" {
 							HStack{LabelDataText(label: "Transmission", data: "\(dataSet.transmission)")}
+						}
+						if dataSet.engineSerialNumber != "" {
+							HStack{LabelDataText(label: "Engine Serial #", data: dataSet.engineSerialNumber)}
+						}
+						if dataSet.transmissionSerialNumber != "" {
+							HStack{LabelDataText(label: "Trans. Serial #", data: dataSet.transmissionSerialNumber)}
 						}
 					}
 				}
@@ -547,6 +961,33 @@ struct EditVehicle: View {
 						}
 						if dataSet.seats > 0 {
 							HStack{LabelDataText(label: "Seats", data: "\(dataSet.seats)")}
+						}
+					}
+				}
+
+				// NEW: Linked Vehicle Records (Details mode)
+				if !linkedAspectVehicles.isEmpty || !dataSet.linkedMasterVehicleId.isEmpty {
+					CardView {
+						VStack(alignment: .leading, spacing: 8) {
+							SectionText(label: "LINKED VEHICLE RECORDS")
+							if !linkedAspectVehicles.isEmpty {
+								HStack{LabelDataText(label: "Role", data: "Master Record")}
+								ForEach(linkedAspectVehicles) { child in
+									HStack{LabelDataText(
+										label: child.vehicleAspect.isEmpty ? "Linked Record" : child.vehicleAspect,
+										data: child.name)}
+								}
+							} else if let master = masterVehicle {
+								HStack{LabelDataText(label: "Aspect", data: dataSet.vehicleAspect.isEmpty ? "Linked Record" : dataSet.vehicleAspect)}
+								HStack{LabelDataText(label: "Master Vehicle", data: master.displayName.isEmpty ? master.name : master.displayName)}
+								if dataSet.linkedSyncFields.isEmpty {
+									HStack{LabelDataText(label: "Synced Fields", data: "None")}
+								} else {
+									ForEach(LinkableVehicleField.allCases.filter { dataSet.linkedSyncFields.contains($0) }) { field in
+										HStack{LabelDataText(label: field.displayName, data: "Synced with master")}
+									}
+								}
+							}
 						}
 					}
 				}
@@ -602,6 +1043,15 @@ struct EditVehicle: View {
 						if dataSet.tirePressureRear > 0 {
 							HStack{LabelDataText(label: "Pressure Rear", data: "\(dataSet.tirePressureRear) \(unit(UnitIndex.pressure))")}
 						}
+						if dataSet.wheelStudSize != "" {
+							HStack{LabelDataText(label: "Wheel Stud Size", data: dataSet.wheelStudSize)}
+						}
+						if dataSet.wheelNutSocket != "" {
+							HStack{LabelDataText(label: "Wheel Nut Socket", data: dataSet.wheelNutSocket)}
+						}
+						if dataSet.wheelNutTorque != "" {
+							HStack{LabelDataText(label: "Wheel Nut Torque", data: dataSet.wheelNutTorque)}
+						}
 					}
 				}
 				
@@ -656,6 +1106,46 @@ struct EditVehicle: View {
 						}
 						if dataSet.availablePayload > 0 {
 							HStack{LabelDataText(label: "Payload", data: "\(dataSet.availablePayload) \(unit(UnitIndex.mass))")}
+						}
+						let totalVehicleWt = dataSet.scaleWeightFrontAxle + dataSet.scaleWeightRearAxle + dataSet.scaleWeightPusherAxle + dataSet.scaleWeightTagAxle
+						let totalRollingWt = totalVehicleWt + dataSet.scaleWeightTrailerAxle
+						if dataSet.scaleWeightFrontAxle > 0 || dataSet.scaleWeightRearAxle > 0 || dataSet.scaleWeightPusherAxle > 0 || dataSet.scaleWeightTagAxle > 0 || dataSet.scaleWeightTrailerAxle > 0 {
+							SectionText(label: "SCALE WEIGHT READINGS")
+							if dataSet.scaleWeightFrontAxle > 0 {
+								HStack{LabelDataText(label: "Steer Axle", data: "\(dataSet.scaleWeightFrontAxle) \(unit(UnitIndex.mass))")}
+							}
+							if dataSet.scaleWeightRearAxle > 0 {
+								HStack{LabelDataText(label: "Drive Axle(s)", data: "\(dataSet.scaleWeightRearAxle) \(unit(UnitIndex.mass))")}
+							}
+							if dataSet.scaleWeightPusherAxle > 0 {
+								HStack{LabelDataText(label: "Pusher Axle", data: "\(dataSet.scaleWeightPusherAxle) \(unit(UnitIndex.mass))")}
+							}
+							if dataSet.scaleWeightTagAxle > 0 {
+								HStack{LabelDataText(label: "Tag Axle", data: "\(dataSet.scaleWeightTagAxle) \(unit(UnitIndex.mass))")}
+							}
+							if dataSet.scaleWeightTrailerAxle > 0 {
+								HStack{LabelDataText(label: "Trailer Axle(s)", data: "\(dataSet.scaleWeightTrailerAxle) \(unit(UnitIndex.mass))")}
+							}
+							if totalVehicleWt > 0 {
+								HStack{LabelDataText(label: "Total Vehicle Weight", data: "\(totalVehicleWt) \(unit(UnitIndex.mass))")}
+							}
+							if totalRollingWt > 0 {
+								HStack{LabelDataText(label: "Total Rolling Weight", data: "\(totalRollingWt) \(unit(UnitIndex.mass))")}
+							}
+						}
+						SectionText(label: "WEIGHT SCALE TICKETS")
+						if scaleTickets.isEmpty {
+							Text("No scale tickets recorded.")
+								.font(.subheadline)
+								.foregroundStyle(.secondary)
+						} else {
+							ForEach(scaleTickets) { ticket in
+								ScaleTicketRow(ticket: ticket) { t in
+									scaleTicketToEdit = t
+								}
+								.padding(.vertical, 4)
+								Divider()
+							}
 						}
 					}
 				}
@@ -724,6 +1214,60 @@ struct EditVehicle: View {
 				}
 				
 				CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						SectionText(label: "VEHICLE WARRANTIES")
+						if warranties.isEmpty {
+							Text("No warranties recorded.")
+								.font(.subheadline)
+								.foregroundStyle(.secondary)
+						} else {
+							ForEach(warranties) { w in
+								VStack(alignment: .leading, spacing: 4) {
+//									Text(w.warrantyName).font(.subheadline).bold()
+									if !w.warrantyName.isEmpty {
+										HStack{LabelDataText(label: "Warrenty Name", data: w.warrantyName)}
+									}
+									if !w.warrantyType.isEmpty {
+										HStack{LabelDataText(label: "Type", data: w.warrantyType)}
+									}
+									if !w.warrantyProvider.isEmpty {
+										HStack{LabelDataText(label: "Warrenter", data: w.warrantyProvider)}
+									}
+									if !w.warrantyDescription.isEmpty {
+										HStack{LabelDataText(label: "Description", data: w.warrantyDescription)}
+									}
+									if !w.warrantyNotes.isEmpty {
+										HStack{LabelDataText(label: "Notes", data: w.warrantyNotes)}
+									}
+									if w.warrantyLengthMonths > 0 {
+										HStack{LabelDataText(label: "Warrenty Length", data: "\(w.warrantyLengthMonths) months")}
+									}
+									if w.warrantyMileageLimit > 0 {
+										let miRemaining = w.warrantyMileageLimit - dataSet.mileage
+										HStack{LabelDataText(label: "Mileage Limit", data: "\(w.warrantyMileageLimit)")}
+										HStack {
+											Text("Mileage Remaining").textLabelModified()
+											Text(miRemaining > 0 ? "\(miRemaining) mi" : "Exceeded")
+												.frame(maxWidth: .infinity, alignment: .trailing)
+												.foregroundStyle(warrantyMileageColor(remaining: miRemaining))
+										}
+									}
+									HStack {
+										Text("Expiration").textLabelModified()
+										Text("\(functions.formatDate_DDMMMyy(date: w.warrantyExpirationDate))")
+											.frame(maxWidth: .infinity, alignment: .trailing)
+											.foregroundStyle(warrantyExpirationColor(date: w.warrantyExpirationDate))
+									}
+								}
+								.padding(.vertical, 4)
+								Divider()
+							}
+						}
+					}
+				}
+
+
+				CardView {
 					VStack {
 						SectionText(label: "ONLINE SERVICE (OnStar...)")
 						if dataSet.onlineServiceProvider != "" {
@@ -746,7 +1290,7 @@ struct EditVehicle: View {
 						}
 					}
 				}
-				
+
 				CardView {
 					VStack {
 						SectionText(label: "VEHICLE GRAPHICS")
@@ -755,11 +1299,15 @@ struct EditVehicle: View {
 						Image_View_Details(label:"3", imageData: dataSet.image3, imageDescription: dataSet.image3Description)
 					}
 				}
-				
-			}//end of list
+
+			}
 			.onAppear {
 				loadUnits()
 				recomputeNextDue()
+				loadWarranties()
+				loadSerialItems()
+				loadScaleTickets()
+				loadLinkedVehicles()
 			}
 			.frame(maxWidth: .infinity, maxHeight: .infinity)
 			// implementation of persistant titles at top of page
@@ -797,7 +1345,128 @@ struct EditVehicle: View {
 		}
 	}
 
-	/// Permanently deletes the current Vehicle8 record from the model context.
+	private func warrantyMileageColor(remaining: Int) -> Color {
+		if remaining <= 0 { return .red }
+		if remaining <= 10000 { return .yellow }
+		return .green
+	}
+
+	private func warrantyExpirationColor(date: Date) -> Color {
+		let now = Date()
+		if date < now { return .red }
+		let sixMonths = Calendar.current.date(byAdding: .month, value: 6, to: now) ?? now
+		if date <= sixMonths { return .yellow }
+		return .green
+	}
+
+	private func loadWarranties() {
+		let vehicleId = dataSet.name
+		let fd = FetchDescriptor<VehicleWarranty>(
+			predicate: #Predicate { $0.vehicleId == vehicleId },
+			sortBy: [SortDescriptor(\VehicleWarranty.warrantyName)]
+		)
+		warranties = (try? modelContext.fetch(fd)) ?? []
+	}
+
+	private func loadSerialItems() {
+		let vehicleId = dataSet.name
+		let fd = FetchDescriptor<VehicleSerialItem>(
+			predicate: #Predicate { $0.vehicleId == vehicleId },
+			sortBy: [SortDescriptor(\VehicleSerialItem.itemName)]
+		)
+		serialItems = (try? modelContext.fetch(fd)) ?? []
+	}
+
+	private func loadScaleTickets() {
+		let vehicleId = dataSet.name
+		let fd = FetchDescriptor<VehicleScaleTicket>(
+			predicate: #Predicate { $0.vehicleId == vehicleId },
+			sortBy: [SortDescriptor(\VehicleScaleTicket.date, order: .reverse)]
+		)
+		scaleTickets = (try? modelContext.fetch(fd)) ?? []
+	}
+
+	// MARK: - Linked Vehicle Records
+
+	/// Vehicles eligible to be selected as this vehicle's master.
+	/// Excludes self and any vehicle that is itself already linked to a master (no chains).
+	private var availableMasterCandidates: [Vehicle8] {
+		allVehiclesForLinking.filter { $0.name != dataSet.name && $0.linkedMasterVehicleId.isEmpty }
+	}
+
+	private func loadLinkedVehicles() {
+		let selfName = dataSet.name
+		let fd = FetchDescriptor<Vehicle8>(predicate: #Predicate { !$0.inactive })
+		allVehiclesForLinking = (try? modelContext.fetch(fd)) ?? []
+		linkedAspectVehicles = allVehiclesForLinking
+			.filter { $0.linkedMasterVehicleId == selfName }
+			.sorted { $0.vehicleAspect < $1.vehicleAspect }
+		masterVehicle = linkedMasterVehicleId.isEmpty
+			? nil
+			: allVehiclesForLinking.first(where: { $0.name == linkedMasterVehicleId })
+	}
+
+	/// Pulls the values for whichever fields this record has opted to sync (`linkedSyncFields`)
+	/// from its master vehicle into the local @State mirrors, so `updateItem()`'s normal
+	/// field write-back persists the master's authoritative values instead of stale local edits.
+	private func pullLinkedFieldsFromMaster() {
+		guard !linkedMasterVehicleId.isEmpty, !linkedSyncFields.isEmpty else { return }
+		let masterName = linkedMasterVehicleId
+		let fd = FetchDescriptor<Vehicle8>(predicate: #Predicate { $0.name == masterName })
+		guard let master = try? modelContext.fetch(fd).first else { return }
+		for field in linkedSyncFields {
+			switch field {
+				case .odometer:
+					mileage = master.mileage
+					mileageVirtual = master.mileageVirtual
+				case .engineHours:
+					engHours = master.engHours
+				case .location:
+					locationId = master.locationId
+				case .owner:
+					ownerId = master.ownerId
+				case .insurance:
+					insuranceCompany = master.insuranceCompany
+					insurancePolicyNumber = master.insurancePolicyNumber
+					insurancePolicyHolder = master.insurancePolicyHolder
+					insuranceExpiration = master.insuranceExpiration
+				case .vin:
+					vin = master.vin
+				case .licensePlate:
+					licensePlate = master.licensePlate
+				case .titleNumber:
+					titleNumber = master.titleNumber
+			}
+		}
+	}
+
+	/// Pushes this vehicle's current field values to any linked aspect vehicles that have
+	/// opted in (via their own `linkedSyncFields` selection) to syncing, so the master's
+	/// readings stay authoritative.
+	private func propagateToLinkedAspects() {
+		guard !linkedAspectVehicles.isEmpty else { return }
+		var didChange = false
+		for child in linkedAspectVehicles where !child.linkedSyncFields.isEmpty {
+			child.applyLinkedFields(from: dataSet)
+			child.updatedAt = Date()
+			didChange = true
+		}
+		if didChange {
+			try? modelContext.save()
+		}
+	}
+
+	private func syncWeightsFromModel() {
+		scaleWeightFrontAxle = dataSet.scaleWeightFrontAxle
+		scaleWeightRearAxle = dataSet.scaleWeightRearAxle
+		scaleWeightPusherAxle = dataSet.scaleWeightPusherAxle
+		scaleWeightTagAxle = dataSet.scaleWeightTagAxle
+		scaleWeightTrailerAxle = dataSet.scaleWeightTrailerAxle
+		weight = dataSet.weight
+		dateWeighed = dataSet.dateWeighed
+	}
+
+		/// Permanently deletes the current Vehicle8 record from the model context.
 	/// Uses a destructive operation and dismisses the view on success.
 	/// Errors are printed to the console for diagnostics.
 	private func DeleteRecord(){
@@ -830,10 +1499,15 @@ struct EditVehicle: View {
 	/// is the single source of truth during editing. On successful save, the Details view
 	/// reflects the new values.
 	private func updateItem() {
+		// If linked to a master vehicle, pull the current values for whichever fields this
+		// record has opted to sync, so it can't be saved out of step with the master.
+		pullLinkedFieldsFromMaster()
+
 		dataSet.inactive = inactive
 		dataSet.createdAt = createdAt
 		dataSet.updatedAt = Date()
 		dataSet.name = name
+		dataSet.displayName = name
 		dataSet.manufacturer = manufacturer
 		dataSet.model = model
 		dataSet.trim = trim
@@ -843,6 +1517,8 @@ struct EditVehicle: View {
 		dataSet.engHours = engHours
 		dataSet.transmission = transmission
 		dataSet.engine = engine
+		dataSet.engineSerialNumber = engineSerialNumber
+		dataSet.transmissionSerialNumber = transmissionSerialNumber
 		dataSet.fuelType = fuelType
 		dataSet.doors = doors
 		dataSet.seats = seats
@@ -890,7 +1566,15 @@ struct EditVehicle: View {
 		dataSet.tirePressureRear = tirePressureRear
 		dataSet.tirePressureTag = tirePressureTag
 		dataSet.tirePressurePusher = tirePressurePusher
+		dataSet.wheelStudSize = wheelStudSize
+		dataSet.wheelNutSocket = wheelNutSocket
+		dataSet.wheelNutTorque = wheelNutTorque
 		dataSet.availablePayload = availablePayload
+		dataSet.scaleWeightFrontAxle = scaleWeightFrontAxle
+		dataSet.scaleWeightRearAxle = scaleWeightRearAxle
+		dataSet.scaleWeightPusherAxle = scaleWeightPusherAxle
+		dataSet.scaleWeightTagAxle = scaleWeightTagAxle
+		dataSet.scaleWeightTrailerAxle = scaleWeightTrailerAxle
 		
 		dataSet.image1 = image1
 		dataSet.image2 = image2
@@ -898,11 +1582,68 @@ struct EditVehicle: View {
 		dataSet.image1Description = image1Description
 		dataSet.image2Description = image2Description
 		dataSet.image3Description = image3Description
-		
+
+		dataSet.linkedMasterVehicleId = linkedMasterVehicleId
+		dataSet.vehicleAspect = vehicleAspect
+		dataSet.linkedSyncFields = linkedSyncFields
+
+		do {
+			try modelContext.save()
+			originalName = name
+		} catch {
+			print(error.localizedDescription)
+		}
+
+		// Push this vehicle's readings out to any linked aspect vehicles that sync to it.
+		propagateToLinkedAspects()
+	}
+
+	/// Returns true if another Vehicle8 record (not this one) already uses `candidate` as its
+	/// name. Since `name` is the unique key every other model references a vehicle by, two
+	/// vehicles sharing a name would make links ambiguous.
+	private func isNameTaken(_ candidate: String) -> Bool {
+		// Compared case-insensitively so "Truck" and "truck" are treated as the same name -
+		// #Predicate can't express that, so this fetches all vehicles and compares in-memory.
+		let fd = FetchDescriptor<Vehicle8>()
+		guard let all = try? modelContext.fetch(fd) else { return false }
+		return all.contains {
+			$0.name != originalName && $0.name.caseInsensitiveCompare(candidate) == .orderedSame
+		}
+	}
+
+	/// Updates the `vehicleId` field on every other record type that references this vehicle by
+	/// name, plus any Vehicle8 records linked to this one as their master, so existing links
+	/// survive a vehicle rename. Vehicle names are the only identifier most other models use to
+	/// associate their records with a specific vehicle (LandShip's string-based linking
+	/// convention — see VehicleWarranty, VehicleScaleTicket, etc.), so a rename without this
+	/// cascade would silently orphan all related data.
+	private func renameLinkedRecords(from oldName: String, to newName: String) {
+		guard !oldName.isEmpty, oldName != newName else { return }
+
+		func rename<T: PersistentModel>(_ descriptor: FetchDescriptor<T>, _ apply: (T) -> Void) {
+			guard let records = try? modelContext.fetch(descriptor), !records.isEmpty else { return }
+			records.forEach(apply)
+		}
+
+		rename(FetchDescriptor<VehicleWarranty>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<VehicleSerialItem>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<VehicleScaleTicket>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<VehicleSystems1>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<MxParts1>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<MxItems3>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<ServiceRecords1>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<FuelLog1>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<TripLog2>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<Additions>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<Subscriptions>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<ProjectList>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<CheckList>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<Vehicle8>(predicate: #Predicate { $0.linkedMasterVehicleId == oldName })) { $0.linkedMasterVehicleId = newName }
+
 		do {
 			try modelContext.save()
 		} catch {
-			print(error.localizedDescription)
+			print("Failed to update linked records after vehicle rename: \(error.localizedDescription)")
 		}
 	}
 
@@ -1017,6 +1758,59 @@ struct EditVehicle: View {
 			self.nextTwoDue = Array(computed.prefix(2))
 		} catch {
 			self.nextTwoDue = []
+		}
+	}
+}
+
+// MARK: - Linked Fields Picker Sheet
+
+/// A checkable popup form letting the user choose which fields a linked vehicle "aspect"
+/// record (e.g. Chassis, Engine, Body/House) should mirror from its master vehicle.
+private struct LinkedFieldsPickerSheet: View {
+	@Environment(\.dismiss) private var dismiss
+	@Binding var selection: Set<LinkableVehicleField>
+
+	var body: some View {
+		NavigationStack {
+			Form {
+				Section {
+					ForEach(LinkableVehicleField.allCases) { field in
+						Button {
+							if selection.contains(field) {
+								selection.remove(field)
+							} else {
+								selection.insert(field)
+							}
+						} label: {
+							HStack {
+								VStack(alignment: .leading, spacing: 2) {
+									Text(field.displayName)
+										.foregroundStyle(.primary)
+									Text(field.summary)
+										.font(.caption)
+										.foregroundStyle(.secondary)
+								}
+								Spacer()
+								if selection.contains(field) {
+									Image(systemName: "checkmark")
+										.foregroundStyle(.blue)
+										.imageScale(.large)
+								}
+							}
+							.contentShape(Rectangle())
+						}
+						.buttonStyle(.plain)
+					}
+				} header: {
+					Text("Select which fields this record should mirror from its master vehicle. Selected fields become read-only here and update automatically whenever the master is saved.")
+				}
+			}
+			.navigationTitle("Synced Fields")
+			.toolbar {
+				ToolbarItem(placement: .confirmationAction) {
+					Button("Done") { dismiss() }
+				}
+			}
 		}
 	}
 }

@@ -10,9 +10,18 @@ extension DashboardView {
 		let intervalMiles: Int
 		let intervalHours: Float
 		let intervalMonths: Int
+		let currentMiles: Int
+		let currentHours: Float
+		let lastServiceDate: Date?
+		let lastServiceMiles: Int
+		let lastServiceHours: Float
+		let derivedIntervalMiles: Int?
+		let derivedIntervalHours: Float?
+		let derivedIntervalMonths: Int?
 		let remainingMiles: Int?
 		let remainingHours: Float?
 		let remainingDays: Int?
+		let dueAtMiles: Int?   // actual odometer reading when service is due
 		let dueDate: Date?
 		let score: Double // lower is more urgent
 	}
@@ -22,8 +31,8 @@ extension DashboardView {
 	// If a specific vehicle is selected: show the two most-urgent items for that vehicle.
 	func recomputeNextDue() {
 		var fd = FetchDescriptor<MxItems3>()
-		if trackVehicleSelected != "All Vehicles" && !trackVehicleSelected.isEmpty {
-			fd.predicate = #Predicate { $0.vehicleId == trackVehicleSelected }
+		if let ids = scopeIds {
+			fd.predicate = #Predicate<MxItems3> { ids.contains($0.vehicleId) }
 		}
 
 		do {
@@ -38,38 +47,60 @@ extension DashboardView {
 				let currentMiles = v.mileage
 				let currentHours = v.engHours
 
-				// Last service record for this vehicle+item
+				// Fetch last 2 records — derive actual interval if history exists, else fall back to database values
 				var lastDate: Date? = nil
 				var lastMiles: Int = 0
 				var lastHours: Float = 0.0
+				var capturedDerivedMiles: Int? = nil
+				var capturedDerivedHours: Float? = nil
+				var capturedDerivedMonths: Int? = nil
+				var effectiveIntervalMiles: Int = item.intervalMiles
+				var effectiveIntervalHours: Float = item.intervalHours
+				var effectiveIntervalMonths: Int = item.intervalMonths
 				do {
 					let mxName = item.mxName
 					var fdRec = FetchDescriptor<ServiceRecords1>(
 						predicate: #Predicate { $0.vehicleId == vId && $0.mxName == mxName },
 						sortBy: [SortDescriptor(\.mxDate, order: .reverse), SortDescriptor(\.updatedAt, order: .reverse)]
 					)
-					fdRec.fetchLimit = 1
-					if let rec = try modelContext.fetch(fdRec).first {
-						lastDate = rec.mxDate
-						lastMiles = rec.Miles
-						lastHours = rec.engHours
+					fdRec.fetchLimit = 2
+					let recs = try modelContext.fetch(fdRec)
+					if let rec0 = recs.first {
+						lastDate  = rec0.mxDate
+						lastMiles = rec0.Miles
+						lastHours = rec0.engHours
+						if recs.count >= 2 {
+							let rec1 = recs[1]
+							let derivedMiles = rec0.Miles - rec1.Miles
+							if derivedMiles > 0 { effectiveIntervalMiles = derivedMiles }
+							let derivedHours = rec0.engHours - rec1.engHours
+							if derivedHours > 0 { effectiveIntervalHours = derivedHours }
+							let derivedMonths = Calendar(identifier: .gregorian)
+								.dateComponents([.month], from: rec1.mxDate, to: rec0.mxDate).month ?? 0
+							if derivedMonths > 0 { effectiveIntervalMonths = derivedMonths }
+							capturedDerivedMiles = derivedMiles > 0 ? derivedMiles : nil
+							capturedDerivedHours = derivedHours > 0 ? derivedHours : nil
+							capturedDerivedMonths = derivedMonths > 0 ? derivedMonths : nil
+						}
 					}
 				} catch {}
 
-				// Since-service
+				// Since last service
 				let milesSince = (lastMiles > 0 && currentMiles >= lastMiles) ? (currentMiles - lastMiles) : 0
 				let hoursSince = (lastHours > 0 && currentHours >= lastHours) ? (currentHours - lastHours) : 0
 
-				// Remaining to due (non-negative for dashboard display)
-				let remainingMiles: Int? = item.intervalMiles > 0 ? max(0, item.intervalMiles - milesSince) : nil
-				let remainingHours: Float? = item.intervalHours > 0 ? max(0, item.intervalHours - hoursSince) : nil
+				// Remaining to due using effective intervals
+				let remainingMiles: Int? = effectiveIntervalMiles > 0 ? max(0, effectiveIntervalMiles - milesSince) : nil
+				let remainingHours: Float? = effectiveIntervalHours > 0 ? max(0, effectiveIntervalHours - hoursSince) : nil
+				// Odometer reading when service is due (can be past current if overdue)
+				let dueAtMiles: Int? = effectiveIntervalMiles > 0 ? (currentMiles + (effectiveIntervalMiles - milesSince)) : nil
 
 				// Time-based due
 				var dueDate: Date? = nil
 				var remainingDays: Int? = nil
-				if item.intervalMonths > 0 {
+				if effectiveIntervalMonths > 0 {
 					let anchor = lastDate ?? item.createdAt
-					if let d = Calendar(identifier: .gregorian).date(byAdding: .month, value: item.intervalMonths, to: anchor) {
+					if let d = Calendar(identifier: .gregorian).date(byAdding: .month, value: effectiveIntervalMonths, to: anchor) {
 						dueDate = d
 						let days = Calendar(identifier: .gregorian).dateComponents([.day], from: Date(), to: d).day ?? 0
 						remainingDays = max(0, days)
@@ -78,10 +109,10 @@ extension DashboardView {
 
 				// Ranking score (lower is more urgent)
 				var factors: [Double] = []
-				if let rm = remainingMiles, item.intervalMiles > 0 { factors.append(Double(rm) / Double(item.intervalMiles)) }
-				if let rh = remainingHours, item.intervalHours > 0 { factors.append(Double(rh) / Double(item.intervalHours)) }
-				if let rd = remainingDays, item.intervalMonths > 0 {
-					let totalDays = max(1, item.intervalMonths * 30)
+				if let rm = remainingMiles, effectiveIntervalMiles > 0 { factors.append(Double(rm) / Double(effectiveIntervalMiles)) }
+				if let rh = remainingHours, effectiveIntervalHours > 0 { factors.append(Double(rh) / Double(effectiveIntervalHours)) }
+				if let rd = remainingDays, effectiveIntervalMonths > 0 {
+					let totalDays = max(1, effectiveIntervalMonths * 30)
 					factors.append(Double(rd) / Double(totalDays))
 				}
 				guard !factors.isEmpty else { continue }
@@ -92,12 +123,21 @@ extension DashboardView {
 						vehicleId: vId,
 						itemName: item.mxName,
 						itemDescription: item.mxDescription,
-						intervalMiles: item.intervalMiles,
-						intervalHours: item.intervalHours,
-						intervalMonths: item.intervalMonths,
+						intervalMiles: effectiveIntervalMiles,
+						intervalHours: effectiveIntervalHours,
+						intervalMonths: effectiveIntervalMonths,
+						currentMiles: currentMiles,
+						currentHours: currentHours,
+						lastServiceDate: lastDate,
+						lastServiceMiles: lastMiles,
+						lastServiceHours: lastHours,
+						derivedIntervalMiles: capturedDerivedMiles,
+						derivedIntervalHours: capturedDerivedHours,
+						derivedIntervalMonths: capturedDerivedMonths,
 						remainingMiles: remainingMiles,
 						remainingHours: remainingHours,
 						remainingDays: remainingDays,
+						dueAtMiles: dueAtMiles,
 						dueDate: dueDate,
 						score: score
 					)
@@ -115,20 +155,19 @@ extension DashboardView {
 				return h0 < h1
 			}
 
-			if trackVehicleSelected == "All Vehicles" || trackVehicleSelected.isEmpty {
-				// Best single item per vehicle
-				let grouped = Dictionary(grouping: computed, by: { $0.vehicleId })
-				var results: [UpcomingDue] = []
-				for arr in grouped.values {
-					if let best = arr.sorted(by: compare).first {
-						results.append(best)
-					}
-				}
-				self.nextTwoDue = results.sorted(by: compare)
-			} else {
-				// Specific vehicle: show top two items
-				self.nextTwoDue = Array(computed.sorted(by: compare).prefix(2))
+			// Group by vehicle, top 3 per vehicle, vehicles sorted by their most urgent item
+			let grouped = Dictionary(grouping: computed, by: { $0.vehicleId })
+			let vehiclesSorted = grouped.keys.sorted {
+				let sA = grouped[$0]!.min(by: { compare($0, $1) })?.score ?? 1.0
+				let sB = grouped[$1]!.min(by: { compare($0, $1) })?.score ?? 1.0
+				return sA < sB
 			}
+			var results: [UpcomingDue] = []
+			for vId in vehiclesSorted {
+				let top3 = Array(grouped[vId]!.sorted(by: compare).prefix(3))
+				results.append(contentsOf: top3)
+			}
+			self.nextTwoDue = results
 		} catch {
 			self.nextTwoDue = []
 		}

@@ -45,7 +45,7 @@ struct SectionText: View {
 	let label: String
 	var body: some View {
 		Text(label)
-			.font(.custom("FontNameRound", fixedSize: 15).weight(.black))
+			.font(.system(size: 15, weight: .black, design: .rounded))
 			.foregroundColor(.blue)
 			.frame(maxWidth: .infinity, alignment: .center)
 	}
@@ -228,11 +228,12 @@ struct Vehicle_SectionHeaderModifier: ViewModifier {
 struct CenteredSectionHeader: View {
 	let title: String
 	var body: some View {
-		Text(title)
+		Text(title.uppercased())
+			.font(.caption.bold())
 			.frame(maxWidth: .infinity, alignment: .center)
 			.multilineTextAlignment(.center)
-			.textCase(nil) // prevent automatic uppercasing in some list styles
-			.foregroundStyle(.secondary)
+			.textCase(nil) // we uppercase manually above; prevent double-uppercasing from list styles
+			.foregroundStyle(.tint)
 	}
 }
 

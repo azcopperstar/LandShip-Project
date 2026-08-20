@@ -71,6 +71,7 @@ struct EditFuelLog: View {
 
 	@State private var isPresentingConfirm: Bool = false /// for confirmation dialog
 	@State private var isEditing: Bool = false
+	@State private var showFluidChecks: Bool = false
 
 	// MARK: - Fuel Log Fields (@State mirrors FuelLog1)
 
@@ -87,8 +88,20 @@ struct EditFuelLog: View {
 	@State private var fuelQuantityEnd: Float = 0.0
 	@State private var fuelAdded: Float = 0.0
 	@State private var defAdded: Float = 0.0
+	@State private var defPrice: Float = 0.0
+	@State private var defLevel1: Float = 0.0
+	@State private var defLevelFraction: String = ""
 	@State private var oilAdded: Float = 0.0
 	@State private var oilChecked: Bool = false
+	@State private var engineCoolantChecked: Bool = false
+	@State private var secondaryCoolantChecked: Bool = false
+	@State private var powerSteeringChecked: Bool = false
+	@State private var brakeFluidChecked: Bool = false
+	@State private var transmissionFluidChecked: Bool = false
+	@State private var rearAxleChecked: Bool = false
+	@State private var frontAxleChecked: Bool = false
+	@State private var fuelWaterSeparatorChecked: Bool = false
+	@State private var airSystemWaterBleedChecked: Bool = false
 	@State private var fuelLevelStart1: Float = 0.0
 	@State private var fuelLevelEnd1: Float = 0.0
 	@State private var fuelLevelStartFraction: String = ""
@@ -125,6 +138,9 @@ struct EditFuelLog: View {
 	@State private var totalCost: Float = 0.0
 	@State private var avgEconomy: Float = 0.0
 	@State private var avgPricePerUnit: Float = 0.0
+	@State private var totalDEFAdded: Float = 0.0
+	@State private var totalDEFCost: Float = 0.0
+	@State private var avgDEFPrice: Float = 0.0
 
 	// MARK: - Previous Fill Metadata
 
@@ -153,8 +169,20 @@ struct EditFuelLog: View {
 		self._fuelQuantityEnd = State.init(initialValue: dataSet.fuelQuantityEnd)
 		self._fuelAdded = State.init(initialValue: dataSet.fuelAdded)
 		self._defAdded = State.init(initialValue: dataSet.defAdded)
+		self._defPrice = State.init(initialValue: dataSet.defPrice)
+		self._defLevel1 = State.init(initialValue: dataSet.defLevel1)
+		self._defLevelFraction = State.init(initialValue: dataSet.defLevelFraction)
 		self._oilAdded = State.init(initialValue: dataSet.oilAdded)
 		self._oilChecked = State.init(initialValue: dataSet.oilChecked)
+		self._engineCoolantChecked = State.init(initialValue: dataSet.engineCoolantChecked)
+		self._secondaryCoolantChecked = State.init(initialValue: dataSet.secondaryCoolantChecked)
+		self._powerSteeringChecked = State.init(initialValue: dataSet.powerSteeringChecked)
+		self._brakeFluidChecked = State.init(initialValue: dataSet.brakeFluidChecked)
+		self._transmissionFluidChecked = State.init(initialValue: dataSet.transmissionFluidChecked)
+		self._rearAxleChecked = State.init(initialValue: dataSet.rearAxleChecked)
+		self._frontAxleChecked = State.init(initialValue: dataSet.frontAxleChecked)
+		self._fuelWaterSeparatorChecked = State.init(initialValue: dataSet.fuelWaterSeparatorChecked)
+		self._airSystemWaterBleedChecked = State.init(initialValue: dataSet.airSystemWaterBleedChecked)
 		self._fuelLevelStart1 = State.init(initialValue: dataSet.fuelLevelStart1)
 		self._fuelLevelEnd1 = State.init(initialValue: dataSet.fuelLevelEnd1)
 		self._fuelLevelStartFraction = State.init(initialValue: dataSet.fuelLevelStartFraction)
@@ -191,8 +219,8 @@ struct EditFuelLog: View {
 								emptyChoiceLabel: "—",
 								autoSelectFirst: false,
 								filter: nil,
-								sort: [SortDescriptor(\.name, order: .forward)],
-								labelProvider: { $0.name }
+								sort: [SortDescriptor(\.displayName, order: .forward)],
+								labelProvider: { v in "\(v.year) \(v.displayName)"},
 							)
 							.onChange(of: selectedVehicle) { _, newVehicle in
 								let name = newVehicle?.name ?? ""
@@ -291,14 +319,42 @@ struct EditFuelLog: View {
 						HStack{LabelDataTextview_Numberpad_Float(label: "Oil Added (\(unit(UnitIndex.oil)))", data: $oilAdded)}
 						if fuelType == "Diesel" {
 							HStack{LabelDataTextview_Numberpad_Float(label: "DEF Added (\(unit(UnitIndex.def)))", data: $defAdded)}
-						}
-						HStack{
-							Toggle(isOn: $oilChecked) {
-								Text("Oil Checked")
-									.textLabelModified()
+							HStack{LabelDataTextview_Numberpad_Currency(label: "DEF Price/\(unit(UnitIndex.def))", data: $defPrice)}
+							HStack{
+								Picker_FuelLevel1(label: "DEF Level", data: $defLevel1, data1: Float(vehicleDetails?.defCapacity ?? 0))
+									.onChange(of: defLevel1) { _, _ in
+										defLevelFraction = functions.getFuelLevel(unit: defLevel1)
+									}
 							}
-							.accessibilityLabel("Oil Checked")
-							.accessibilityHint("Indicates whether oil level was checked during this fuel stop")
+						}
+						CardView {
+							VStack {
+								SectionText(label: "FLUID CHECKS")
+								HStack {
+									Spacer()
+									Button {
+										showFluidChecks = true
+									} label: {
+										Label("Fluid Checks", systemImage: "drop.circle")
+									}
+									.buttonStyle(.bordered)
+									Spacer()
+								}
+							}
+						}
+						.sheet(isPresented: $showFluidChecks) {
+							FluidCheckSheet(
+								oilChecked: $oilChecked,
+								engineCoolantChecked: $engineCoolantChecked,
+								secondaryCoolantChecked: $secondaryCoolantChecked,
+								powerSteeringChecked: $powerSteeringChecked,
+								brakeFluidChecked: $brakeFluidChecked,
+								transmissionFluidChecked: $transmissionFluidChecked,
+								rearAxleChecked: $rearAxleChecked,
+								frontAxleChecked: $frontAxleChecked,
+								fuelWaterSeparatorChecked: $fuelWaterSeparatorChecked,
+								airSystemWaterBleedChecked: $airSystemWaterBleedChecked
+							)
 						}
 
 						CardView {
@@ -381,7 +437,7 @@ struct EditFuelLog: View {
 								refreshVehicleDetails()
 								computeFuelStats()
 							}
-						HStack{LabelDataText(label: "Vehicle", data: dataSet.vehicleId)}
+						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						HStack{LabelDataText(label: "Date/Time", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.fuelDateTime))")}
 						HStack{LabelDataText(label: "Log Name", data: "\(dataSet.logName)")}
 						if dataSet.location != "" {
@@ -412,13 +468,39 @@ struct EditFuelLog: View {
 						}
 						if dataSet.defAdded > 0.0 {
 							HStack{LabelDataNumber(label: "DEF Added (\(unit(UnitIndex.def)))", data: dataSet.defAdded, fractionalLength: 1)}
+							if dataSet.defPrice > 0.0 {
+								HStack{LabelDataCurrency(label: "DEF Price/\(unit(UnitIndex.def))", data: dataSet.defPrice, unit: "")}
+							}
 						}
-						if dataSet.oilChecked {
-							HStack{LabelDataText(label: "Oil Checked", data: "Yes")}
+						if dataSet.defLevelFraction != "" {
+							HStack{LabelDataText(label: "DEF Level", data: "\(Float(vehicleDetails?.defCapacity ?? 0) * dataSet.defLevel1) \(unit(UnitIndex.def)) \(dataSet.defLevelFraction)")}
 						}
 					}
 				}
-				
+
+				let checkedFluids: [(String, Bool)] = [
+					("Engine Oil", dataSet.oilChecked),
+					("Engine Coolant", dataSet.engineCoolantChecked),
+					("Secondary Coolant", dataSet.secondaryCoolantChecked),
+					("Power Steering", dataSet.powerSteeringChecked),
+					("Brake", dataSet.brakeFluidChecked),
+					("Transmission", dataSet.transmissionFluidChecked),
+					("Rear Axle", dataSet.rearAxleChecked),
+					("Front Axle", dataSet.frontAxleChecked),
+					("Fuel/Water Separator", dataSet.fuelWaterSeparatorChecked),
+					("Air System Water Bleed", dataSet.airSystemWaterBleedChecked)
+				]
+				if checkedFluids.contains(where: { $0.1 }) {
+					CardView {
+						VStack {
+							SectionText(label: "FLUID CHECKS")
+							ForEach(checkedFluids.filter { $0.1 }, id: \.0) { name, _ in
+								HStack { LabelDataText(label: name, data: "Checked") }
+							}
+						}
+					}
+				}
+
 				if dataSet.fuelNotes != "" {CardView {
 					TextNoteDisplay_FullWidth(sectionText: "FUEL LOG NOTES", data: dataSet.fuelNotes)}
 				}
@@ -464,6 +546,11 @@ struct EditFuelLog: View {
 						HStack{LabelDataText(label: "Average \(unit(UnitIndex.distance))/\(unit(UnitIndex.fuel))", data: "\(avgEco.formatted(.number.precision(.fractionLength(1))))")}
 						HStack{LabelDataCurrency(label: "Fuel Cost", data: totalCost, unit: "")}
 						HStack{LabelDataCurrency(label: "Avg Price/\(unit(UnitIndex.fuel))", data: avgPricePerUnit, unit: "")}
+						if dataSet.fuelType == "Diesel" {
+							HStack{LabelDataNumber(label: "DEF Total (\(unit(UnitIndex.def)))", data: totalDEFAdded, fractionalLength: 1)}
+							HStack{LabelDataCurrency(label: "DEF Cost", data: totalDEFCost, unit: "")}
+							HStack{LabelDataCurrency(label: "Avg DEF Price/\(unit(UnitIndex.def))", data: avgDEFPrice, unit: "")}
+						}
 					}
 				}
 
@@ -608,6 +695,34 @@ struct EditFuelLog: View {
 			lastFillDate = nil
 		}
 
+		// 3) DEF totals — separate fetch includes ALL records (not filtered by fuelAdded > 0)
+		do {
+			let defVid = vid
+			let defDate = fuelDateTime
+			let defFetch: FetchDescriptor<FuelLog1>
+			if showInactiveVehicles {
+				defFetch = FetchDescriptor<FuelLog1>(
+					predicate: #Predicate { log in log.vehicleId == defVid && log.fuelDateTime <= defDate },
+					sortBy: [SortDescriptor(\.fuelDateTime, order: .forward)]
+				)
+			} else {
+				defFetch = FetchDescriptor<FuelLog1>(
+					predicate: #Predicate { log in log.vehicleId == defVid && log.fuelDateTime <= defDate && log.inactive == false },
+					sortBy: [SortDescriptor(\.fuelDateTime, order: .forward)]
+				)
+			}
+			let defLogs = try modelContext.fetch(defFetch)
+			let defCurrentID = dataSet.id
+			let otherDefLogs = defLogs.filter { $0.id != defCurrentID }
+			totalDEFAdded = otherDefLogs.reduce(Float(0)) { $0 + $1.defAdded } + defAdded
+			totalDEFCost = otherDefLogs.reduce(Float(0)) { $0 + ($1.defAdded * $1.defPrice) } + (defAdded * defPrice)
+			avgDEFPrice = totalDEFAdded > 0 ? (totalDEFCost / totalDEFAdded) : 0.0
+		} catch {
+			totalDEFAdded = 0
+			totalDEFCost = 0
+			avgDEFPrice = 0
+		}
+
 		// 2) Totals up to (and including) this record
 		do {
 			let upToFetch: FetchDescriptor<FuelLog1>
@@ -646,6 +761,7 @@ struct EditFuelLog: View {
 			// Averages based on totals up to this record
 			avgEconomy = totalFuel > 0 ? Float(totalDistance) / totalFuel : 0.0
 			avgPricePerUnit = totalFuel > 0 ? (totalCost / totalFuel) : 0.0
+
 		} catch {
 			print("Up-to fetch error: \(error.localizedDescription)")
 			totalDistance = 0
@@ -669,6 +785,9 @@ struct EditFuelLog: View {
 		totalCost = 0
 		avgEconomy = 0
 		avgPricePerUnit = 0
+		totalDEFAdded = 0
+		totalDEFCost = 0
+		avgDEFPrice = 0
 		lastFillOdometer = 0
 		lastFillDate = nil
 	}
@@ -713,8 +832,20 @@ struct EditFuelLog: View {
 		dataSet.fuelQuantityEnd = fuelQuantityEnd
 		dataSet.fuelAdded = fuelAdded
 		dataSet.defAdded = defAdded
+		dataSet.defPrice = defPrice
+		dataSet.defLevel1 = defLevel1
+		dataSet.defLevelFraction = defLevelFraction
 		dataSet.oilAdded = oilAdded
 		dataSet.oilChecked = oilChecked
+		dataSet.engineCoolantChecked = engineCoolantChecked
+		dataSet.secondaryCoolantChecked = secondaryCoolantChecked
+		dataSet.powerSteeringChecked = powerSteeringChecked
+		dataSet.brakeFluidChecked = brakeFluidChecked
+		dataSet.transmissionFluidChecked = transmissionFluidChecked
+		dataSet.rearAxleChecked = rearAxleChecked
+		dataSet.frontAxleChecked = frontAxleChecked
+		dataSet.fuelWaterSeparatorChecked = fuelWaterSeparatorChecked
+		dataSet.airSystemWaterBleedChecked = airSystemWaterBleedChecked
 		dataSet.fuelLevelStart1 = fuelLevelStart1
 		dataSet.fuelLevelEnd1 = fuelLevelEnd1
 		dataSet.fuelLevelStartFraction = fuelLevelStartFraction
@@ -738,7 +869,7 @@ struct EditFuelLog: View {
 		}
 
 		// Update the primary vehicle with newer odometer/engHours if greater
-		var fetchDescriptor = FetchDescriptor<Vehicle8>(
+		let fetchDescriptor = FetchDescriptor<Vehicle8>(
 			predicate: #Predicate { fetchModel in fetchModel.name == vehicleId })
 		do {
 			let vehicleDataSet: [Vehicle8] = try modelContext.fetch(fetchDescriptor)

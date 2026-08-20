@@ -25,31 +25,42 @@ struct SettingsEditorView: View {
 
 	// App-wide vehicle list preference moved here from ChooseVehicle
 	@AppStorage("showInactiveVehicles") private var showInactiveVehicles: Bool = false
-	
-	// Create-or-load on appear
+	@AppStorage(StorageKey.launchScreen) private var launchScreen: String = "dashboard"
+	// Create-or-load on appear; deduplicates if CloudKit synced multiple records
 	private func ensureSettings() {
-		if let first = fetched.first {
-			settings = first
+		if fetched.isEmpty {
+			// Create a new primary1 record if none exists
+			let newPrimary = Settings1(
+				userName: "primary1",
+				unitVolumeFuel: "",
+				unitVolumeOil: "",
+				unitVolumeDEF: "",
+				unitTemp: "",
+				unitSpeed: "",
+				unitPressure: "",
+				unitMass: "",
+				unitLength: "",
+				unitWidth: "",
+				unitHeight: "",
+				unitWheelBase: ""
+			)
+			modelContext.insert(newPrimary)
+			do { try modelContext.save() } catch { print("Failed to seed Settings1: \(error)") }
+			settings = newPrimary
 			return
 		}
-		// Create a new primary1 record if none exists
-		let newPrimary = Settings1(
-			userName: "primary1",
-			unitVolumeFuel: "",
-			unitVolumeOil: "",
-			unitVolumeDEF: "",
-			unitTemp: "",
-			unitSpeed: "",
-			unitPressure: "",
-			unitMass: "",
-			unitLength: "",
-			unitWidth: "",
-			unitHeight: "",
-			unitWheelBase: ""
-		)
-		modelContext.insert(newPrimary)
-		do { try modelContext.save() } catch { print("Failed to seed Settings1: \(error)") }
-		settings = newPrimary
+		// Deterministic deduplication: sort by persistentModelID, which is the same
+		// CloudKit record ID on every device — all devices independently keep the same winner
+		let enc = JSONEncoder()
+		func idData(_ m: Settings1) -> Data { (try? enc.encode(m.persistentModelID)) ?? Data() }
+		let sorted = fetched.sorted { idData($0).lexicographicallyPrecedes(idData($1)) }
+		if fetched.count > 1 {
+			for duplicate in sorted.dropFirst() {
+				modelContext.delete(duplicate)
+			}
+			try? modelContext.save()
+		}
+		settings = sorted.first
 	}
 	
 	// Small helper to bind to optional reference type fields safely
@@ -63,6 +74,16 @@ struct SettingsEditorView: View {
 		)
 	}
 	
+	private func bindBool(_ keyPath: ReferenceWritableKeyPath<Settings1, Bool>) -> Binding<Bool> {
+		Binding(
+			get: { settings?[keyPath: keyPath] ?? true },
+			set: { newValue in
+				if settings == nil { ensureSettings() }
+				settings?[keyPath: keyPath] = newValue
+			}
+		)
+	}
+
 	// Reusable content so we can present it in Form (iOS) or ScrollView/VStack (macOS)
 	@ViewBuilder
 	private var formContent: some View {
@@ -90,6 +111,36 @@ struct SettingsEditorView: View {
 			Picker_LWH(label: "Wheelbase", data: bind(\.unitWheelBase))
 		}
 		
+		Section("App Behaviour") {
+			Picker("Launch Screen", selection: $launchScreen) {
+				Text("Dashboard").tag("dashboard")
+				Text("Vehicles").tag("vehicles")
+				Text("Fuel Log").tag("fuelLog")
+				Text("Travel Log").tag("tripLog")
+				Text("Service Records").tag("records")
+				Text("Improvements").tag("additions")
+				Text("Expenditures").tag("subscriptions")
+				Text("Projects").tag("projectList")
+				Text("Checklists").tag("displayChecklist")
+				Text("Last Section Open").tag("lastSection")
+			}
+		}
+
+		Section("Fuel Log — Fluid Checks") {
+			Text("Choose which fluid checks appear in the Fluid Checks popup when editing a fuel log or enroute stop.")
+				.font(.caption).foregroundStyle(.secondary)
+			Toggle("Engine Oil", isOn: bindBool(\.fluidChk_engineOil))
+			Toggle("Engine Coolant", isOn: bindBool(\.fluidChk_engineCoolant))
+			Toggle("Secondary Coolant", isOn: bindBool(\.fluidChk_secondaryCoolant))
+			Toggle("Power Steering", isOn: bindBool(\.fluidChk_powerSteering))
+			Toggle("Brake", isOn: bindBool(\.fluidChk_brake))
+			Toggle("Transmission", isOn: bindBool(\.fluidChk_transmission))
+			Toggle("Rear Axle", isOn: bindBool(\.fluidChk_rearAxle))
+			Toggle("Front Axle", isOn: bindBool(\.fluidChk_frontAxle))
+			Toggle("Fuel/Water Separator", isOn: bindBool(\.fluidChk_fuelWaterSep))
+			Toggle("Air System Water Bleed", isOn: bindBool(\.fluidChk_airWaterBleed))
+		}
+
 		Section {
 			Button(role: .destructive) {
 				showResetOnboardingConfirm = true

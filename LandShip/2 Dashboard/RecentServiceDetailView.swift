@@ -32,7 +32,7 @@ struct RecentServiceDetailView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(rec.mxName).font(.subheadline).bold()
-                            Text("\(rec.vehicleId) • \(formatDate(rec.mxDate))")
+                            Text("\(Functions().getVehicleDisplayName(vehicleId: rec.vehicleId, context: modelContext)) • \(formatDate(rec.mxDate))")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

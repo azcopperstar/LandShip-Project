@@ -165,6 +165,7 @@ struct pdfReportTrip: View {
 				} label: {
 					Label("Print", systemImage: "printer")
 				}
+				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
 		}
@@ -207,7 +208,7 @@ struct pdfReportTrip: View {
 		}
 
 		func makeNSView(context: Context) -> PDFView {
-			let pdfView = PDFView()
+			let pdfView = PrintablePDFView()
 			pdfView.document = pdfDocument
 			pdfView.autoScales = true
 			pdfView.displaysPageBreaks = true
@@ -529,7 +530,7 @@ struct pdfReportTrip: View {
 
 		func beginMacPage() {
 			cgContext.beginPDFPage(nil)
-			var nsGraphicsContext = NSGraphicsContext(cgContext: cgContext, flipped: false)
+			let nsGraphicsContext = NSGraphicsContext(cgContext: cgContext, flipped: false)
 			NSGraphicsContext.saveGraphicsState()
 			NSGraphicsContext.current = nsGraphicsContext
 
@@ -726,7 +727,7 @@ struct pdfReportTrip: View {
 	}
 
 	/// Draws the page header including title, subtitle (vehicle), date, and page number.
-	func drawPageHeader(margin: CGFloat,
+	nonisolated func drawPageHeader(margin: CGFloat,
 	                    pageWidth: CGFloat,
 	                    pageHeight: CGFloat,
 	                    headerHeight: CGFloat,
@@ -795,7 +796,7 @@ struct pdfReportTrip: View {
 	}
 
 	/// Draws a footer with the current page number.
-	func drawPageFooter(margin: CGFloat,
+	nonisolated func drawPageFooter(margin: CGFloat,
 	                    pageWidth: CGFloat,
 	                    pageHeight: CGFloat,
 	                    footerHeight: CGFloat,
@@ -1155,20 +1156,17 @@ struct pdfReportTrip: View {
 	private func printPDF() {
 		guard let doc = pdfDocument else { return }
 		#if os(macOS)
-		// Use a transient PDFView and a standard NSPrintOperation
-		let pdfView = PDFView()
-		pdfView.document = doc
-
 		let printInfo = NSPrintInfo.shared
 		printInfo.horizontalPagination = .automatic
 		printInfo.verticalPagination = .automatic
 		printInfo.isHorizontallyCentered = true
 		printInfo.isVerticallyCentered = true
 
-		let op = NSPrintOperation(view: pdfView, printInfo: printInfo)
-		op.showsPrintPanel = true
-		op.showsProgressPanel = true
-		op.run()
+		if let op = doc.printOperation(for: printInfo, scalingMode: .pageScaleDownToFit, autoRotate: true) {
+			op.showsPrintPanel = true
+			op.showsProgressPanel = true
+			op.runModal(for: NSApp.keyWindow ?? NSWindow(), delegate: nil, didRun: nil, contextInfo: nil)
+		}
 		#else
 		guard UIPrintInteractionController.isPrintingAvailable,
 		      let data = doc.dataRepresentation() else { return }
@@ -1184,7 +1182,6 @@ struct pdfReportTrip: View {
 		// On iPad, present from a source rect/view; on iPhone, simple present is fine.
 		if UIDevice.current.userInterfaceIdiom == .pad {
 			if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-			   let window = windowScene.windows.first,
 			   let rootView = windowScene.windows.first?.rootViewController?.view {
 				controller.present(from: rootView.bounds, in: rootView, animated: true, completionHandler: nil)
 			} else {
@@ -1298,11 +1295,9 @@ struct pdfReportTrip: View {
 		// All Vehicles preview
 		pdfReportTrip(trackVehicleSelected: .constant("All Vehicles"))
 			.modelContainer(container)
-			.previewDisplayName("All Vehicles")
 
 		// Specific vehicle preview
 		pdfReportTrip(trackVehicleSelected: .constant("Vehicle A"))
 			.modelContainer(container)
-			.previewDisplayName("Vehicle A")
 	}
 }

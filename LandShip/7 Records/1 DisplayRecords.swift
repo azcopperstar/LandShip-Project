@@ -98,6 +98,8 @@ struct DisplayRecords: View {
 	
 	// Sort options for the records list. Each case defines a set of SortDescriptors.
 	private enum PartsSort: String, CaseIterable, Identifiable {
+		case dateDesc = "Date ↓"
+		case dateAsc = "Date ↑"
 		case datedDesc_vehicleAsc = "Vehicle A–Z, Date Desc"
 		case vehicleAsc_nameAsc = "Vehicle A–Z, Records A–Z"
 		case vehicleAsc_nameDesc = "Vehicle A–Z, Records Z–A"
@@ -109,6 +111,10 @@ struct DisplayRecords: View {
 		// Translate each sort mode into SwiftData SortDescriptors on ServiceRecords1
 		var descriptors: [SortDescriptor<ServiceRecords1>] {
 			switch self {
+				case .dateDesc:
+					return [ .init(\.mxDate, order: .reverse) ]
+				case .dateAsc:
+					return [ .init(\.mxDate, order: .forward) ]
 				case .datedDesc_vehicleAsc:
 					return [.init(\.vehicleId, order: .forward), .init(\.mxDate, order: .reverse)]
 				case .vehicleAsc_nameAsc:
@@ -126,28 +132,24 @@ struct DisplayRecords: View {
 	}
 	
 	// Current sort selection; defaults to vehicle A–Z and date descending
-	@State private var selectedSort: PartsSort = .datedDesc_vehicleAsc
+	@AppStorage("sort_records") private var selectedSort: PartsSort = .dateDesc
 	
 	// MARK: - Body
 	
 	var body: some View {
 		
 		// Vehicle scope picker using the same ModelPicker pattern as in EditRecord.
-		HStack {
-			Text("Vehicle")
-				.textLabelModified()
-			ModelPicker(
-				selection: $selectedVehicle,
-				title: "Vehicle",
-				includeEmptyChoice: true,
-				emptyChoiceLabel: "All Vehicles",
-				autoSelectFirst: false,
-				filter: nil,
-				sort: [SortDescriptor(\.name, order: .forward)],
-				labelProvider: { $0.name }
-			)
-			.frame(maxWidth: .infinity, alignment: .trailing)
-		}
+		ModelPicker(
+			selection: $selectedVehicle,
+			title: "",
+			includeEmptyChoice: true,
+			emptyChoiceLabel: "All Vehicles",
+			autoSelectFirst: false,
+			filter: nil,
+			sort: [SortDescriptor(\.displayName, order: .forward)],
+			labelProvider: { v in "\(v.year) \(v.displayName)"},
+		)
+		.frame(maxWidth: .infinity)
 		.onChange(of: selectedVehicle) { _, newVehicle in
 			// Sync shared string binding from object selection
 			trackVehicleSelected = newVehicle?.name ?? "All Vehicles"
@@ -178,7 +180,7 @@ struct DisplayRecords: View {
 			}
 		}
 		.safeAreaInset(edge: .top) {
-			PageTitle_Col2_NoPhoto(label: "SERVICE RECORDS")
+			PageTitle_Col2_NoPhoto(label: "SERVICE")
 		}
 
 
@@ -189,8 +191,8 @@ struct DisplayRecords: View {
 				List {
 					EmptyStateSection(
 						title: "Add your first Service Record",
-						systemImage: "square.grid.3x1.folder.badge.plus",
-						description: "Create a Service Record to track service, maintence, and repairs.\n\nTo add additional records after this first one, select the '+' button at the top of the form.",
+						systemImage: "wrench.and.screwdriver.fill",
+						description: "Create a Service Record to track service, maintenance, and repairs.\n\nTo add additional records after this first one, select the '+' button at the top of the form.",
 						actionTitle: "Add First Fuel Log",
 						action: { addNewRecord() }
 					)
@@ -208,17 +210,44 @@ struct DisplayRecords: View {
 								// Row presentation: date, odometer + units, vehicle name, and record name (no photo)
 								let mxDate = functions.formatDate_DDMMMyy(date: record.mxDate)
 								HStack {
-									let vehicleForImage = vehicles.first { $0.name == record.vehicleId }
-									Image_View_Thumbnail(imageData: vehicleForImage?.image1 ?? record.image1)
-									VStack {
+//									let vehicleForImage = vehicles.first { $0.name == record.vehicleId }
+//									Image_View_Thumbnail(imageData: vehicleForImage?.image1 ?? record.image1)
+									VStack(alignment: .leading, spacing: 1) {
 										Text("\(record.mxName)")
-											.textModifier_ListTitle()
+											.font(.headline)
+										if !record.mxDescription.isEmpty {
+											Text("\(record.mxDescription)")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
 										Text("\(mxDate)")
-											.textModifier_ListSubTitle_R()
-										Text("\(record.Miles) \(unit(UnitIndex.distance))")
-											.textModifier_ListSubTitle_R()
-										Text("\(record.vehicleId)")
-											.textModifier_ListSubTitle_R()
+											.font(.subheadline)
+											.foregroundStyle(.secondary)
+										if record.Miles != 0 {
+											Text("\(record.Miles) \(unit(UnitIndex.distance))")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
+										if record.engHours != 0 {
+											Text("\(record.engHours.formatted(.number.precision(.fractionLength(1)))) hrs")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
+										if !record.customMeasureLabel.isEmpty {
+											Text("\(record.customMeasureLabel): \(record.customMeasureValue.formatted(.number.precision(.fractionLength(1)))) \(record.customMeasureUnit)")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
+										if trackVehicleSelected == "All Vehicles" {
+											Text("\(Functions().getVehicleDisplayName(vehicleId: record.vehicleId, context: modelContext))")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
+										if !record.vendor.isEmpty {
+											Text("\(record.vendor)")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
 									}
 									.cardStyle(backgroundColor: .blue.opacity(0.6))
 								}
@@ -234,8 +263,18 @@ struct DisplayRecords: View {
 								print("reportVehicleScope (frozen): \(frozen)")
 								reportDestination = ReportDestination(scope: frozen)
 							} label: {
-								Label("Report", systemImage: "list.clipboard")
+#if os(macOS)
+								Image(systemName: "doc.text")
+#else
+								VStack(spacing: 2) {
+								Image(systemName: "doc.text")
+								Text("Report")
+									.font(.caption2)
 							}
+#endif
+							}
+							.help("Report")
+							.accessibilityLabel("Report")
 						}
 						// Sort menu: presents all sort cases via a Picker
 						ToolbarItem(placement: .automatic) {
@@ -246,9 +285,18 @@ struct DisplayRecords: View {
 									}
 								}
 							} label: {
-								Label("Sort", systemImage: "arrow.up.arrow.down")
+#if os(macOS)
+								Image(systemName: "arrow.up.arrow.down")
+#else
+								VStack(spacing: 2) {
+								Image(systemName: "arrow.up.arrow.down")
+								Text("Sort")
+									.font(.caption2)
+							}
+#endif
 							}
 							.buttonStyle(GrowingButton(buttonColor: Color.gray))
+							.help("Sort")
 							.accessibilityLabel("Sort records")
 						}
 						if !allVehiclesSelected {
@@ -256,9 +304,19 @@ struct DisplayRecords: View {
 								Button {
 									addNewRecord()
 								} label: {
-									Label("Add", systemImage: "plus.capsule")
+#if os(macOS)
+									Image(systemName: "plus.capsule")
+#else
+									VStack(spacing: 2) {
+									Image(systemName: "plus.capsule")
+									Text("Add")
+										.font(.caption2)
+								}
+#endif
 								}
 								.disabled(false)
+								.help("Add")
+								.accessibilityLabel("Add")
 							}
 						}
 					}

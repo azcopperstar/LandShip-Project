@@ -49,10 +49,38 @@ struct DashboardView: View {
 	@Environment(\.modelContext) var modelContext
 	// Live query of all vehicles; used to populate the toolbar picker and sync filter state.
 	@Query var vehicles: [Vehicle8]
+	// Live query of the saved dashboard configuration scheme (card order/visibility, vehicle scope).
+	@Query(filter: #Predicate<Settings1> { $0.userName == "primary1" }) private var settingsRows: [Settings1]
+	private var settings: Settings1? { settingsRows.first }
 	// Utility formatters/helpers (dates, currency, etc.).
 	let functions: Functions = Functions()
 	// Utility for loading user/unit preferences.
 	let prefsFunc: PrefsFunctions = PrefsFunctions()
+
+	// Cards enabled by the user's saved scheme, in display order. Falls back to the original hardcoded set.
+	var enabledCards: [DashboardCard] { settings?.dashCards ?? DashboardCard.defaultOrder }
+
+	// Vehicle scope for dashboard aggregates. The toolbar's single-vehicle picker always wins over the
+	// saved subset (drilling into one vehicle is an explicit, temporary override).
+	// nil means "no restriction — include every vehicle".
+	var scopeIds: [String]? {
+		if trackVehicleSelected != "All Vehicles" && !trackVehicleSelected.isEmpty {
+			return [trackVehicleSelected]
+		}
+		let configured = settings?.dashVehicleScopeRaw ?? []
+		return configured.isEmpty ? nil : configured
+	}
+	func includesVehicle(_ vehicleId: String) -> Bool {
+		guard let ids = scopeIds else { return true }
+		return ids.contains(vehicleId)
+	}
+	var scopedVehicles: [Vehicle8] { vehicles.filter { includesVehicle($0.name) } }
+	// True when a saved vehicle subset (not the toolbar picker) is limiting the "All Vehicles" totals.
+	var isVehicleScopeLimited: Bool {
+		trackVehicleSelected == "All Vehicles" || trackVehicleSelected.isEmpty
+			? !(settings?.dashVehicleScopeRaw ?? []).isEmpty
+			: false
+	}
 
 	// Vehicle filter state
 	// - `trackVehicleSelected` is a human-readable label persisted in state ("All Vehicles" or a vehicle name).
@@ -64,15 +92,53 @@ struct DashboardView: View {
 	@State private var units: [String] = Array(repeating: "", count: 13)
 	private func unit(_ index: Int) -> String { units.indices.contains(index) ? units[index] : "" }
 
+	// Cards lay out in a 2-column grid on iPad only; other platforms keep the single-column stack.
+	private var isPadLayout: Bool {
+#if os(iOS)
+		return UIDevice.current.userInterfaceIdiom == .pad
+#else
+		return false
+#endif
+	}
+
+    // Safe reflection helpers to avoid KVC and Objective-C exceptions on SwiftData models
+    private func reflectedString(_ value: Any, keys: [String]) -> String? {
+        let mirror = Mirror(reflecting: value)
+        for key in keys {
+            if let child = mirror.children.first(where: { $0.label == key }) {
+                if let s = child.value as? String, !s.isEmpty { return s }
+            }
+        }
+        return nil
+    }
+
+    private func reflectedDouble(_ value: Any, keys: [String]) -> Double {
+        let mirror = Mirror(reflecting: value)
+        for key in keys {
+            if let child = mirror.children.first(where: { $0.label == key }) {
+                if let d = child.value as? Double { return d }
+                if let f = child.value as? Float { return Double(f) }
+                if let i = child.value as? Int { return Double(i) }
+                if let n = child.value as? NSNumber { return n.doubleValue }
+            }
+        }
+        return 0
+    }
+
 	// Backing state for each dashboard card. These are derived/aggregated values computed in `refreshAll()`.
 	@State var nextTwoDue: [UpcomingDue] = []
 	@State var dueSummary: DueSummary = DueSummary()
 	@State var recentServices: [RecentService] = []
 	@State var insuranceAlerts: [InsuranceAlert] = []
+	@State var recurringCosts: [RecurringCost] = []
 	@State var fleetSnapshot: FleetSnapshot = FleetSnapshot()
 	@State var usageSinceLast: [UsageSinceLast] = []
 	@State var costSnapshot: CostSnapshot = CostSnapshot()
 	@State var systemHotlist: [SystemHot] = []
+	@State var vehicleMaintenanceStatuses: [VehicleMaintenanceStatus] = []
+	@State var additionsCostByCategory: [AdditionsCategoryCost] = []
+	@State var warrantyAlerts: [WarrantyAlert] = []
+	@State var tripGroups: [TripGroupSummary] = []
 
 	// Thresholds that define what counts as "due soon" across various dimensions.
 	let dueSoonFraction: Double = 0.10 // within 10% of interval
@@ -86,6 +152,7 @@ struct DashboardView: View {
 	@State private var showingFilterSheet = false
 	@State private var filterTitle = ""
 	@State private var filterDetails = ""
+	@State private var showingConfigSheet = false
 
 	/// Subtle background gradient to give the dashboard depth without overpowering content.
 	/// Uses system-friendly colors with low opacity to work across light/dark modes.
@@ -101,6 +168,59 @@ struct DashboardView: View {
 		)
 	}
 
+	// MARK: - Additions Cost Summary (by model category / subcategory)
+	struct AdditionsCategoryCost: Identifiable {
+        let id = UUID()
+        let vehicleId: String
+        let category: String
+        let subcategory: String
+        let total: Double
+	}
+
+	/// Computes aggregated costs for "Additions" grouped by model category and subcategory
+	/// This function expects ServiceRecords1 (or similar) to store category/subcategory and cost fields.
+	/// It scopes by the current vehicle filter if one is selected.
+	func computeAdditionsCategoryCosts() {
+	    // Use only strongly-typed properties defined on Additions (no KVC/reflection).
+	    var buckets: [String: Double] = [:]
+
+	    if let additions = try? modelContext.fetch(FetchDescriptor<Additions>()) {
+	        // Apply vehicle scope: toolbar single-vehicle pick or the saved vehicle scheme.
+	        let filtered = additions.filter { includesVehicle($0.vehicleId) }
+
+	        for add in filtered {
+	            // Category/subcategory straight from model
+	            let category = add.category.isEmpty ? "Unspecified" : add.category
+	            let subcategory = add.subCategory.isEmpty ? "—" : add.subCategory
+
+	            // Cost straight from model
+	            let cost = Double(add.itemCost)
+	            guard cost > 0 else { continue }
+
+	            let key = add.vehicleId + "\u{0001}" + category + "\u{0001}" + subcategory
+	            buckets[key, default: 0] += cost
+	        }
+	    }
+
+	    // Map to view models and sort by total descending
+	    let rows: [AdditionsCategoryCost] = buckets.map { key, total in
+	        let parts = key.split(separator: "\u{0001}").map(String.init)
+	        let vehicleId = parts.indices.contains(0) ? parts[0] : ""
+	        let category = parts.indices.contains(1) ? parts[1] : "Unspecified"
+	        let subcategory = parts.indices.contains(2) ? parts[2] : "—"
+	        return AdditionsCategoryCost(vehicleId: vehicleId, category: category, subcategory: subcategory, total: total)
+	    }
+	    .sorted {
+	        if $0.vehicleId == $1.vehicleId {
+	            if $0.category == $1.category { return $0.total > $1.total }
+	            return $0.category < $1.category
+	        }
+	        return $0.vehicleId < $1.vehicleId
+	    }
+
+	    self.additionsCostByCategory = rows
+	}
+
 	var body: some View {
 		// Main content stack: background gradient + scrollable list of cards.
 		ZStack {
@@ -109,189 +229,18 @@ struct DashboardView: View {
 
 			ScrollView {
 				VStack(spacing: 12) {
-					// Contextual explanation: helps new users understand what the dashboard shows.
-					HStack(alignment: .top, spacing: 8) {
-						Image(systemName: "info.circle")
-							.font(.headline)
-							.foregroundStyle(.secondary)
-						VStack(alignment: .leading, spacing: 4) {
-//							Text("Dashboard")
-//								.font(.subheadline).bold()
-							Text("This dashboard summarizes your fleet’s status. Tap a card to open a detailed view.")
-								.font(.caption)
-								.foregroundStyle(.secondary)
-								.fixedSize(horizontal: false, vertical: true)
+					infoCard
+					if isPadLayout {
+						LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+							ForEach(enabledCards) { card in
+								cardView(for: card)
+							}
 						}
-						.frame(maxWidth: .infinity, alignment: .leading)
+					} else {
+						ForEach(enabledCards) { card in
+							cardView(for: card)
+						}
 					}
-					.padding(12)
-					.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-					.overlay(
-						RoundedRectangle(cornerRadius: 12, style: .continuous)
-							.strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
-					)
-
-					// Card: Next Service Due — shows next two upcoming items across the selected scope.
-					NavigationLink {
-						NextServiceDueDetailView(
-							vehicleScope: trackVehicleSelected,
-							distanceUnit: unit(UnitIndex.distance),
-							formatDate: { functions.formatDate_DDMMMyy(date: $0) }
-						)
-					} label: {
-						NextServiceDueCard(
-							nextTwoDue: nextTwoDue,
-							distanceUnit: unit(UnitIndex.distance),
-							formatDate: { functions.formatDate_DDMMMyy(date: $0) }
-						)
-					}
-					.buttonStyle(.plain)
-
-					// Card: Maintenance Status — summary counts and a "system hotlist" of problem areas.
-					NavigationLink {
-						MaintenanceStatusDetailView(
-							dueSummary: dueSummary,
-							systemHotlist: systemHotlist,
-							onTapSystem: { sys in
-								filterTitle = "System • \(sys.isEmpty ? "Unspecified" : sys)"
-								filterDetails = "Would navigate to items overdue for this system."
-								showingFilterSheet = true
-							}
-						)
-					} label: {
-						MaintenanceStatusCard(dueSummary: dueSummary)
-					}
-					.buttonStyle(.plain)
-
-					// Card: Recent Service — latest completed services for awareness and audit trail.
-					NavigationLink {
-						RecentServiceDetailView(
-							vehicleScope: trackVehicleSelected,
-							distanceUnit: unit(UnitIndex.distance),
-							formatDate: { functions.formatDate_DDMMMyy(date: $0) }
-						)
-					} label: {
-						RecentServiceCard(
-							recentServices: recentServices,
-							distanceUnit: unit(UnitIndex.distance),
-							formatDate: { functions.formatDate_DDMMMyy(date: $0) }
-						)
-					}
-					.buttonStyle(.plain)
-
-
-					// Card: Fleet Snapshot — overall fleet metrics (e.g., active vehicles, utilization, etc.).
-					NavigationLink {
-						FleetSnapshotDetailView(
-							fleetSnapshot: fleetSnapshot,
-							distanceUnit: unit(UnitIndex.distance)
-						)
-					} label: {
-						FleetSnapshotCard(
-							fleetSnapshot: fleetSnapshot,
-							distanceUnit: unit(UnitIndex.distance)
-						)
-					}
-					.buttonStyle(.plain)
-
-					// Card: Usage Since Last — distance/hours since last service per vehicle.
-					NavigationLink {
-						UsageSinceLastDetailView(
-							rows: usageSinceLast,
-							distanceUnit: unit(UnitIndex.distance),
-							formatDate: { functions.formatDate_DDMMMyy(date: $0) },
-							onTapVehicle: { name in
-								filterTitle = "Usage • \(name)"
-								filterDetails = "Would navigate to vehicle detail with usage since last service."
-								showingFilterSheet = true
-							}
-						)
-					} label: {
-						UsageSinceLastCard(
-							rows: usageSinceLast,
-							distanceUnit: unit(UnitIndex.distance),
-							formatDate: { functions.formatDate_DDMMMyy(date: $0) },
-							onTapVehicle: { name in
-								filterTitle = "Usage • \(name)"
-								filterDetails = "Would navigate to vehicle detail with usage since last service."
-								showingFilterSheet = true
-							}
-						)
-					}
-					.buttonStyle(.plain)
-
-					// Card: Cost Snapshot — recent spend overview and top cost drivers.
-					NavigationLink {
-						CostSnapshotDetailView(
-							cost: costSnapshot,
-							formatCurrency: { functions.formatCurrency(dollars: Float($0)) },
-							onTapRange: { title, details in
-								filterTitle = title
-								filterDetails = details
-								showingFilterSheet = true
-							},
-							onTapTopItem: { name in
-								filterTitle = "Top Item • \(name)"
-								filterDetails = "Would navigate to records filtered to \(name) in last 90 days."
-								showingFilterSheet = true
-							}
-						)
-					} label: {
-						CostSnapshotCard(
-							cost: costSnapshot,
-							formatCurrency: { functions.formatCurrency(dollars: Float($0)) },
-							onTapRange: { title, details in
-								filterTitle = title
-								filterDetails = details
-								showingFilterSheet = true
-							},
-							onTapTopItem: { name in
-								filterTitle = "Top Item • \(name)"
-								filterDetails = "Would navigate to records filtered to \(name) in last 90 days."
-								showingFilterSheet = true
-							}
-						)
-					}
-					.buttonStyle(.plain)
-
-					// Card: System Hotlist — systems with the most overdue or frequent issues.
-					NavigationLink {
-						SystemHotlistDetailView(
-							systems: systemHotlist,
-							onTapSystem: { sys in
-								filterTitle = "System • \(sys.isEmpty ? "Unspecified" : sys)"
-								filterDetails = "Would navigate to items overdue for this system."
-								showingFilterSheet = true
-							}
-						)
-					} label: {
-						SystemHotlistCard(
-							systems: systemHotlist,
-							onTapSystem: { sys in
-								filterTitle = "System • \(sys.isEmpty ? "Unspecified" : sys)"
-								filterDetails = "Would navigate to items overdue for this system."
-								showingFilterSheet = true
-							}
-						)
-					}
-					.buttonStyle(.plain)
-
-					// Card: Insurance Expirations — upcoming expirations to help avoid coverage gaps.
-					NavigationLink {
-						InsuranceExpirationsDetailView(
-							alerts: insuranceAlerts,
-							formatDate: { functions.formatDate_DDMMMyy(date: $0) }
-						)
-					} label: {
-						InsuranceExpirationsCard(
-							alerts: insuranceAlerts,
-							formatDate: { functions.formatDate_DDMMMyy(date: $0) }
-						)
-					}
-					.buttonStyle(.plain)
-
-					// Quick actions — optional shortcuts to common tasks.
-					QuickActionsCard()
 				}
 				.padding(.horizontal)
 			}
@@ -306,7 +255,14 @@ struct DashboardView: View {
 
 		.toolbar {
 			ToolbarItem(placement: .navigationBarTrailing) {
-				// Model-based picker bound to `selectedVehicle`; includes an "All Vehicles" empty choice.
+				Button {
+					showingConfigSheet = true
+				} label: {
+					Image(systemName: "slider.horizontal.3")
+				}
+				.accessibilityLabel("Customize Dashboard")
+			}
+			ToolbarItem(placement: .navigationBarTrailing) {
 				LabeledContent {
 					ModelPicker(
 						selection: $selectedVehicle,
@@ -315,7 +271,7 @@ struct DashboardView: View {
 						emptyChoiceLabel: "All Vehicles",
 						autoSelectFirst: false,
 						sort: [SortDescriptor(\.name, order: .forward)],
-						labelProvider: { $0.name }
+						labelProvider: { $0.displayName }
 					)
 					.fixedSize(horizontal: true, vertical: true)
 				} label: {
@@ -327,7 +283,14 @@ struct DashboardView: View {
 		#else
 		.toolbar {
 			ToolbarItem(placement: .automatic) {
-				// Model-based picker bound to `selectedVehicle`; includes an "All Vehicles" empty choice.
+				Button {
+					showingConfigSheet = true
+				} label: {
+					Image(systemName: "slider.horizontal.3")
+				}
+				.accessibilityLabel("Customize Dashboard")
+			}
+			ToolbarItem(placement: .automatic) {
 				LabeledContent {
 					ModelPicker(
 						selection: $selectedVehicle,
@@ -336,7 +299,7 @@ struct DashboardView: View {
 						emptyChoiceLabel: "All Vehicles",
 						autoSelectFirst: false,
 						sort: [SortDescriptor(\.name, order: .forward)],
-						labelProvider: { $0.name }
+						labelProvider: { $0.displayName }
 					)
 					.fixedSize(horizontal: true, vertical: true)
 				} label: {
@@ -347,29 +310,21 @@ struct DashboardView: View {
 		}
 		#endif
 		.onAppear {
-			// Load unit preferences; fall back to empty strings if unavailable.
 			units = prefsFunc.loadSettingsArray(context: modelContext, userName: "primary1")
-			?? Array(repeating: "", count: 13)
-
-			// Initialize picker selection based on the string filter from prior sessions.
+				?? Array(repeating: "", count: 13)
 			if trackVehicleSelected == "All Vehicles" || trackVehicleSelected.isEmpty {
 				selectedVehicle = nil
 			} else {
 				selectedVehicle = vehicles.first(where: { $0.name == trackVehicleSelected })
 			}
-
-			// Compute all dashboard card inputs for the initial render.
 			refreshAll()
 		}
-		// Recompute all card inputs whenever the string-based vehicle filter changes.
 		.onChange(of: trackVehicleSelected) { _, _ in
 			refreshAll()
 		}
-		// Keep string filter in sync with the model-based picker selection.
 		.onChange(of: selectedVehicle) { _, newVehicle in
 			trackVehicleSelected = newVehicle?.name ?? "All Vehicles"
 		}
-		// Keep the model-based picker in sync when the string filter changes externally.
 		.onChange(of: trackVehicleSelected) { _, newValue in
 			if newValue == "All Vehicles" || newValue.isEmpty {
 				selectedVehicle = nil
@@ -381,7 +336,6 @@ struct DashboardView: View {
 				selectedVehicle = nil
 			}
 		}
-		// Informational sheet used by card-level tap targets to describe hypothetical filters/routes.
 		.sheet(isPresented: $showingFilterSheet) {
 			VStack(spacing: 12) {
 				Text(filterTitle).font(.headline)
@@ -391,6 +345,294 @@ struct DashboardView: View {
 			}
 			.padding()
 			.presentationDetents([.medium])
+		}
+		.sheet(isPresented: $showingConfigSheet, onDismiss: { refreshAll() }) {
+			DashboardConfigView()
+		}
+	}
+
+	// MARK: - Card Views
+
+	@ViewBuilder private var infoCard: some View {
+		VStack(alignment: .leading, spacing: 6) {
+			HStack(alignment: .top, spacing: 8) {
+				Image(systemName: "info.circle")
+					.font(.headline)
+					.foregroundStyle(.secondary)
+				Text("This dashboard summarizes your fleet's status. Tap a card to open a detailed view. Tap \(Image(systemName: "slider.horizontal.3")) to customize which cards are shown and which vehicles count toward totals.")
+					.font(.caption)
+					.foregroundStyle(.secondary)
+					.fixedSize(horizontal: false, vertical: true)
+					.frame(maxWidth: .infinity, alignment: .leading)
+			}
+			if isVehicleScopeLimited {
+				let count = (settings?.dashVehicleScopeRaw ?? []).count
+				HStack(alignment: .top, spacing: 8) {
+					Image(systemName: "line.3.horizontal.decrease.circle")
+						.font(.caption)
+						.foregroundStyle(.blue)
+					Text("Totals limited to \(count) of \(vehicles.count) vehicles.")
+						.font(.caption2)
+						.foregroundStyle(.blue)
+				}
+			}
+		}
+		.padding(12)
+		.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+		.overlay(
+			RoundedRectangle(cornerRadius: 12, style: .continuous)
+				.strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
+		)
+	}
+
+	@ViewBuilder private var maintenanceStatusCard: some View {
+		NavigationLink {
+			MaintenanceStatusDetailView(
+				vehicleStatuses: vehicleMaintenanceStatuses,
+				nextDue: nextTwoDue,
+				dueSummary: dueSummary,
+				systemHotlist: systemHotlist,
+				onTapSystem: { sys in
+					let label = sys.isEmpty ? "Unspecified" : sys
+					filterTitle = "System: " + label
+					filterDetails = "Would navigate to items overdue for this system."
+					showingFilterSheet = true
+				}
+			)
+		} label: {
+			MaintenanceStatusCard(
+				vehicleStatuses: vehicleMaintenanceStatuses,
+				nextDue: nextTwoDue,
+				recentServices: recentServices,
+				dueSummary: dueSummary,
+				distanceUnit: unit(UnitIndex.distance),
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) }
+			)
+		}
+		.buttonStyle(.plain)
+	}
+
+	@ViewBuilder private var nextServiceDueCard: some View {
+		NavigationLink {
+			NextServiceDueDetailView(
+				vehicleScope: trackVehicleSelected,
+				distanceUnit: unit(UnitIndex.distance),
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) }
+			)
+		} label: {
+			NextServiceDueCard(
+				nextTwoDue: nextTwoDue,
+				distanceUnit: unit(UnitIndex.distance),
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) }
+			)
+		}
+		.buttonStyle(.plain)
+	}
+
+	@ViewBuilder private var fleetSnapshotCard: some View {
+		NavigationLink {
+			FleetSnapshotDetailView(
+				fleetSnapshot: fleetSnapshot,
+				distanceUnit: unit(UnitIndex.distance),
+				cost: costSnapshot,
+				formatCurrency: { functions.formatCurrency(dollars: Float($0)) },
+				onTapRange: { title, details in
+					filterTitle = title
+					filterDetails = details
+					showingFilterSheet = true
+				},
+				onTapTopItem: { name in
+					filterTitle = "Top Item: " + name
+					filterDetails = "Records filtered to " + name + " (last 90 days)."
+					showingFilterSheet = true
+				}
+			)
+		} label: {
+			FleetSnapshotCard(
+				fleetSnapshot: fleetSnapshot,
+				distanceUnit: unit(UnitIndex.distance),
+				cost: costSnapshot,
+				formatCurrency: { functions.formatCurrency(dollars: Float($0)) },
+				onTapRange: { title, details in
+					filterTitle = title
+					filterDetails = details
+					showingFilterSheet = true
+				},
+				onTapTopItem: { name in
+					filterTitle = "Top Item: " + name
+					filterDetails = "Records filtered to " + name + " (last 90 days)."
+					showingFilterSheet = true
+				}
+			)
+		}
+		.buttonStyle(.plain)
+	}
+
+	@ViewBuilder private var insuranceCard: some View {
+		NavigationLink {
+			InsuranceExpirationsDetailView(
+				alerts: insuranceAlerts,
+				recurringCosts: recurringCosts,
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) },
+				formatCurrency: { functions.formatCurrency(dollars: Float($0)) }
+			)
+		} label: {
+			InsuranceExpirationsCard(
+				alerts: insuranceAlerts,
+				recurringCosts: recurringCosts,
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) },
+				formatCurrency: { functions.formatCurrency(dollars: Float($0)) }
+			)
+		}
+		.buttonStyle(.plain)
+	}
+
+	@ViewBuilder private var warrantyCard: some View {
+		WarrantyCard(
+			alerts: warrantyAlerts,
+			formatDate: { functions.formatDate_DDMMMyy(date: $0) }
+		)
+	}
+
+	@ViewBuilder private var tripGroupsCard: some View {
+		NavigationLink {
+			TripGroupsDetailView(
+				groups: tripGroups,
+				distanceUnit: unit(UnitIndex.distance),
+				fuelUnit: unit(UnitIndex.fuel),
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) }
+			)
+		} label: {
+			TripGroupsCard(
+				groups: tripGroups,
+				distanceUnit: unit(UnitIndex.distance),
+				fuelUnit: unit(UnitIndex.fuel),
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) }
+			)
+		}
+		.buttonStyle(.plain)
+	}
+
+	@ViewBuilder private var recentServiceCard: some View {
+		NavigationLink {
+			RecentServiceDetailView(
+				vehicleScope: trackVehicleSelected,
+				distanceUnit: unit(UnitIndex.distance),
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) }
+			)
+		} label: {
+			RecentServiceCard(
+				recentServices: recentServices,
+				distanceUnit: unit(UnitIndex.distance),
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) }
+			)
+		}
+		.buttonStyle(.plain)
+	}
+
+	@ViewBuilder private var usageSinceLastCard: some View {
+		NavigationLink {
+			UsageSinceLastDetailView(
+				rows: usageSinceLast,
+				distanceUnit: unit(UnitIndex.distance),
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) },
+				onTapVehicle: { name in
+					filterTitle = "Vehicle: " + name
+					filterDetails = "Would navigate to this vehicle's service history."
+					showingFilterSheet = true
+				}
+			)
+		} label: {
+			UsageSinceLastCard(
+				rows: usageSinceLast,
+				distanceUnit: unit(UnitIndex.distance),
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) },
+				onTapVehicle: { name in
+					filterTitle = "Vehicle: " + name
+					filterDetails = "Would navigate to this vehicle's service history."
+					showingFilterSheet = true
+				}
+			)
+		}
+		.buttonStyle(.plain)
+	}
+
+	@ViewBuilder private var systemHotlistCard: some View {
+		SystemHotlistCard(
+			systems: systemHotlist,
+			onTapSystem: { sys in
+				let label = sys.isEmpty ? "Unspecified" : sys
+				filterTitle = "System: " + label
+				filterDetails = "Would navigate to items overdue for this system."
+				showingFilterSheet = true
+			}
+		)
+	}
+
+	@ViewBuilder private var costSnapshotCard: some View {
+		NavigationLink {
+			CostSnapshotDetailView(
+				cost: costSnapshot,
+				formatCurrency: { functions.formatCurrency(dollars: Float($0)) },
+				onTapRange: { title, details in
+					filterTitle = title
+					filterDetails = details
+					showingFilterSheet = true
+				},
+				onTapTopItem: { name in
+					filterTitle = "Top Item: " + name
+					filterDetails = "Records filtered to " + name + " (last 90 days)."
+					showingFilterSheet = true
+				}
+			)
+		} label: {
+			CostSnapshotCard(
+				cost: costSnapshot,
+				formatCurrency: { functions.formatCurrency(dollars: Float($0)) },
+				onTapRange: { title, details in
+					filterTitle = title
+					filterDetails = details
+					showingFilterSheet = true
+				},
+				onTapTopItem: { name in
+					filterTitle = "Top Item: " + name
+					filterDetails = "Records filtered to " + name + " (last 90 days)."
+					showingFilterSheet = true
+				}
+			)
+		}
+		.buttonStyle(.plain)
+	}
+
+	@ViewBuilder private var additionsCostCard: some View {
+		NavigationLink {
+			AdditionsCostDetailView(
+				rows: additionsCostByCategory,
+				formatCurrency: { functions.formatCurrency(dollars: Float($0)) }
+			)
+		} label: {
+			AdditionsCostCard(
+				rows: additionsCostByCategory,
+				formatCurrency: { functions.formatCurrency(dollars: Float($0)) }
+			)
+		}
+		.buttonStyle(.plain)
+	}
+
+	@ViewBuilder private func cardView(for card: DashboardCard) -> some View {
+		switch card {
+		case .maintenanceStatus: maintenanceStatusCard
+		case .nextServiceDue: nextServiceDueCard
+		case .tripGroups: tripGroupsCard
+		case .fleetSnapshot: fleetSnapshotCard
+		case .insurance: insuranceCard
+		case .warranty: warrantyCard
+		case .quickActions: QuickActionsCard()
+		case .recentService: recentServiceCard
+		case .usageSinceLast: usageSinceLastCard
+		case .systemHotlist: systemHotlistCard
+		case .costSnapshot: costSnapshotCard
+		case .additionsCost: additionsCostCard
 		}
 	}
 
@@ -405,19 +647,58 @@ struct DashboardView: View {
 		recomputeDueSummaryAndSystemHotlist()
 		fetchRecentServices()
 		computeInsuranceAlerts()
+		computeRecurringCosts()
 		computeFleetSnapshot()
 		computeUsageSinceLastService()
 		computeCostSnapshot()
+		computeAdditionsCategoryCosts()
+		computeWarrantyAlerts()
+		computeTripGroups()
 	}
 }
-
-#Preview {
-	// Preview uses an in-memory model container for fast iteration without persistent side effects.
+#Preview("Dashboard – Seeded Data") {
 	let config = ModelConfiguration(isStoredInMemoryOnly: true)
-	let container = try! ModelContainer(for: Vehicle8.self, MxItems3.self, ServiceRecords1.self, configurations: config)
-	return NavigationStack {
+	let container = try! ModelContainer(for: Vehicle8.self, MxItems3.self, ServiceRecords1.self, Additions.self, configurations: config)
+	NavigationStack {
 		DashboardView()
+			.onAppear {
+				let ctx = container.mainContext
+
+				// Jeepster — OVERDUE: oil change 7,000 mi since last, interval 5,000
+				let v1 = Vehicle8()
+				v1.name = "Jeepster"; v1.displayName = "Jeepster"
+				v1.year = 2018; v1.manufacturer = "Jeep"; v1.model = "Wrangler"
+				v1.mileage = 22000; v1.engHours = 700
+				ctx.insert(v1)
+				ctx.insert(MxItems3(createdAt: Date(), updatedAt: Date(), vehicleId: "Jeepster", vehicleSystem: "Engine", mxName: "Oil & Filter Change", mxDescription: "", Notes: "", vendor: "", laborCost: 0, intervalMonths: 0, intervalMiles: 5000, intervalHours: 0, part1: "", part1Id: "", part1Qty: 0, part1cost: 0, part1Unit: "", part2: "", part2Id: "", part2Qty: 0, part2cost: 0, part2Unit: "", part3: "", part3Id: "", part3Qty: 0, part3cost: 0, part3Unit: "", part4: "", part4Id: "", part4Qty: 0, part4cost: 0, part4Unit: "", part5: "", part5Id: "", part5Qty: 0, part5cost: 0, part5Unit: ""))
+				ctx.insert(MxItems3(createdAt: Date(), updatedAt: Date(), vehicleId: "Jeepster", vehicleSystem: "Suspension", mxName: "Tire Rotation", mxDescription: "", Notes: "", vendor: "", laborCost: 0, intervalMonths: 0, intervalMiles: 7500, intervalHours: 0, part1: "", part1Id: "", part1Qty: 0, part1cost: 0, part1Unit: "", part2: "", part2Id: "", part2Qty: 0, part2cost: 0, part2Unit: "", part3: "", part3Id: "", part3Qty: 0, part3cost: 0, part3Unit: "", part4: "", part4Id: "", part4Qty: 0, part4cost: 0, part4Unit: "", part5: "", part5Id: "", part5Qty: 0, part5cost: 0, part5Unit: ""))
+				ctx.insert(ServiceRecords1(mxDate: Calendar.current.date(byAdding: .month, value: -6, to: Date())!, vehicleId: "Jeepster", Miles: 15000, mxName: "Oil & Filter Change"))
+				ctx.insert(ServiceRecords1(mxDate: Calendar.current.date(byAdding: .month, value: -2, to: Date())!, vehicleId: "Jeepster", Miles: 18500, mxName: "Tire Rotation"))
+				ctx.insert(ServiceRecords1(mxDate: Calendar.current.date(byAdding: .day, value: -10, to: Date())!, vehicleId: "Jeepster", Miles: 21500, mxName: "Brake Inspection"))
+
+				// GMC Truck — DUE SOON: coolant flush 23 months done, interval 24
+				let v2 = Vehicle8()
+				v2.name = "GMC Truck"; v2.displayName = "GMC Truck"
+				v2.year = 2021; v2.manufacturer = "GMC"; v2.model = "Sierra"
+				v2.mileage = 38000; v2.engHours = 420
+				ctx.insert(v2)
+				ctx.insert(MxItems3(createdAt: Date(), updatedAt: Date(), vehicleId: "GMC Truck", vehicleSystem: "Cooling", mxName: "Coolant Flush", mxDescription: "", Notes: "", vendor: "", laborCost: 0, intervalMonths: 24, intervalMiles: 0, intervalHours: 0, part1: "", part1Id: "", part1Qty: 0, part1cost: 0, part1Unit: "", part2: "", part2Id: "", part2Qty: 0, part2cost: 0, part2Unit: "", part3: "", part3Id: "", part3Qty: 0, part3cost: 0, part3Unit: "", part4: "", part4Id: "", part4Qty: 0, part4cost: 0, part4Unit: "", part5: "", part5Id: "", part5Qty: 0, part5cost: 0, part5Unit: ""))
+				ctx.insert(MxItems3(createdAt: Date(), updatedAt: Date(), vehicleId: "GMC Truck", vehicleSystem: "Engine", mxName: "Spark Plugs", mxDescription: "", Notes: "", vendor: "", laborCost: 0, intervalMonths: 0, intervalMiles: 30000, intervalHours: 0, part1: "", part1Id: "", part1Qty: 0, part1cost: 0, part1Unit: "", part2: "", part2Id: "", part2Qty: 0, part2cost: 0, part2Unit: "", part3: "", part3Id: "", part3Qty: 0, part3cost: 0, part3Unit: "", part4: "", part4Id: "", part4Qty: 0, part4cost: 0, part4Unit: "", part5: "", part5Id: "", part5Qty: 0, part5cost: 0, part5Unit: ""))
+				ctx.insert(ServiceRecords1(mxDate: Calendar.current.date(byAdding: .month, value: -23, to: Date())!, vehicleId: "GMC Truck", Miles: 15000, mxName: "Coolant Flush"))
+				ctx.insert(ServiceRecords1(mxDate: Calendar.current.date(byAdding: .year, value: -2, to: Date())!, vehicleId: "GMC Truck", Miles: 10000, mxName: "Spark Plugs"))
+				ctx.insert(ServiceRecords1(mxDate: Calendar.current.date(byAdding: .day, value: -21, to: Date())!, vehicleId: "GMC Truck", Miles: 37800, mxName: "Air Filter"))
+
+				// Cargo Trailer — OK: wheel bearings 3,500 mi since, interval 10,000
+				let v3 = Vehicle8()
+				v3.name = "Trailer"; v3.displayName = "Cargo Trailer"
+				v3.year = 2020; v3.manufacturer = "PJ"; v3.model = "Utility"
+				v3.mileage = 4500; v3.engHours = 0
+				ctx.insert(v3)
+				ctx.insert(MxItems3(createdAt: Date(), updatedAt: Date(), vehicleId: "Trailer", vehicleSystem: "Axle", mxName: "Wheel Bearing Grease", mxDescription: "", Notes: "", vendor: "", laborCost: 0, intervalMonths: 0, intervalMiles: 10000, intervalHours: 0, part1: "", part1Id: "", part1Qty: 0, part1cost: 0, part1Unit: "", part2: "", part2Id: "", part2Qty: 0, part2cost: 0, part2Unit: "", part3: "", part3Id: "", part3Qty: 0, part3cost: 0, part3Unit: "", part4: "", part4Id: "", part4Qty: 0, part4cost: 0, part4Unit: "", part5: "", part5Id: "", part5Qty: 0, part5cost: 0, part5Unit: ""))
+				ctx.insert(ServiceRecords1(mxDate: Calendar.current.date(byAdding: .month, value: -4, to: Date())!, vehicleId: "Trailer", Miles: 1000, mxName: "Wheel Bearing Grease"))
+			}
 	}
 	.modelContainer(container)
 }
+
 

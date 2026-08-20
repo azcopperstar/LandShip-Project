@@ -38,10 +38,10 @@ extension DashboardView {
 			return parts.reduce(0.0) { $0 + ($1.0 * $1.1) }
 		}
 
-		func totalForRange(_ start: Date, _ end: Date, vehicleId: String?) -> Double {
+		func totalForRange(_ start: Date, _ end: Date, ids: [String]?) -> Double {
 			var predicate: Predicate<ServiceRecords1>
-			if let vid = vehicleId, vid != "All Vehicles" {
-				predicate = #Predicate { $0.mxDate >= start && $0.mxDate <= end && $0.vehicleId == vid }
+			if let ids = ids {
+				predicate = #Predicate { $0.mxDate >= start && $0.mxDate <= end && ids.contains($0.vehicleId) }
 			} else {
 				predicate = #Predicate { $0.mxDate >= start && $0.mxDate <= end }
 			}
@@ -58,16 +58,16 @@ extension DashboardView {
 			}
 		}
 
-		let selectedVehicle: String? = (trackVehicleSelected != "All Vehicles" && !trackVehicleSelected.isEmpty) ? trackVehicleSelected : nil
+		let ids = scopeIds
 
-		let mtd = totalForRange(startOfMonth, now, vehicleId: selectedVehicle)
-		let last90 = totalForRange(ninetyDaysAgo, now, vehicleId: selectedVehicle)
-		let ytd = totalForRange(startOfYear, now, vehicleId: selectedVehicle)
+		let mtd = totalForRange(startOfMonth, now, ids: ids)
+		let last90 = totalForRange(ninetyDaysAgo, now, ids: ids)
+		let ytd = totalForRange(startOfYear, now, ids: ids)
 
 		// Top items by spend (last 90 days)
 		var predTop: Predicate<ServiceRecords1>
-		if let vid = selectedVehicle {
-			predTop = #Predicate { $0.mxDate >= ninetyDaysAgo && $0.mxDate <= now && $0.vehicleId == vid }
+		if let ids = ids {
+			predTop = #Predicate { $0.mxDate >= ninetyDaysAgo && $0.mxDate <= now && ids.contains($0.vehicleId) }
 		} else {
 			predTop = #Predicate { $0.mxDate >= ninetyDaysAgo && $0.mxDate <= now }
 		}

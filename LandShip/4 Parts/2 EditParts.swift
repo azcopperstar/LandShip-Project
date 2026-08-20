@@ -88,11 +88,9 @@ struct EditParts: View {
 	@State private var image3Description: String = ""
 
 	@State private var selectedVehicle: Vehicle8?
-	@State private var selectedSystem: VehicleSystems1?
 	@State private var selectedVendor: Vendors1?
-	
+
 	@Query private var vehicles: [Vehicle8]
-	@Query private var systems: [VehicleSystems1]
 	@Query private var vendors: [Vendors1]
 
 	/// Creates a new `EditParts` view.
@@ -149,7 +147,7 @@ struct EditParts: View {
 								emptyChoiceLabel: "All Vehicles",
 								autoSelectFirst: false,
 								sort: [SortDescriptor(\.name, order: .forward)],
-								labelProvider: { v in v.name },
+								labelProvider: { v in "\(v.year) \(v.displayName)"},
 								onSelectionChanged: { sel in
 									vehicleId = sel?.name ?? "All Vehicles"
 								}
@@ -160,32 +158,7 @@ struct EditParts: View {
 								.textLabelModified()
 						}
 
-						LabeledContent {
-							ModelPicker<VehicleSystems1>(
-								selection: $selectedSystem,
-								title: "Vehicle System",
-								includeEmptyChoice: true,
-								emptyChoiceLabel: "—",
-								autoSelectFirst: false,
-								filter: {
-									if vehicleId.isEmpty || vehicleId == "All Vehicles" {
-										return nil
-									}
-									return #Predicate<VehicleSystems1> { sys in
-										sys.vehicleId == vehicleId
-									}
-								}(),
-								sort: [SortDescriptor(\.systemName, order: .forward)],
-								labelProvider: { s in s.systemName },
-								onSelectionChanged: { sel in
-									vehicleSystem = sel?.systemName ?? ""
-								}
-							)
-							.fixedSize(horizontal: true, vertical: true)
-						} label: {
-							Text("Vehicle System")
-								.textLabelModified()
-						}
+						Picker_VehicleSystem(label: "Vehicle System", data: $vehicleSystem)
 					}
 				}
 				
@@ -275,17 +248,6 @@ struct EditParts: View {
 					selectedVehicle = vehicles.first(where: { $0.name == vehicleId })
 				}
 
-				// Preselect the Vehicle System picker from the current vehicleSystem when possible.
-				if vehicleSystem.isEmpty {
-					selectedSystem = nil
-				} else {
-					if vehicleId.isEmpty || vehicleId == "All Vehicles" {
-						selectedSystem = systems.first(where: { $0.systemName == vehicleSystem })
-					} else {
-						selectedSystem = systems.first(where: { $0.systemName == vehicleSystem && $0.vehicleId == vehicleId })
-					}
-				}
-
 				// Preselect the Vendor picker from the current partSupplier when possible.
 				if partSupplier.isEmpty {
 					selectedVendor = nil
@@ -327,7 +289,7 @@ struct EditParts: View {
 				CardView {
 					VStack{
 						SectionText(label: "GENERAL")
-						HStack{LabelDataText(label: "Vehicle", data: functions.cleanOptional(inputString: dataSet.vehicleId))}
+						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						HStack{LabelDataText(label: "Vehicle System", data: functions.cleanOptional(inputString: dataSet.vehicleSystem))}
 						HStack{LabelDataText(label: "Status", data: dataSet.inactive ? "Inactive" : "Active")}
 					}
@@ -469,12 +431,42 @@ struct EditParts: View {
 		dataSet.image2Description = image2Description
 		dataSet.image3Description = image3Description
 
+		createSystemIfNeeded()
+
 		// Attempt to persist all changes to the model context.
 		do {
 			try modelContext.save()
 		} catch {
 			print(error.localizedDescription)
 		}
+	}
+
+	/// If the user typed a vehicle system name that doesn't already exist for this
+	/// vehicle, create a new `VehicleSystems1` record so it's available for future selection.
+	private func createSystemIfNeeded() {
+		let name = vehicleSystem.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !name.isEmpty else { return }
+		let vId = vehicleId
+		let fetch = FetchDescriptor<VehicleSystems1>(predicate: #Predicate<VehicleSystems1> {
+			$0.systemName == name && $0.vehicleId == vId
+		})
+		let exists = (try? modelContext.fetch(fetch))?.isEmpty == false
+		guard !exists else { return }
+		let newSystem = VehicleSystems1(
+			vehicleId: vId,
+			systemName: name,
+			systemDescription: "",
+			systemType: "",
+			systemManufacturer: "",
+			systemModel: "",
+			systemSerialNumber: "",
+			systemPartNumber: "",
+			systemLocation: "",
+			systemStatus: "",
+			systemNotes: "",
+			systemImage: nil
+		)
+		modelContext.insert(newSystem)
 	}
 	/// Permanently deletes the current `MxParts1` record and dismisses the view.
 	///

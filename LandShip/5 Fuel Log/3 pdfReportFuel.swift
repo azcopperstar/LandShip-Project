@@ -155,6 +155,7 @@ struct pdfReportFuel: View {
 				} label: {
 					Label("Print", systemImage: "printer")
 				}
+				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
 		}
@@ -196,7 +197,7 @@ struct pdfReportFuel: View {
 		}
 
 		func makeNSView(context: Context) -> PDFView {
-			let pdfView = PDFView()
+			let pdfView = PrintablePDFView()
 			pdfView.document = pdfDocument
 			pdfView.autoScales = true
 			pdfView.displaysPageBreaks = true
@@ -301,6 +302,7 @@ struct pdfReportFuel: View {
 		
 		let fuelPrice = functions.formatCurrency(dollars: record.fuelPrice)
 		let fuelCost = functions.formatCurrency(dollars: record.fuelCost)
+		let defPrice = functions.formatCurrency(dollars: record.defPrice)
 		let fuelType = record.fuelType
 		var defAdded = qtyFormatter.string(from: NSNumber(value: record.defAdded)) ?? "\(record.defAdded)"
 		defAdded = defAdded + " \(units[UnitIndex.def])"
@@ -309,7 +311,7 @@ struct pdfReportFuel: View {
 
 		let fuelNotes = record.fuelNotes
 		
-		return [vehicle, fuelDate, miles, local, fuelAdded, levelStart, fuelPrice, fuelCost, fuelType, defAdded, oilAdded, fuelNotes]
+		return [vehicle, fuelDate, miles, local, fuelAdded, levelStart, fuelPrice, fuelCost, fuelType, defAdded, defPrice, oilAdded, fuelNotes]
 	}
 	
 	/// Generates a paginated PDF containing a table of fuel log entries.
@@ -327,7 +329,7 @@ struct pdfReportFuel: View {
 		let footerHeight: CGFloat = 24
 
 		let headerRows: [[String]] = [
-			["VEHICLE", "FUEL\nDATE", "ODOM", "LOCALE", "FUEL\nADDED", "LEVEL\nSTART", "FUEL\nPRICE", "FUEL\nCOST", "FUEL\nTYPE", "DEF\nADDED", "OIL\nADDED", "FUEL NOTES"]
+			["VEHICLE", "FUEL\nDATE", "ODOM", "LOCALE", "FUEL\nADDED", "LEVEL\nSTART", "FUEL\nPRICE", "FUEL\nCOST", "FUEL\nTYPE", "DEF\nADDED", "DEF\nPRICE", "OIL\nADDED", "FUEL NOTES"]
 		]
 
 		let contentWidth = pageWidth - 2 * margin
@@ -335,7 +337,7 @@ struct pdfReportFuel: View {
 
 		// Proportional widths for the 12 columns; must sum to ~1.0
 		let columnWeights: [CGFloat] = [
-			0.08, 0.05, 0.07, 0.09, 0.06, 0.06, 0.06, 0.05, 0.08, 0.06, 0.06, 0.30
+			0.08, 0.05, 0.07, 0.09, 0.06, 0.06, 0.06, 0.05, 0.07, 0.06, 0.05, 0.06, 0.24
 		]
 		let columnWidths = columnWeights.map { $0 * contentWidth }
 
@@ -355,7 +357,7 @@ struct pdfReportFuel: View {
 
 		func beginMacPage() {
 			cgContext.beginPDFPage(nil)
-			var nsGraphicsContext = NSGraphicsContext(cgContext: cgContext, flipped: false)
+			let nsGraphicsContext = NSGraphicsContext(cgContext: cgContext, flipped: false)
 			NSGraphicsContext.saveGraphicsState()
 			NSGraphicsContext.current = nsGraphicsContext
 
@@ -476,7 +478,7 @@ struct pdfReportFuel: View {
 
 	/// Draws the page header including title, subtitle/date, and page number.
 	/// Handles platform coordinate differences when needed.
-	func drawPageHeader(margin: CGFloat,
+	nonisolated func drawPageHeader(margin: CGFloat,
 	                    pageWidth: CGFloat,
 	                    pageHeight: CGFloat,
 	                    headerHeight: CGFloat,
@@ -545,7 +547,7 @@ struct pdfReportFuel: View {
 	}
 
 	/// Draws a centered page footer with the current page number.
-	func drawPageFooter(margin: CGFloat,
+	nonisolated func drawPageFooter(margin: CGFloat,
 	                    pageWidth: CGFloat,
 	                    pageHeight: CGFloat,
 	                    footerHeight: CGFloat,
@@ -732,7 +734,7 @@ struct pdfReportFuel: View {
 	/// for each column, respecting minimum row height.
 	func computeRowHeight(for record: FuelLog1, columnWidths: [CGFloat], minRowHeight: CGFloat, units: [String]) -> CGFloat {
 		let values = valuesForRecord(record, units: units)
-		let notesIndex = 11 // last column is FUEL NOTES
+		let notesIndex = 12 // last column is FUEL NOTES
 
 		#if os(macOS)
 		let font = NSFont.systemFont(ofSize: 8)
@@ -770,7 +772,7 @@ struct pdfReportFuel: View {
 	/// and full grid lines across all columns.
 	func drawTableRow(record: FuelLog1, at origin: CGPoint, columnWidths: [CGFloat], rowHeight: CGFloat, rowIndex: Int, units: [String], pageHeight: CGFloat? = nil) {
 		let values = valuesForRecord(record, units: units)
-		let notesIndex = 11 // last column is FUEL NOTES
+		let notesIndex = 12 // last column is FUEL NOTES
 
 		#if os(macOS)
 		let font = NSFont.systemFont(ofSize: 8)
@@ -909,20 +911,17 @@ struct pdfReportFuel: View {
 	private func printPDF() {
 		guard let doc = pdfDocument else { return }
 		#if os(macOS)
-		// Use a transient PDFView and a standard NSPrintOperation
-		let pdfView = PDFView()
-		pdfView.document = doc
-
 		let printInfo = NSPrintInfo.shared
 		printInfo.horizontalPagination = .automatic
 		printInfo.verticalPagination = .automatic
 		printInfo.isHorizontallyCentered = true
 		printInfo.isVerticallyCentered = true
 
-		let op = NSPrintOperation(view: pdfView, printInfo: printInfo)
-		op.showsPrintPanel = true
-		op.showsProgressPanel = true
-		op.run()
+		if let op = doc.printOperation(for: printInfo, scalingMode: .pageScaleDownToFit, autoRotate: true) {
+			op.showsPrintPanel = true
+			op.showsProgressPanel = true
+			op.runModal(for: NSApp.keyWindow ?? NSWindow(), delegate: nil, didRun: nil, contextInfo: nil)
+		}
 		#else
 		guard UIPrintInteractionController.isPrintingAvailable,
 		      let data = doc.dataRepresentation() else { return }
@@ -956,7 +955,7 @@ struct pdfReportFuel: View {
 
 /// Preview seeds an in-memory SwiftData container with sample `FuelLog1` rows and
 /// a `Settings1` record so the PDF renders with realistic content and units.
-#Preview {
+#Preview("All Vehicles") {
 	// In-memory SwiftData container for previews
 	let config = ModelConfiguration(isStoredInMemoryOnly: true)
 	let container = try! ModelContainer(for: FuelLog1.self, Settings1.self, configurations: config)
@@ -1023,16 +1022,71 @@ struct pdfReportFuel: View {
 
 	try? context.save()
 
-	return Group {
-		// All Vehicles preview
-		pdfReportFuel(trackVehicleSelected: .constant("All Vehicles"))
-			.modelContainer(container)
-			.previewDisplayName("All Vehicles")
+	return pdfReportFuel(trackVehicleSelected: .constant("All Vehicles"))
+		.modelContainer(container)
+}
 
-		// Specific vehicle preview
-		pdfReportFuel(trackVehicleSelected: .constant("Vehicle A"))
-			.modelContainer(container)
-			.previewDisplayName("Vehicle A")
+#Preview("Vehicle A") {
+	let config = ModelConfiguration(isStoredInMemoryOnly: true)
+	let container = try! ModelContainer(for: FuelLog1.self, Settings1.self, configurations: config)
+	let context = container.mainContext
+	func makeFuelLog(vehicleId: String, daysAgo: Int, odometer: Int, fuelAdded: Float, location: String) -> FuelLog1 {
+		let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date()) ?? Date()
+		return FuelLog1(
+			logId: UUID().uuidString,
+			vehicleId: vehicleId,
+			logName: "Fuel \(vehicleId) \(daysAgo)d ago",
+			fuelNotes: "Some note for \(vehicleId) that could be long and should wrap across multiple lines in the PDF row to demonstrate wrapping behavior.",
+			createdAt: date,
+			updatedAt: date,
+			fuelDateTime: date,
+			odometer: odometer,
+			location: location,
+			engHours: 0,
+			fuelQuantityStart: 10,
+			fuelQuantityEnd: 20,
+			fuelAdded: fuelAdded,
+			defAdded: 0.2,
+			oilAdded: 0.1,
+			fuelLevelStart1: 0.5,
+			fuelLevelEnd1: 1.0,
+			fuelLevelStart: "1/2",
+			fuelLevelEnd: "Full",
+			fuelPrice: 3.79,
+			fuelCost: 3.79 * fuelAdded,
+			fuelType: "Gasoline",
+			image1: nil,
+			image1Description: "",
+			image2: nil,
+			image2Description: "",
+			image3: nil,
+			image3Description: ""
+		)
 	}
+	let samples: [FuelLog1] = [
+		makeFuelLog(vehicleId: "Vehicle A", daysAgo: 0, odometer: 12050, fuelAdded: 12.3, location: "Harbor"),
+		makeFuelLog(vehicleId: "Vehicle A", daysAgo: 3, odometer: 11800, fuelAdded: 10.0, location: "Depot"),
+		makeFuelLog(vehicleId: "Vehicle B", daysAgo: 1, odometer: 5400, fuelAdded: 8.7, location: "Station 9")
+	]
+	samples.forEach { context.insert($0) }
+	let settings = Settings1()
+	settings.userName = "primary1"
+	settings.unitVolumeFuel = "gal"
+	settings.unitVolumeOil = "qt"
+	settings.unitVolumeDEF = "gal"
+	settings.unitTemp = "F"
+	settings.unitSpeed = "mph"
+	settings.unitPressure = "PSI"
+	settings.unitMass = "lb"
+	settings.unitDistance = "mi"
+	settings.unitArea = "ft²"
+	settings.unitLength = "ft"
+	settings.unitWidth = "ft"
+	settings.unitHeight = "ft"
+	settings.unitWheelBase = "in"
+	context.insert(settings)
+	try? context.save()
+	return pdfReportFuel(trackVehicleSelected: .constant("Vehicle A"))
+		.modelContainer(container)
 }
 

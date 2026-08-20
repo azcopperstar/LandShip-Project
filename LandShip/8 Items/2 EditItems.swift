@@ -116,6 +116,15 @@ struct EditItems: View {
 	@State private var part5Qty: Float = 0
 	@State private var part5cost: Float = 0
 	@State private var part5Unit: String = "Each"
+
+	// User-defined numeric field to complement Miles/engHours (e.g. "Water Gallons" in "gal").
+	// The dropdown of previously used names is cross-referenced from both MxItems3 and ServiceRecords1.
+	@State private var customMeasureLabel: String = ""
+	@State private var customMeasureUnit: String = ""
+	@State private var customMeasureValue: Float = 0
+	@State private var availableCustomMeasureLabels: [String] = []
+	@State private var customMeasureLabelSelection: String = "__none__"
+
 	@State private var image1: Data?
 	@State private var image2: Data?
 	@State private var image3: Data?
@@ -187,7 +196,6 @@ struct EditItems: View {
 	// MARK: - Picker selections
 	// Bindings for ModelPicker/PartPickerRow components. These sync to the mirrored fields.
 	@State private var selectedVehicle: Vehicle8? = nil
-    @State private var selectedSystem: VehicleSystems1? = nil
     @State private var selectedVendor: Vendors1? = nil
     @State private var selectedPart1: MxParts1? = nil
     @State private var selectedPart2: MxParts1? = nil
@@ -245,7 +253,12 @@ struct EditItems: View {
 		self._part5Qty = State(initialValue: dataSet.part5Qty)
 		self._part5cost = State(initialValue: dataSet.part5cost)
 		self._part5Unit = State(initialValue: dataSet.part5Unit)
-		
+
+		self._customMeasureLabel = State(initialValue: dataSet.customMeasureLabel)
+		self._customMeasureUnit = State(initialValue: dataSet.customMeasureUnit)
+		self._customMeasureValue = State(initialValue: dataSet.customMeasureValue)
+		self._customMeasureLabelSelection = State(initialValue: dataSet.customMeasureLabel.isEmpty ? "__none__" : dataSet.customMeasureLabel)
+
 		self._image1 = State(initialValue: dataSet.image1)
 		self._image2 = State(initialValue: dataSet.image2)
 		self._image3 = State(initialValue: dataSet.image3)
@@ -277,8 +290,8 @@ struct EditItems: View {
 									emptyChoiceLabel: "—",
 									autoSelectFirst: false,
 									filter: nil,
-									sort: [SortDescriptor(\.name, order: .forward)],
-									labelProvider: { $0.name }
+									sort: [SortDescriptor(\.displayName, order: .forward)],
+									labelProvider: { v in "\(v.year) \(v.displayName)"},
 								)
 								.onChange(of: selectedVehicle) { _, newVehicle in
 									let name = newVehicle?.name ?? ""
@@ -293,59 +306,9 @@ struct EditItems: View {
 									.textLabelModified()
 							}
 
-							
-							LabeledContent {
-//								let currentVehicle = vehicleId.isEmpty ? dataSet.vehicleId : vehicleId
-//								let systemsFilter: Predicate<VehicleSystems1>? = currentVehicle.isEmpty ? nil : #Predicate<VehicleSystems1> { $0.vehicleId == currentVehicle }
-								ModelPicker<VehicleSystems1>(
-									selection: $selectedSystem,
-									title: "Vehicle System",
-									includeEmptyChoice: true,
-									emptyChoiceLabel: "—",
-									autoSelectFirst: false,
-									filter: {
-										if vehicleId.isEmpty || vehicleId == "All Vehicles" {
-											return nil
-										}
-										return #Predicate<VehicleSystems1> { sys in
-											sys.vehicleId == vehicleId
-										}
-									}(),
-									sort: [SortDescriptor(\.systemName, order: .forward)],
-									labelProvider: { s in s.systemName },
-									onSelectionChanged: { sel in
-										vehicleSystem = sel?.systemName ?? ""
-									}
-								)
-								.fixedSize(horizontal: true, vertical: true)
-							} label: {
-								Text("Vehicle System")
-									.textLabelModified()
-							}
 
-							
-//						HStack{
-//							Text("Vehicle System")
-//								.textLabelModified()
-//							let currentVehicle = vehicleId.isEmpty ? dataSet.vehicleId : vehicleId
-//							let systemsFilter: Predicate<VehicleSystems1>? = currentVehicle.isEmpty ? nil : #Predicate<VehicleSystems1> { $0.vehicleId == currentVehicle }
-//							ModelPicker(
-//								selection: $selectedSystem,
-//								title: "Vehicle System",
-//								includeEmptyChoice: true,
-//								emptyChoiceLabel: "—",
-//								autoSelectFirst: false,
-//								filter: systemsFilter,
-//								sort: [SortDescriptor(\.systemName, order: .forward)],
-//								labelProvider: { $0.systemName }
-//							)
-//							.onChange(of: selectedSystem) { _, newSystem in
-//								let name = newSystem?.systemName ?? ""
-//								vehicleSystem = name
-//								dataSet.vehicleSystem = name
-//							}
-//							.frame(maxWidth: .infinity, alignment: .trailing)
-//						}
+							Picker_VehicleSystem(label: "Vehicle System", data: $vehicleSystem)
+
 						HStack{ LabelDataText(label: "Status", data: inactive ? "Inactive" : "Active") }
 					}
 				}
@@ -354,10 +317,18 @@ struct EditItems: View {
 				CardView {
 					VStack {
 						SectionText(label: "SERVICE ITEM DETAILS")
-						HStack{LabelDataTextview(label: "Item Name", data: $mxName)}
-							.onChange(of: mxName) { _, _ in
-								loadLastServiceForItem()
-							}
+						if dataSet.mxName == "(New service item)" {
+							HStack{LabelDataTextview(label: "Item Name", data: $mxName)}
+								.onChange(of: mxName) { _, _ in
+									loadLastServiceForItem()
+								}
+						} else {
+							HStack{LabelDataText(label: "Item Name", data: mxName)}
+							Text("Item name cannot be changed after it has been set. It is used to link service records to this item.")
+								.font(.caption)
+								.foregroundStyle(.secondary)
+								.frame(maxWidth: .infinity, alignment: .trailing)
+						}
 						HStack{LabelDataTextview(label: "Item Description", data: $mxDescription)}
 
 						LabeledContent {
@@ -422,6 +393,40 @@ struct EditItems: View {
 							.onChange(of: intervalMiles) { _, _ in recomputeServiceStats() }
 						HStack{LabelDataTextview_Numberpad_Float(label: "Interval Hours", data: $intervalHours)}
 							.onChange(of: intervalHours) { _, _ in recomputeServiceStats() }
+
+						// User-defined numeric tracking field (e.g. Water Gallons). Selecting a
+						// previously used field name (from either Items or Service Records) auto-fills
+						// the unit last used with it.
+						LabeledContent {
+							Picker("", selection: $customMeasureLabelSelection) {
+								Text("— None —").tag("__none__")
+								ForEach(availableCustomMeasureLabels, id: \.self) { name in
+									Text(name).tag(name)
+								}
+								Text("New Field...").tag("__new__")
+							}
+							.pickerStyle(.menu)
+							.fixedSize()
+							.onChange(of: customMeasureLabelSelection) { _, newVal in
+								if newVal == "__none__" {
+									customMeasureLabel = ""
+									customMeasureUnit = ""
+								} else if newVal != "__new__" {
+									customMeasureLabel = newVal
+									customMeasureUnit = unitForCustomMeasureLabel(newVal)
+								}
+							}
+						} label: {
+							Text("Custom Field Name")
+								.textLabelModified()
+						}
+						if customMeasureLabelSelection == "__new__" {
+							HStack{LabelDataTextview(label: "Field Name", data: $customMeasureLabel)}
+						}
+						if customMeasureLabelSelection != "__none__" {
+							HStack{LabelDataTextview(label: "Custom Field Unit", data: $customMeasureUnit)}
+							HStack{LabelDataTextview_Numberpad_Float(label: "Custom Field Value\(customMeasureUnit.isEmpty ? "" : " (\(customMeasureUnit))")", data: $customMeasureValue)}
+						}
 					}
 				}
 
@@ -580,7 +585,7 @@ struct EditItems: View {
 				CardView {
 					VStack {
 						SectionText(label: "SERVICE ITEM & VEHICLE STATS")
-						HStack{LabelDataText(label: "Vehicle", data: vehicleId.isEmpty ? dataSet.vehicleId : vehicleId)}
+						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: vehicleId.isEmpty ? dataSet.vehicleId : vehicleId, context: modelContext))}
 						if vehicleCurrentMiles > 0 {
 							HStack{LabelDataText(label: "Current Odometer", data: "\(vehicleCurrentMiles) \(unit(UnitIndex.distance))")}
 						}
@@ -672,7 +677,8 @@ struct EditItems: View {
 
 			.onAppear {
 				loadUnits()
-				
+				loadAvailableCustomMeasureLabels()
+
 				// Seed vehicle picker from existing vehicleId
 				if selectedVehicle == nil, !vehicleId.isEmpty {
 					let name = vehicleId
@@ -681,15 +687,6 @@ struct EditItems: View {
 					if let v = try? modelContext.fetch(fd).first {
 						selectedVehicle = v
 					}
-				}
-				
-				// Seed system picker from existing vehicleSystem
-				if selectedSystem == nil, !vehicleSystem.isEmpty {
-						let sysName = vehicleSystem
-						let vName = vehicleId.isEmpty ? dataSet.vehicleId : vehicleId
-						var fd = FetchDescriptor<VehicleSystems1>(predicate: #Predicate { $0.systemName == sysName && $0.vehicleId == vName })
-						fd.fetchLimit = 1
-						if let s = try? modelContext.fetch(fd).first { selectedSystem = s }
 				}
 				
 				// Seed vendor picker
@@ -756,7 +753,7 @@ struct EditItems: View {
 				CardView {
 					VStack{
 						SectionText(label: "GENERAL")
-						HStack{LabelDataText(label: "Vehicle:", data: dataSet.vehicleId)}
+						HStack{LabelDataText(label: "Vehicle:", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						HStack{LabelDataText(label: "Systems:", data: "\(dataSet.vehicleSystem)")}
 						HStack{LabelDataText(label: "Status:", data: dataSet.inactive ? "Inactive" : "Active")}
 					}
@@ -793,9 +790,12 @@ struct EditItems: View {
 						if dataSet.intervalMonths > 0 {
 							HStack{LabelDataText(label: "Months:", data: "\(dataSet.intervalMonths)")}
 						}
+						if !dataSet.customMeasureLabel.isEmpty {
+							HStack{LabelDataText(label: dataSet.customMeasureLabel, data: "\(dataSet.customMeasureValue.formatted(.number.precision(.fractionLength(1)))) \(dataSet.customMeasureUnit)")}
+						}
 					}
 				}
-				
+
 				// Part 1..5 parts used details
 				CardView {
 					VStack{
@@ -866,7 +866,7 @@ struct EditItems: View {
 				CardView {
 					VStack {
 						SectionText(label: "SERVICE ITEM & VEHICLE STATS")
-						HStack{LabelDataText(label: "Vehicle", data: dataSet.vehicleId)}
+						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						if vehicleCurrentMiles > 0 {
 							HStack{LabelDataText(label: "Current Odometer", data: "\(vehicleCurrentMiles) \(unit(UnitIndex.distance))")}
 						}
@@ -940,6 +940,7 @@ struct EditItems: View {
 
 			.onAppear {
 				loadUnits()
+				loadAvailableCustomMeasureLabels()
 				// Seed vehicle picker from existing vehicleId
 				if selectedVehicle == nil, !vehicleId.isEmpty {
 					let name = vehicleId
@@ -949,14 +950,6 @@ struct EditItems: View {
 						selectedVehicle = v
 					}
 				}
-                // Seed system picker from existing vehicleSystem
-                if selectedSystem == nil, !vehicleSystem.isEmpty {
-                    let sysName = vehicleSystem
-                    let vName = vehicleId.isEmpty ? dataSet.vehicleId : vehicleId
-                    var fd = FetchDescriptor<VehicleSystems1>(predicate: #Predicate { $0.systemName == sysName && $0.vehicleId == vName })
-                    fd.fetchLimit = 1
-                    if let s = try? modelContext.fetch(fd).first { selectedSystem = s }
-                }
                 // Seed vendor picker
                 if selectedVendor == nil, !vendor.isEmpty {
                     let name = vendor
@@ -1062,6 +1055,9 @@ struct EditItems: View {
 		dataSet.part5Qty = part5Qty
 		dataSet.part5cost = part5cost
 		dataSet.part5Unit = part5Unit
+		dataSet.customMeasureLabel = customMeasureLabel
+		dataSet.customMeasureUnit = customMeasureUnit
+		dataSet.customMeasureValue = customMeasureValue
 		dataSet.image1 = image1
 		dataSet.image2 = image2
 		dataSet.image3 = image3
@@ -1069,13 +1065,43 @@ struct EditItems: View {
 		dataSet.image2Description = image2Description
 		dataSet.image3Description = image3Description
 
+		createSystemIfNeeded()
+
 		do {
 			try modelContext.save()
 		} catch {
 			print(error.localizedDescription)
 		}
 	}
-	
+
+	/// If the user typed a vehicle system name that doesn't already exist for this
+	/// vehicle, create a new `VehicleSystems1` record so it's available for future selection.
+	private func createSystemIfNeeded() {
+		let name = vehicleSystem.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !name.isEmpty else { return }
+		let vId = vehicleId.isEmpty ? dataSet.vehicleId : vehicleId
+		let fetch = FetchDescriptor<VehicleSystems1>(predicate: #Predicate<VehicleSystems1> {
+			$0.systemName == name && $0.vehicleId == vId
+		})
+		let exists = (try? modelContext.fetch(fetch))?.isEmpty == false
+		guard !exists else { return }
+		let newSystem = VehicleSystems1(
+			vehicleId: vId,
+			systemName: name,
+			systemDescription: "",
+			systemType: "",
+			systemManufacturer: "",
+			systemModel: "",
+			systemSerialNumber: "",
+			systemPartNumber: "",
+			systemLocation: "",
+			systemStatus: "",
+			systemNotes: "",
+			systemImage: nil
+		)
+		modelContext.insert(newSystem)
+	}
+
 	/// Permanently deletes this item from the model context and dismisses the view.
 	@MainActor
 	private func DeleteRecord(){
@@ -1179,7 +1205,52 @@ struct EditItems: View {
 			self.units = arr
 		}
 	}
-	
+
+	/// Loads the distinct custom tracking field names previously used, cross-referencing both
+	/// MxItems3 (service item templates) and ServiceRecords1 (service records), so the
+	/// "Custom Field Name" picker offers names entered in either place for reuse.
+	private func loadAvailableCustomMeasureLabels() {
+		var labels = Set<String>()
+		if let items = try? modelContext.fetch(FetchDescriptor<MxItems3>()) {
+			labels.formUnion(items.compactMap { $0.customMeasureLabel.isEmpty ? nil : $0.customMeasureLabel })
+		}
+		if let records = try? modelContext.fetch(FetchDescriptor<ServiceRecords1>()) {
+			labels.formUnion(records.compactMap { $0.customMeasureLabel.isEmpty ? nil : $0.customMeasureLabel })
+		}
+		var sortedLabels = labels.sorted()
+		if !customMeasureLabel.isEmpty && !sortedLabels.contains(customMeasureLabel) {
+			sortedLabels.insert(customMeasureLabel, at: 0)
+		}
+		availableCustomMeasureLabels = sortedLabels
+		if !customMeasureLabel.isEmpty && sortedLabels.contains(customMeasureLabel) && customMeasureLabelSelection == "__none__" {
+			customMeasureLabelSelection = customMeasureLabel
+		}
+	}
+
+	/// Looks up the unit of measure most recently used with a given custom field name,
+	/// checking both MxItems3 and ServiceRecords1, so choosing that name auto-completes its unit.
+	private func unitForCustomMeasureLabel(_ label: String) -> String {
+		var itemFd = FetchDescriptor<MxItems3>(predicate: #Predicate<MxItems3> { $0.customMeasureLabel == label })
+		itemFd.sortBy = [SortDescriptor(\.updatedAt, order: .reverse)]
+		itemFd.fetchLimit = 1
+		var recordFd = FetchDescriptor<ServiceRecords1>(predicate: #Predicate<ServiceRecords1> { $0.customMeasureLabel == label })
+		recordFd.sortBy = [SortDescriptor(\.updatedAt, order: .reverse)]
+		recordFd.fetchLimit = 1
+		let itemMatch = try? modelContext.fetch(itemFd).first
+		let recordMatch = try? modelContext.fetch(recordFd).first
+		switch (itemMatch, recordMatch) {
+		case (.some(let item), .some(let record)):
+			return item.updatedAt >= record.updatedAt ? item.customMeasureUnit : record.customMeasureUnit
+		case (.some(let item), nil):
+			return item.customMeasureUnit
+		case (nil, .some(let record)):
+			return record.customMeasureUnit
+		default:
+			return ""
+		}
+	}
+
+
 	/// Fetches current vehicle readings (miles/hours) and triggers a stats recompute.
 	private func refreshVehicleDetails() {
 		let id = (vehicleId.isEmpty ? dataSet.vehicleId : vehicleId)

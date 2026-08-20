@@ -90,6 +90,8 @@ struct DisplayParts: View {
     /// Supported sort options for parts. Each case maps to concrete SortDescriptors
     /// used by the parts query.
     private enum PartsSort: String, CaseIterable, Identifiable {
+        case dateDesc = "Date ↓"
+        case dateAsc = "Date ↑"
         case vehicleAsc_nameAsc = "Vehicle A–Z, Part A–Z"
         case vehicleAsc_nameDesc = "Vehicle A–Z, Part Z–A"
         case nameAsc = "Part A–Z"
@@ -100,6 +102,10 @@ struct DisplayParts: View {
         /// Concrete sort descriptors used by the SwiftData query for `MxParts1`.
         var descriptors: [SortDescriptor<MxParts1>] {
             switch self {
+            case .dateDesc:
+                return [ .init(\.createdAt, order: .reverse) ]
+            case .dateAsc:
+                return [ .init(\.createdAt, order: .forward) ]
             case .vehicleAsc_nameAsc:
                 return [
                     .init(\.vehicleId, order: .forward),
@@ -121,7 +127,7 @@ struct DisplayParts: View {
     }
 
     /// Currently selected sort option.
-    @State private var selectedSort: PartsSort = .vehicleAsc_nameAsc
+    @AppStorage("sort_parts") private var selectedSort: PartsSort = .dateDesc
 
     // MARK: - Body
 
@@ -129,22 +135,17 @@ struct DisplayParts: View {
         // Build the shared content for both modern and legacy navigation flows.
         let sharedContent = Group {
             // MARK: Vehicle Filter Row
-            LabeledContent {
-                ModelPicker(
-                    selection: $selectedVehicle,
-                    title: "Vehicle",
-                    includeEmptyChoice: true,
-                    emptyChoiceLabel: "All Vehicles",
-                    autoSelectFirst: false,
-                    filter: nil,
-                    sort: [SortDescriptor(\.name, order: .forward)],
-                    labelProvider: { $0.name }
-                )
-                .fixedSize(horizontal: true, vertical: true)
-            } label: {
-                Text("Vehicle")
-                    .textLabelModified()
-            }
+            ModelPicker(
+                selection: $selectedVehicle,
+                title: "",
+                includeEmptyChoice: true,
+                emptyChoiceLabel: "All Vehicles",
+                autoSelectFirst: false,
+                filter: nil,
+                sort: [SortDescriptor(\.displayName, order: .forward)],
+									labelProvider: { v in "\(v.year) \(v.displayName)"},
+            )
+            .frame(maxWidth: .infinity)
             // Keep the shared string binding and local object selection synchronized.
             .onChange(of: selectedVehicle) { _, newVehicle in
                 // When the user picks a vehicle object, reflect it into the shared string.
@@ -186,7 +187,7 @@ struct DisplayParts: View {
                         List {
                             EmptyStateSection(
                                 title: "Add your first Part",
-                                systemImage: "engine.combustion.badge.exclamationmark",
+                                systemImage: "gearshape.2.fill",
                                 description: "Create a part to track inventory, sourcing, and usage in service items and records.\n\nTo add additional parts after this first one, select the '+' button at the top of the form.",
                                 actionTitle: "Add First Part",
                                 action: { addNewRecord() }
@@ -206,13 +207,41 @@ struct DisplayParts: View {
                                         HStack {
                                             // Thumbnail and primary fields for the part.
 //                                            Image_View_Thumbnail(imageData: record.image1)
-																					let vehicleForImage = vehicles.first { $0.name == record.vehicleId }
-																					Image_View_Thumbnail(imageData: vehicleForImage?.image1 ?? record.image1)
-                                            VStack {
+//																					let vehicleForImage = vehicles.first { $0.name == record.vehicleId }
+//																					Image_View_Thumbnail(imageData: vehicleForImage?.image1 ?? record.image1)
+                                            VStack(alignment: .leading, spacing: 1) {
 																							Text("\(record.partName)")
-																								.textModifier_ListTitle()
-                                                Text("\(record.vehicleId)")
-                                                    .textModifier_ListSubTitle_R()
+																								.font(.headline)
+                                                if !record.partManufacture.isEmpty || !record.partNumber.isEmpty {
+                                                    Text("\([record.partManufacture, record.partNumber].filter { !$0.isEmpty }.joined(separator: " · "))")
+                                                        .font(.subheadline)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                if !record.partDescription.isEmpty {
+                                                    Text("\(record.partDescription)")
+                                                        .font(.subheadline)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                if !record.vehicleSystem.isEmpty {
+                                                    Text("\(record.vehicleSystem)")
+                                                        .font(.subheadline)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                if record.partQuantity != 0 || record.costPerUnit != 0 {
+                                                    Text("\(record.partQuantity) \(record.partUnit) · \(record.costPerUnit.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")))")
+                                                        .font(.subheadline)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                if !record.partStatus.isEmpty || !record.partSupplier.isEmpty {
+                                                    Text("\([record.partStatus, record.partSupplier].filter { !$0.isEmpty }.joined(separator: " · "))")
+                                                        .font(.subheadline)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                if trackVehicleSelected == "All Vehicles" {
+                                                    Text("\(Functions().getVehicleDisplayName(vehicleId: record.vehicleId, context: modelContext))")
+                                                        .font(.subheadline)
+                                                        .foregroundStyle(.secondary)
+                                                }
                                             }
 																						.cardStyle(backgroundColor: .blue.opacity(0.6))
                                         }
@@ -230,8 +259,18 @@ struct DisplayParts: View {
                                         let frozen = trackVehicleSelected
                                         reportDestination = ReportDestination(scope: frozen)
                                     } label: {
-                                        Label("Report", systemImage: "list.clipboard")
+#if os(macOS)
+                                        Image(systemName: "doc.text")
+#else
+                                        VStack(spacing: 2) {
+                                            Image(systemName: "doc.text")
+                                            Text("Report")
+                                                .font(.caption2)
+                                        }
+#endif
                                     }
+                                    .help("Report")
+                                    .accessibilityLabel("Report")
                                 }
                                 ToolbarItem(placement: .automatic) {
                                     Menu {
@@ -241,18 +280,37 @@ struct DisplayParts: View {
                                             }
                                         }
                                     } label: {
-                                        Label("Sort", systemImage: "arrow.up.arrow.down")
+#if os(macOS)
+                                        Image(systemName: "arrow.up.arrow.down")
+#else
+                                        VStack(spacing: 2) {
+                                            Image(systemName: "arrow.up.arrow.down")
+                                            Text("Sort")
+                                                .font(.caption2)
+                                        }
+#endif
                                     }
                                     .buttonStyle(GrowingButton(buttonColor: Color.gray))
+                                    .help("Sort")
                                     .accessibilityLabel("Sort parts")
                                 }
                                 ToolbarItem(placement: .automatic) {
                                     Button {
                                         addNewRecord()
                                     } label: {
-                                        Label("Add", systemImage: "plus.capsule")
+#if os(macOS)
+                                        Image(systemName: "plus.capsule")
+#else
+                                        VStack(spacing: 2) {
+                                            Image(systemName: "plus.capsule")
+                                            Text("Add")
+                                                .font(.caption2)
+                                        }
+#endif
                                     }
                                     .disabled(false)
+                                    .help("Add")
+                                    .accessibilityLabel("Add")
                                 }
                             }
                         } header: {
@@ -371,54 +429,85 @@ struct DisplayParts: View {
 
 // MARK: - Previews
 
-#Preview("DisplayParts - Empty State") {
-    makeDisplayPartsEmptyPreview(initialVehicle: "All Vehicles")
+#Preview("DisplayParts - Seeded") {
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: Vehicle8.self, MxParts1.self, configurations: config)
+    let ctx = container.mainContext
+
+    // Seed vehicles
+    let truck = Vehicle8()
+    truck.name = "Big Red"
+    truck.displayName = "Big Red"
+    truck.year = 2021
+    truck.manufacturer = "Ford"
+    truck.model = "F-250"
+    truck.fuelType = "Diesel"
+    truck.fuelCapacity = 48
+    truck.mileage = 42500
+    ctx.insert(truck)
+
+    let van = Vehicle8()
+    van.name = "White Van"
+    van.displayName = "White Van"
+    van.year = 2019
+    van.manufacturer = "Ford"
+    van.model = "Transit"
+    van.fuelType = "Gasoline"
+    van.fuelCapacity = 25
+    van.mileage = 88000
+    ctx.insert(van)
+
+    // Seed parts
+    let partsData: [(vehicle: String, system: String, name: String, number: String, make: String, qty: Int, cost: Float, status: String, supplier: String)] = [
+        ("Big Red",  "Engine",       "Oil Filter",          "PH3593A",  "Fram",       2,  12.99, "In Stock",  "AutoZone"),
+        ("Big Red",  "Engine",       "Air Filter",          "CA10755",  "Fram",       1,   9.49, "In Stock",  "AutoZone"),
+        ("Big Red",  "Transmission", "Transmission Filter", "TF271",    "WIX",        1,  22.00, "Ordered",   "Rock Auto"),
+        ("Big Red",  "Brakes",       "Front Brake Pads",    "D1453",    "Wagner",     1,  48.50, "In Stock",  "O'Reilly"),
+        ("Big Red",  "Belts/Hoses",  "Serpentine Belt",     "K060882",  "Gates",      1,  31.75, "Low Stock", "NAPA"),
+        ("White Van","Engine",       "Spark Plug Set",      "5224",     "NGK",        8,   3.99, "In Stock",  "AutoZone"),
+        ("White Van","Brakes",       "Rear Brake Rotors",   "BR900835", "Raybestos",  2,  54.00, "In Stock",  "Rock Auto"),
+    ]
+
+    for p in partsData {
+        let part = MxParts1(
+            vehicleId: p.vehicle,
+            vehicleSystem: p.system,
+            partName: p.name,
+            partNumber: p.number,
+            partManufacture: p.make,
+            partDescription: "",
+            Notes: "",
+            costPerUnit: p.cost,
+            partUnit: "each",
+            partSource: "",
+            partQuantity: p.qty,
+            partLocation: "Shop Shelf",
+            partStatus: p.status,
+            partSupplier: p.supplier
+        )
+        ctx.insert(part)
+    }
+
+    return NavigationStack {
+        DisplayParts(trackVehicleSelected: .constant("Big Red"))
+    }
+    .modelContainer(container)
 }
 
-/// Constructs a preview for `DisplayParts` with an in-memory model container.
-@MainActor
-private func makeDisplayPartsEmptyPreview(initialVehicle: String) -> some View {
-    // In-memory SwiftData container (include both models so queries work)
-    let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(
-        for: Vehicle8.self,
-                MxParts1.self,
-                configurations: configuration
-    )
+#Preview("DisplayParts - Empty State") {
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: Vehicle8.self, MxParts1.self, configurations: config)
+    let ctx = container.mainContext
 
-    let context = container.mainContext
+    let truck = Vehicle8()
+    truck.name = "Big Red"
+    truck.displayName = "Big Red"
+    truck.year = 2021
+    ctx.insert(truck)
 
-    // Seed vehicles only (no parts), so the table is empty
-    let vehicleA = Vehicle8(
-        name: "Truck 1500",
-        year: 2020,
-        mileage: 42000,
-        mileageVirtual: 0,
-        engHours: 1234.5,
-        fuelType: "Gasoline",
-        fuelCapacity: 26
-    )
-    let vehicleB = Vehicle8(
-        name: "Van 2500",
-        year: 2018,
-        mileage: 88000,
-        mileageVirtual: 0,
-        engHours: 2345.6,
-        fuelType: "Diesel",
-        fuelCapacity: 32
-    )
-    context.insert(vehicleA)
-    context.insert(vehicleB)
-    try? context.save()
-
-    // Binding for the selected vehicle in the preview
-    let selection = State(initialValue: initialVehicle)
-
-    // Wrap in a NavigationStack so navigationDestination works
     return NavigationStack {
-        DisplayParts(trackVehicleSelected: selection.projectedValue)
-            .modelContainer(container)
-            .navigationTitle("Parts")
+        DisplayParts(trackVehicleSelected: .constant("All Vehicles"))
     }
+    .modelContainer(container)
 }
 

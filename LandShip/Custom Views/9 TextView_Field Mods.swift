@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import SwiftData
 import Combine
 import CoreLocation
 
@@ -60,17 +61,18 @@ struct PageTitle_Col3_Photo: View {
 	
 	let label: String
 	let action: String /// edit or display
-	let dbRecord: String	/// record being displayed
+	let dbRecord: String	/// record being displayed (may be a vehicleId UUID that needs lookup)
+	@Environment(\.modelContext) private var modelContext
 	
 	var body: some View {
-		/// get app name and version
-		let version = AppVersion.current
+		/// Look up display name if dbRecord is a vehicle UUID
+		let displayText = Functions().getVehicleDisplayName(vehicleId: dbRecord, context: modelContext)
 		
 		HStack(alignment: .firstTextBaseline, spacing: 6) {
 			if action == "edit" {
-				Text("EDIT \(dbRecord)".uppercased())
+				Text("EDIT \(displayText)".uppercased())
 			} else {
-				Text("\(dbRecord) DETAILS".uppercased())
+				Text("\(displayText) DETAILS".uppercased())
 			}
 			Text("\(VersionStrings.fullVersionStringWithAppName)")
 				.font(.caption2)
@@ -88,6 +90,8 @@ struct PageTitle_Col3_Photo: View {
 struct LabelLocationTextview: View {
     let label: String
     @Binding var data: String
+    /// When `false`, the field never auto-fills on appear/becoming empty — it only fills when the location button is pressed.
+    var autoFillOnAppear: Bool = true
 
     @StateObject private var locationProvider = LocationProvider()
     @State private var userClearedField: Bool = false
@@ -153,10 +157,12 @@ struct LabelLocationTextview: View {
                 }
             }
             .buttonStyle(.borderless)
-            .help("Fill with current place")
+            .disabled(!data.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .help(data.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Fill with current place" : "Clear the field to auto-fill location")
 #endif
         }
         .task(id: data.isEmpty) {
+            guard autoFillOnAppear else { return }
             // Only auto-fill when the field is empty and the user hasn't explicitly cleared it
             let shouldAutofill = await MainActor.run {
                 data.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !userClearedField
@@ -188,10 +194,12 @@ struct LabelLocationTextview: View {
 struct LabelDataTextview: View {
 	let label: String
 	@Binding var data: String
+	/// Overrides the placeholder text shown when `data` is empty. Defaults to `label` when nil.
+	var prompt: String? = nil
 	var body: some View {
 		Text(label)
 			.textLabelModified()
-		TextField("", text: $data, prompt: Text(label.replacingOccurrences(of: ":", with: "")))
+		TextField("", text: $data, prompt: Text(prompt ?? label.replacingOccurrences(of: ":", with: "")))
 			.textViewModified()
 #if os(iOS)
 			.selectAllTextOnBeginEditing()
@@ -250,10 +258,27 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 	@Binding var defAdded: Float
 	let labelDEF: String
 	@Binding var oilChecked: Bool
+	@Binding var engineCoolantChecked: Bool
+	@Binding var secondaryCoolantChecked: Bool
+	@Binding var powerSteeringChecked: Bool
+	@Binding var brakeFluidChecked: Bool
+	@Binding var transmissionFluidChecked: Bool
+	@Binding var rearAxleChecked: Bool
+	@Binding var frontAxleChecked: Bool
+	@Binding var fuelWaterSeparatorChecked: Bool
+	@Binding var airSystemWaterBleedChecked: Bool
+	@Binding var fuelDateTime: Date
+	@Binding var fuelImage1: Data?
+	@Binding var fuelImage2: Data?
+	@Binding var fuelImage3: Data?
+	var fuelExitTime: Binding<Date>? = nil
+	var stopReason: Binding<String>? = nil
+	var stopComment: Binding<String>? = nil
 	let functions: Functions = Functions()
 	
 	/// Optional callback invoked when any of the fuel fields (notably notes) change or commit
 	var onUpdate: (() -> Void)? = nil
+	@State private var showFluidChecks: Bool = false
 	
 	private var isLocationValid: Bool { !fuelLocation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !dataFuelLog }
 	private var isQuantityValid: Bool { dataQuantity >= 0 }
@@ -262,7 +287,11 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 	private var isEngHoursValid: Bool { !dataFuelLog || fuelEngHours >= 0 }
 	private var isOilValid: Bool { !dataFuelLog || oilAdded >= 0 }
 	private var isDEFValid: Bool { !dataFuelLog || defAdded >= 0 }
-	
+	/// Stop details stay hidden until a stop reason is chosen, so a freshly-added stop doesn't show a wall of empty fields.
+	private var fieldsVisible: Bool { stopReason.map { !$0.wrappedValue.isEmpty } ?? true }
+	/// Quantity only applies to fuel stops; other stop reasons (rest, food, etc.) don't add fuel.
+	private var isFuelStop: Bool { stopReason.map { $0.wrappedValue == "Fuel" } ?? true }
+
 	@ViewBuilder private func validatedField<Content: View>(_ valid: Bool, @ViewBuilder content: () -> Content) -> some View {
 		content()
 			.overlay(
@@ -273,7 +302,55 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 	
 	var body: some View {
 		VStack {
-			if fuelEntryValue == 0 {
+				if let stopReason {
+					let predefined: [String] = ["", "Fuel", "Rest", "Food", "Sightseeing", "Lodging", "Maintenance", "Weather"]
+					let pickerSel = predefined.contains(stopReason.wrappedValue) ? stopReason.wrappedValue : "Other"
+					HStack {
+						Text("Stop Reason")
+							.textLabelModified()
+						Picker("", selection: Binding(
+							get: { pickerSel },
+							set: { val in
+								if val == "Other" { stopReason.wrappedValue = "Other" }
+								else { stopReason.wrappedValue = val }
+								if val == "Fuel" { dataFuelLog = true }
+							}
+						)) {
+							Text("Not Set").tag("")
+							Text("Fuel").tag("Fuel")
+							Text("Rest").tag("Rest")
+							Text("Food").tag("Food")
+							Text("Sightseeing").tag("Sightseeing")
+							Text("Lodging").tag("Lodging")
+							Text("Maintenance").tag("Maintenance")
+							Text("Weather").tag("Weather")
+							Text("Other").tag("Other")
+						}
+						.pickerStyle(.menu)
+						.pickerModifier_Medium()
+					}
+					if pickerSel == "Other" {
+						HStack {
+							Text("  Specify")
+								.bold()
+							TextField("Describe stop", text: Binding(
+								get: { stopReason.wrappedValue == "Other" ? "" : stopReason.wrappedValue },
+								set: { stopReason.wrappedValue = $0.isEmpty ? "Other" : $0 }
+							))
+							.textFieldStyle(.roundedBorder)
+						}
+					}
+				}
+				if fieldsVisible {
+				if let stopComment {
+					HStack {
+						Text("Comments")
+							.bold()
+						TextField("Stop notes", text: stopComment)
+							.textFieldStyle(.roundedBorder)
+					}
+				}
+				if fuelEntryValue == 0 {
 				// only display fuel log option if new entry
 				// edited entry would be > 0 so log already created
 				Toggle(isOn: $dataFuelLog){
@@ -282,24 +359,33 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 				}
 				.accessibilityLabel("Create Fuel Log")
 				.accessibilityHint("Enable to store this fuel stop as a separate log with price, odometer, and fluids")
-			}
-				LabelLocationTextview(label: "Location", data: $fuelLocation)
-			HStack {
-				Text("Qty\(label)")
-					.textLabelModified()
-				validatedField(isQuantityValid) {
-					TextField("", value: $dataQuantity, formatter: functions.DoubleFormatter)
-						.textViewModified_Medium()
-#if !os(macOS)
-						.selectAllTextOnBeginEditing()
-						.keyboardType(.decimalPad)
-#endif
-						.accessibilityLabel("Fuel Quantity \(label)")
+				.onChange(of: dataFuelLog) { _, newValue in
+					if newValue { stopReason?.wrappedValue = "Fuel" }
 				}
-				if !isQuantityValid {
-					Text("Quantity cannot be negative")
-						.font(.caption2)
-						.foregroundStyle(.red)
+			}
+				LabelDataPicker_DateTime(label: "Date/Time                    ", data: $fuelDateTime)
+				if let fuelExitTime {
+					LabelDataPicker_DateTime(label: "Exit Time                    ", data: fuelExitTime)
+				}
+				LabelLocationTextview(label: "Location", data: $fuelLocation, autoFillOnAppear: false)
+			HStack {
+				if isFuelStop {
+					Text("Qty\(label)")
+						.textLabelModified()
+					validatedField(isQuantityValid) {
+						TextField("", value: $dataQuantity, formatter: functions.DoubleFormatter)
+							.textViewModified_Medium()
+#if !os(macOS)
+							.selectAllTextOnBeginEditing()
+							.keyboardType(.decimalPad)
+#endif
+							.accessibilityLabel("Fuel Quantity \(label)")
+					}
+					if !isQuantityValid {
+						Text("Quantity cannot be negative")
+							.font(.caption2)
+							.foregroundStyle(.red)
+					}
 				}
 				if dataFuelLog {
 					Text("Price/\(label)")
@@ -395,13 +481,27 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 						}
 					}
 					HStack {
-						Toggle(isOn: $oilChecked) {
-							Text("Oil Checked")
-								.textLabelModified()
+						Button {
+							showFluidChecks = true
+						} label: {
+							Label("Fluid Checks", systemImage: "drop.circle")
 						}
-						.accessibilityLabel("Oil Checked")
-						.accessibilityHint("Indicates whether oil level was checked during this fuel stop")
+						.buttonStyle(.bordered)
 						Spacer()
+					}
+					.sheet(isPresented: $showFluidChecks) {
+						FluidCheckSheet(
+						oilChecked: $oilChecked,
+						engineCoolantChecked: $engineCoolantChecked,
+						secondaryCoolantChecked: $secondaryCoolantChecked,
+						powerSteeringChecked: $powerSteeringChecked,
+						brakeFluidChecked: $brakeFluidChecked,
+						transmissionFluidChecked: $transmissionFluidChecked,
+						rearAxleChecked: $rearAxleChecked,
+						frontAxleChecked: $frontAxleChecked,
+						fuelWaterSeparatorChecked: $fuelWaterSeparatorChecked,
+						airSystemWaterBleedChecked: $airSystemWaterBleedChecked,
+					)
 					}
 				}
 				HStack {
@@ -435,6 +535,12 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 //							onUpdate?()
 //						}
 				}
+				HStack(spacing: 8) {
+					FuelStop_ImagePicker(imageData: $fuelImage1)
+					FuelStop_ImagePicker(imageData: $fuelImage2)
+					FuelStop_ImagePicker(imageData: $fuelImage3)
+				}
+			}
 			}
 		}
 	}
@@ -619,3 +725,49 @@ extension View {
 #endif
 }
 
+// MARK: - Fluid Check Sheet
+struct FluidCheckSheet: View {
+	@Environment(\.dismiss) private var dismiss
+
+	@Query(filter: #Predicate<Settings1> { $0.userName == "primary1" })
+	private var settingsQuery: [Settings1]
+	private var s: Settings1? { settingsQuery.first }
+
+	var oilChecked: Binding<Bool>? = nil
+	var engineCoolantChecked: Binding<Bool>? = nil
+	var secondaryCoolantChecked: Binding<Bool>? = nil
+	var powerSteeringChecked: Binding<Bool>? = nil
+	var brakeFluidChecked: Binding<Bool>? = nil
+	var transmissionFluidChecked: Binding<Bool>? = nil
+	var rearAxleChecked: Binding<Bool>? = nil
+	var frontAxleChecked: Binding<Bool>? = nil
+	var fuelWaterSeparatorChecked: Binding<Bool>? = nil
+	var airSystemWaterBleedChecked: Binding<Bool>? = nil
+
+	var body: some View {
+		NavigationStack {
+			Form {
+				Section {
+					if let b = oilChecked, s?.fluidChk_engineOil ?? true { Toggle("Engine Oil", isOn: b) }
+					if let b = engineCoolantChecked, s?.fluidChk_engineCoolant ?? true { Toggle("Engine Coolant", isOn: b) }
+					if let b = secondaryCoolantChecked, s?.fluidChk_secondaryCoolant ?? true { Toggle("Secondary Coolant", isOn: b) }
+					if let b = powerSteeringChecked, s?.fluidChk_powerSteering ?? true { Toggle("Power Steering", isOn: b) }
+					if let b = brakeFluidChecked, s?.fluidChk_brake ?? true { Toggle("Brake", isOn: b) }
+					if let b = transmissionFluidChecked, s?.fluidChk_transmission ?? true { Toggle("Transmission", isOn: b) }
+					if let b = rearAxleChecked, s?.fluidChk_rearAxle ?? true { Toggle("Rear Axle", isOn: b) }
+					if let b = frontAxleChecked, s?.fluidChk_frontAxle ?? true { Toggle("Front Axle", isOn: b) }
+					if let b = fuelWaterSeparatorChecked, s?.fluidChk_fuelWaterSep ?? true { Toggle("Fuel/Water Separator", isOn: b) }
+					if let b = airSystemWaterBleedChecked, s?.fluidChk_airWaterBleed ?? true { Toggle("Air System Water Bleed", isOn: b) }
+				} header: {
+					Text("Mark fluids checked at this stop")
+				}
+			}
+			.navigationTitle("Fluid Checks")
+			.toolbar {
+				ToolbarItem(placement: .confirmationAction) {
+					Button("Done") { dismiss() }
+				}
+			}
+		}
+	}
+}

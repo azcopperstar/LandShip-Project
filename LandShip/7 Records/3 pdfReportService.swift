@@ -152,7 +152,7 @@ struct pdfReportService: View {
 		.onAppear {
 			scheduleGeneration()
 		}
-		.onChange(of: dataSetKey) { _ in
+		.onChange(of: dataSetKey) {
 			scheduleGeneration()
 		}
 		.toolbar {
@@ -189,6 +189,7 @@ struct pdfReportService: View {
 				} label: {
 					Label("Print", systemImage: "printer")
 				}
+				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
 			#if os(macOS)
@@ -318,7 +319,7 @@ struct pdfReportService: View {
 		}
 
 		func makeNSView(context: Context) -> PDFView {
-			let pdfView = PDFView()
+			let pdfView = PrintablePDFView()
 			pdfView.document = pdfDocument
 			pdfView.autoScales = true
 			pdfView.displaysPageBreaks = true
@@ -525,7 +526,7 @@ struct pdfReportService: View {
 		// Helper: begin a new page and draw header/footer.
 		func beginMacPage() {
 			cgContext.beginPDFPage(nil)
-			var nsGraphicsContext = NSGraphicsContext(cgContext: cgContext, flipped: false)
+			let nsGraphicsContext = NSGraphicsContext(cgContext: cgContext, flipped: false)
 			NSGraphicsContext.saveGraphicsState()
 			NSGraphicsContext.current = nsGraphicsContext
 
@@ -659,7 +660,7 @@ struct pdfReportService: View {
 
 	// Draw page header: title (left), subtitle+date (left), and page number (right).
 	// macOS variant converts to Quartz coordinates; iOS draws directly.
-	func drawPageHeader(margin: CGFloat,
+	nonisolated func drawPageHeader(margin: CGFloat,
 	                    pageWidth: CGFloat,
 	                    pageHeight: CGFloat,
 	                    headerHeight: CGFloat,
@@ -729,7 +730,7 @@ struct pdfReportService: View {
 
 	// Draw page footer: centered page number.
 	// macOS variant converts to Quartz coordinates; iOS draws directly.
-	func drawPageFooter(margin: CGFloat,
+	nonisolated func drawPageFooter(margin: CGFloat,
 	                    pageWidth: CGFloat,
 	                    pageHeight: CGFloat,
 	                    footerHeight: CGFloat,
@@ -925,8 +926,6 @@ struct pdfReportService: View {
 	// Uses a small font and per‑column paragraph styles (left for text‑heavy columns, centered otherwise).
 	func computeRowHeight(for record: ServiceRecords1, columnWidths: [CGFloat], minRowHeight: CGFloat) -> CGFloat {
 		let values = valuesForRecord(record)
-		let notesIndex = 11 // last column is NOTES (kept for reference if needed in future)
-
 		#if os(macOS)
 		let font = NSFont.systemFont(ofSize: 8)
 		#else
@@ -971,8 +970,6 @@ struct pdfReportService: View {
 	// macOS variant converts to Quartz coordinates; iOS draws directly.
 	func drawTableRow(record: ServiceRecords1, at origin: CGPoint, columnWidths: [CGFloat], rowHeight: CGFloat, rowIndex: Int, pageHeight: CGFloat? = nil) {
 		let values = valuesForRecord(record)
-		let notesIndex = 11 // last column is NOTES (kept for reference if needed in future)
-
 		#if os(macOS)
 		let font = NSFont.systemFont(ofSize: 8)
 		let separatorColor = NSColor.separatorColor
@@ -1173,20 +1170,17 @@ struct pdfReportService: View {
 	private func printPDF() {
 		guard let doc = pdfDocument else { return }
 		#if os(macOS)
-		// Use a transient PDFView and a standard NSPrintOperation for printing.
-		let pdfView = PDFView()
-		pdfView.document = doc
-
 		let printInfo = NSPrintInfo.shared
 		printInfo.horizontalPagination = .automatic
 		printInfo.verticalPagination = .automatic
 		printInfo.isHorizontallyCentered = true
 		printInfo.isVerticallyCentered = true
 
-		let op = NSPrintOperation(view: pdfView, printInfo: printInfo)
-		op.showsPrintPanel = true
-		op.showsProgressPanel = true
-		op.run()
+		if let op = doc.printOperation(for: printInfo, scalingMode: .pageScaleDownToFit, autoRotate: true) {
+			op.showsPrintPanel = true
+			op.showsProgressPanel = true
+			op.runModal(for: NSApp.keyWindow ?? NSWindow(), delegate: nil, didRun: nil, contextInfo: nil)
+		}
 		#else
 		guard UIPrintInteractionController.isPrintingAvailable,
 		      let data = doc.dataRepresentation() else { return }

@@ -163,8 +163,8 @@ struct EditSystems: View {
 							emptyChoiceLabel: "—",
 							autoSelectFirst: false,
 							filter: nil,
-							sort: [SortDescriptor(\.name, order: .forward)],
-							labelProvider: { $0.name }
+							sort: [SortDescriptor(\.displayName, order: .forward)],
+							labelProvider: { v in "\(v.year) \(v.displayName)"},
 						)
 						.onChange(of: selectedVehicle) { _, newVehicle in
 							let name = newVehicle?.name ?? ""
@@ -189,7 +189,7 @@ struct EditSystems: View {
 //							autoSelectFirst: false,
 //							filter: nil,
 //							sort: [SortDescriptor(\.name, order: .forward)],
-//							labelProvider: { $0.name }
+//							labelProvider: { $0.displayName }
 //						)
 //						.onChange(of: selectedVehicle) { _, newVehicle in
 //							let name = newVehicle?.name ?? ""
@@ -279,7 +279,7 @@ struct EditSystems: View {
 			CardView {
 				VStack{
 					SectionText(label: "GENERAL")
-					HStack{LabelDataText(label: "Vehicle", data: dataSet.vehicleId)}
+					HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 					HStack{LabelDataText(label: "System Name", data: "\(dataSet.systemName)")}
 					HStack{LabelDataText(label: "Status", data: inactive ? "Inactive" : "Active")}
 					if dataSet.systemDescription != "" {

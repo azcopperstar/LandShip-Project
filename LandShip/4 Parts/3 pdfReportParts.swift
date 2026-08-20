@@ -142,6 +142,7 @@ struct pdfReportParts: View {
 				} label: {
 					Label("Print", systemImage: "printer")
 				}
+				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
 		}
@@ -178,7 +179,7 @@ struct pdfReportParts: View {
 		}
 
 		func makeNSView(context: Context) -> PDFView {
-			let pdfView = PDFView()
+			let pdfView = PrintablePDFView()
 			pdfView.document = pdfDocument
 			pdfView.autoScales = true
 			pdfView.displaysPageBreaks = true
@@ -322,7 +323,7 @@ struct pdfReportParts: View {
 		// Starts a new macOS PDF page and draws the header/footer for the given page number.
 		func beginMacPage() {
 			cgContext.beginPDFPage(nil)
-			var nsGraphicsContext = NSGraphicsContext(cgContext: cgContext, flipped: false)
+			let nsGraphicsContext = NSGraphicsContext(cgContext: cgContext, flipped: false)
 			NSGraphicsContext.saveGraphicsState()
 			NSGraphicsContext.current = nsGraphicsContext
 
@@ -452,7 +453,7 @@ struct pdfReportParts: View {
 	///   - subtitle: Secondary line (vehicle filter).
 	///   - dateText: Rendered date string.
 	///   - pageNumber: Current page index (1-based).
-	func drawPageHeader(margin: CGFloat,
+	nonisolated func drawPageHeader(margin: CGFloat,
 	                    pageWidth: CGFloat,
 	                    pageHeight: CGFloat,
 	                    headerHeight: CGFloat,
@@ -527,7 +528,7 @@ struct pdfReportParts: View {
 	///   - pageHeight: Full page height in points.
 	///   - footerHeight: Height reserved for the footer region.
 	///   - pageNumber: Current page index (1-based).
-	func drawPageFooter(margin: CGFloat,
+	nonisolated func drawPageFooter(margin: CGFloat,
 	                    pageWidth: CGFloat,
 	                    pageHeight: CGFloat,
 	                    footerHeight: CGFloat,
@@ -900,20 +901,17 @@ struct pdfReportParts: View {
 	private func printPDF() {
 		guard let doc = pdfDocument else { return }
 		#if os(macOS)
-		// Use a transient PDFView and a standard NSPrintOperation
-		let pdfView = PDFView()
-		pdfView.document = doc
-
 		let printInfo = NSPrintInfo.shared
 		printInfo.horizontalPagination = .automatic
 		printInfo.verticalPagination = .automatic
 		printInfo.isHorizontallyCentered = true
 		printInfo.isVerticallyCentered = true
 
-		let op = NSPrintOperation(view: pdfView, printInfo: printInfo)
-		op.showsPrintPanel = true
-		op.showsProgressPanel = true
-		op.run()
+		if let op = doc.printOperation(for: printInfo, scalingMode: .pageScaleDownToFit, autoRotate: true) {
+			op.showsPrintPanel = true
+			op.showsProgressPanel = true
+			op.runModal(for: NSApp.keyWindow ?? NSWindow(), delegate: nil, didRun: nil, contextInfo: nil)
+		}
 		#else
 		guard UIPrintInteractionController.isPrintingAvailable,
 		      let data = doc.dataRepresentation() else { return }
@@ -941,13 +939,9 @@ struct pdfReportParts: View {
 	}
 }
 
-#Preview {
-	// Preview scaffolding: in-memory SwiftData container and sample records for quick iteration.
-	// In-memory SwiftData container for previews
+#Preview("All Vehicles") {
 	let config = ModelConfiguration(isStoredInMemoryOnly: true)
 	let container = try! ModelContainer(for: MxParts1.self, configurations: config)
-
-	// Seed sample data
 	let context = container.mainContext
 	let samples: [MxParts1] = [
 		MxParts1(vehicleId: "Vehicle A", vehicleSystem: "Engine", partName: "Oil Filter", partNumber: "OF-123", partManufacture: "ACME", partDescription: "Standard oil filter", Notes: "Keep 2 spare", costPerUnit: 12.5, partUnit: "ea", partSource: "Online", partQuantity: 3, partLocation: "Bay 1", partStatus: "In Stock", partSupplier: "PartsCo"),
@@ -956,17 +950,21 @@ struct pdfReportParts: View {
 	]
 	samples.forEach { context.insert($0) }
 	try? context.save()
+	return pdfReportParts(trackVehicleSelected: .constant("All Vehicles"))
+		.modelContainer(container)
+}
 
-	return Group {
-		// All Vehicles preview
-		pdfReportParts(trackVehicleSelected: .constant("All Vehicles"))
-			.modelContainer(container)
-			.previewDisplayName("All Vehicles")
-
-		// Specific vehicle preview
-		pdfReportParts(trackVehicleSelected: .constant("Vehicle A"))
-			.modelContainer(container)
-			.previewDisplayName("Vehicle A")
-	}
+#Preview("Vehicle A") {
+	let config = ModelConfiguration(isStoredInMemoryOnly: true)
+	let container = try! ModelContainer(for: MxParts1.self, configurations: config)
+	let context = container.mainContext
+	let samples: [MxParts1] = [
+		MxParts1(vehicleId: "Vehicle A", vehicleSystem: "Engine", partName: "Oil Filter", partNumber: "OF-123", partManufacture: "ACME", partDescription: "Standard oil filter", Notes: "Keep 2 spare", costPerUnit: 12.5, partUnit: "ea", partSource: "Online", partQuantity: 3, partLocation: "Bay 1", partStatus: "In Stock", partSupplier: "PartsCo"),
+		MxParts1(vehicleId: "Vehicle A", vehicleSystem: "Electrical", partName: "Battery", partNumber: "BAT-12V", partManufacture: "VoltCo", partDescription: "12V battery", Notes: "AGM", costPerUnit: 110.0, partUnit: "ea", partSource: "Online", partQuantity: 2, partLocation: "Bay 2", partStatus: "In Stock", partSupplier: "BatteryWorld")
+	]
+	samples.forEach { context.insert($0) }
+	try? context.save()
+	return pdfReportParts(trackVehicleSelected: .constant("Vehicle A"))
+		.modelContainer(container)
 }
 

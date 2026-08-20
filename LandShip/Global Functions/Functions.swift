@@ -128,6 +128,7 @@ struct VehicleDetails: Codable, Hashable {
 	let mileage: Int
 	let engHours: Float
 	let fuelCapacity: Int
+	let defCapacity: Int
 	let fuelType: String
 }
 
@@ -358,6 +359,7 @@ extension Functions {
 					mileage: v.mileage,
 					engHours: v.engHours,
 					fuelCapacity: v.fuelCapacity,
+					defCapacity: v.defCapacity,
 					fuelType: v.fuelType
 				)
 			}
@@ -373,6 +375,31 @@ extension Functions {
 			return [details]
 		}
 		return []
+	}
+	
+	/// Helper function to get a vehicle's display name from its internal vehicleId (name field)
+	/// - Parameters:
+	///   - vehicleId: The internal vehicle identifier (UUID stored in the name field)
+	///   - context: The SwiftData ModelContext to query
+	/// - Returns: The vehicle's displayName, or the vehicleId if vehicle not found
+	func getVehicleDisplayName(vehicleId: String, context: ModelContext) -> String {
+		// Handle special cases
+		guard vehicleId != "All Vehicles" && !vehicleId.isEmpty else {
+			return vehicleId
+		}
+		
+		// Try to find the vehicle by its internal name (UUID)
+		let descriptor = FetchDescriptor<Vehicle8>(
+			predicate: #Predicate { $0.name == vehicleId }
+		)
+		
+		guard let vehicles = try? context.fetch(descriptor),
+			  let vehicle = vehicles.first else {
+			return vehicleId
+		}
+		
+		// Return displayName if not empty, otherwise fallback
+		return vehicle.displayName.isEmpty ? vehicleId : vehicle.displayName
 	}
 }
 
@@ -391,7 +418,8 @@ struct AppVersion: Hashable {
 
     /// Returns: "v<version> (<build>)" + optional " beta"
     var fullVersionString: String {
-        "v\(version) (\(build))\(isBeta ? " beta" : "")"
+//			"v\(version) (\(build))\(isBeta ? " beta" : "")"
+			"v\(version)"
     }
 
     /// Returns: "<appName> v<version> (<build>)" + optional " beta"
@@ -417,8 +445,12 @@ struct AppVersion: Hashable {
             // TODO: Adopt StoreKit's AppTransaction.shared / Transaction.all to detect TestFlight if needed.
 //            isTestFlight = false
 //        } else {
-            // Pre–iOS 18: sandbox receipt indicates TestFlight install
-            isTestFlight = bundle.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+            // Pre–macOS 15: sandbox receipt indicates TestFlight install
+            if #available(macOS 15.0, iOS 18.0, *) {
+                isTestFlight = false // TODO: Adopt AppTransaction.shared / Transaction.all from StoreKit
+            } else {
+                isTestFlight = bundle.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+            }
 //        }
 
         // Allow build-time override using a custom Swift flag (e.g., -D BETA)
@@ -443,5 +475,44 @@ struct VersionStrings {
     static var fullVersionString: String { AppVersion.current.fullVersionString }
     /// e.g., "MyApp v1.2.3 (45) beta"
     static var fullVersionStringWithAppName: String { AppVersion.current.displayStringWithAppName }
+}
+
+// MARK: - Color Hex Utilities
+
+extension Color {
+    /// Initialize from a hex string (6-digit RGB or 8-digit RGBA). Returns nil for invalid input.
+    init?(hex: String) {
+        var h = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        h = h.hasPrefix("#") ? String(h.dropFirst()) : h
+        guard h.count == 6 || h.count == 8 else { return nil }
+        var value: UInt64 = 0
+        guard Scanner(string: h).scanHexInt64(&value) else { return nil }
+        let r, g, b, a: Double
+        if h.count == 8 {
+            r = Double((value >> 24) & 0xFF) / 255
+            g = Double((value >> 16) & 0xFF) / 255
+            b = Double((value >> 8) & 0xFF) / 255
+            a = Double(value & 0xFF) / 255
+        } else {
+            r = Double((value >> 16) & 0xFF) / 255
+            g = Double((value >> 8) & 0xFF) / 255
+            b = Double(value & 0xFF) / 255
+            a = 1
+        }
+        self.init(red: r, green: g, blue: b, opacity: a)
+    }
+
+    /// Convert this color to an 8-digit RGBA hex string using platform-native color APIs.
+    func hexString() -> String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+#if os(iOS) || os(watchOS) || os(tvOS)
+        UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+#elseif os(macOS)
+        (NSColor(self).usingColorSpace(.deviceRGB) ?? .black).getRed(&r, green: &g, blue: &b, alpha: &a)
+#endif
+        return String(format: "#%02X%02X%02X%02X",
+            Int((r * 255).rounded()), Int((g * 255).rounded()),
+            Int((b * 255).rounded()), Int((a * 255).rounded()))
+    }
 }
 

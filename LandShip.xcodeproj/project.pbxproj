@@ -3,33 +3,50 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 100;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		E8EFE4472E6737BE004C2789 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E8EFE4462E6737BE004C2789 /* CloudKit.framework */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		E8965F192F6CAABA00C9FAED /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolder = None;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
-		E89F2A492E2BF9C800EE079C /* LandShip.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LandShip.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E8965F1B2F6CAABA00C9FAED /* Import app store photos */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "Import app store photos"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E89F2A492E2BF9C800EE079C /* VehicleTrax.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VehicleTrax.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8EFE4462E6737BE004C2789 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/CloudKit.framework; sourceTree = DEVELOPER_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		E88D71D52E55E2A300BF2ACF /* Exceptions for "LandShip" folder in "LandShip" target */ = {
+		E88D71D52E55E2A300BF2ACF /* Exceptions for "LandShip" folder in "VehicleTrax" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = E89F2A482E2BF9C800EE079C /* LandShip */;
+			target = E89F2A482E2BF9C800EE079C /* VehicleTrax */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		E8965F1C2F6CAABA00C9FAED /* Import app store photos */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Import app store photos";
+			sourceTree = "<group>";
+		};
 		E89F2A4B2E2BF9C800EE079C /* LandShip */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				E88D71D52E55E2A300BF2ACF /* Exceptions for "LandShip" folder in "LandShip" target */,
+				E88D71D52E55E2A300BF2ACF /* Exceptions for "LandShip" folder in "VehicleTrax" target */,
 			);
 			path = LandShip;
 			sourceTree = "<group>";
@@ -37,13 +54,16 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		E8965F182F6CAABA00C9FAED /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
 		E89F2A462E2BF9C800EE079C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				E8EFE4472E6737BE004C2789 /* CloudKit.framework in Frameworks */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
@@ -52,6 +72,7 @@
 			isa = PBXGroup;
 			children = (
 				E89F2A4B2E2BF9C800EE079C /* LandShip */,
+				E8965F1C2F6CAABA00C9FAED /* Import app store photos */,
 				E8EFE4452E6737BD004C2789 /* Frameworks */,
 				E89F2A4A2E2BF9C800EE079C /* Products */,
 			);
@@ -60,7 +81,8 @@
 		E89F2A4A2E2BF9C800EE079C /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				E89F2A492E2BF9C800EE079C /* LandShip.app */,
+				E89F2A492E2BF9C800EE079C /* VehicleTrax.app */,
+				E8965F1B2F6CAABA00C9FAED /* Import app store photos */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -76,9 +98,27 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		E89F2A482E2BF9C800EE079C /* LandShip */ = {
+		E8965F1A2F6CAABA00C9FAED /* Import app store photos */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = E89F2A552E2BF9C900EE079C /* Build configuration list for PBXNativeTarget "LandShip" */;
+			buildConfigurationList = E8965F1F2F6CAABA00C9FAED /* Build configuration list for PBXNativeTarget "Import app store photos" */;
+			buildPhases = (
+				E8965F172F6CAABA00C9FAED /* Sources */,
+				E8965F182F6CAABA00C9FAED /* Frameworks */,
+				E8965F192F6CAABA00C9FAED /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				E8965F1C2F6CAABA00C9FAED /* Import app store photos */,
+			);
+			name = "Import app store photos";
+			productName = "Import app store photos";
+			productReference = E8965F1B2F6CAABA00C9FAED /* Import app store photos */;
+			productType = "com.apple.product-type.tool";
+		};
+		E89F2A482E2BF9C800EE079C /* VehicleTrax */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E89F2A552E2BF9C900EE079C /* Build configuration list for PBXNativeTarget "VehicleTrax" */;
 			buildPhases = (
 				E89F2A452E2BF9C800EE079C /* Sources */,
 				E89F2A462E2BF9C800EE079C /* Frameworks */,
@@ -86,16 +126,12 @@
 			);
 			buildRules = (
 			);
-			dependencies = (
-			);
 			fileSystemSynchronizedGroups = (
 				E89F2A4B2E2BF9C800EE079C /* LandShip */,
 			);
-			name = LandShip;
-			packageProductDependencies = (
-			);
+			name = VehicleTrax;
 			productName = LandShip;
-			productReference = E89F2A492E2BF9C800EE079C /* LandShip.app */;
+			productReference = E89F2A492E2BF9C800EE079C /* VehicleTrax.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -105,9 +141,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1640;
+				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 2610;
 				TargetAttributes = {
+					E8965F1A2F6CAABA00C9FAED = {
+						CreatedOnToolsVersion = 26.4;
+					};
 					E89F2A482E2BF9C800EE079C = {
 						CreatedOnToolsVersion = 16.4;
 					};
@@ -122,12 +161,13 @@
 			);
 			mainGroup = E89F2A402E2BF9C800EE079C;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
+			preferredProjectObjectVersion = 100;
 			productRefGroup = E89F2A4A2E2BF9C800EE079C /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				E89F2A482E2BF9C800EE079C /* LandShip */,
+				E89F2A482E2BF9C800EE079C /* VehicleTrax */,
+				E8965F1A2F6CAABA00C9FAED /* Import app store photos */,
 			);
 		};
 /* End PBXProject section */
@@ -135,25 +175,82 @@
 /* Begin PBXResourcesBuildPhase section */
 		E89F2A472E2BF9C800EE079C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		E89F2A452E2BF9C800EE079C /* Sources */ = {
+		E8965F172F6CAABA00C9FAED /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E89F2A452E2BF9C800EE079C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		E89F2A532E2BF9C900EE079C /* Debug */ = {
+		E8965F202F6CAABA00C9FAED /* Debug configuration for PBXNativeTarget "Import app store photos" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				AUTOMATION_APPLE_EVENTS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = KBZXZT5NSJ;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E8965F212F6CAABA00C9FAED /* Release configuration for PBXNativeTarget "Import app store photos" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				AUTOMATION_APPLE_EVENTS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = KBZXZT5NSJ;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		E89F2A532E2BF9C900EE079C /* Debug configuration for PBXProject "LandShip" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -208,6 +305,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -217,7 +315,7 @@
 			};
 			name = Debug;
 		};
-		E89F2A542E2BF9C900EE079C /* Release */ = {
+		E89F2A542E2BF9C900EE079C /* Release configuration for PBXProject "LandShip" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -266,6 +364,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -273,7 +372,7 @@
 			};
 			name = Release;
 		};
-		E89F2A562E2BF9C900EE079C /* Debug */ = {
+		E89F2A562E2BF9C900EE079C /* Debug configuration for PBXNativeTarget "VehicleTrax" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
@@ -284,7 +383,7 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = LandShip/LandShip.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 78;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = KBZXZT5NSJ;
 				ENABLE_APP_SANDBOX = YES;
@@ -295,9 +394,9 @@
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
 				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = YES;
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
@@ -306,6 +405,8 @@
 				INFOPLIST_FILE = LandShip/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = VehicleTrax;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Approve use of the camera in VehicleTrax for images in forms.  Data is saved locally and to users iCloud but is not used for marketing, and is not transmitted outside the users personal account.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Approve use of location services in VehicleTrax to auto-fill location fields in forms...";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -321,7 +422,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 2025.11;
+				MARKETING_VERSION = 2026.09.01;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aeronauticaltrax.LandShip;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -341,7 +442,7 @@
 			};
 			name = Debug;
 		};
-		E89F2A572E2BF9C900EE079C /* Release */ = {
+		E89F2A572E2BF9C900EE079C /* Release configuration for PBXNativeTarget "VehicleTrax" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
@@ -352,7 +453,7 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = LandShip/LandShip.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 78;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = KBZXZT5NSJ;
 				ENABLE_APP_SANDBOX = YES;
@@ -363,9 +464,9 @@
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
 				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = YES;
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
@@ -374,6 +475,8 @@
 				INFOPLIST_FILE = LandShip/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = VehicleTrax;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Approve use of the camera in VehicleTrax for images in forms.  Data is saved locally and to users iCloud but is not used for marketing, and is not transmitted outside the users personal account.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Approve use of location services in VehicleTrax to auto-fill location fields in forms...";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -389,7 +492,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 2025.11;
+				MARKETING_VERSION = 2026.09.01;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aeronauticaltrax.LandShip;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -412,22 +515,28 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		E8965F1F2F6CAABA00C9FAED /* Build configuration list for PBXNativeTarget "Import app store photos" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E8965F202F6CAABA00C9FAED /* Debug configuration for PBXNativeTarget "Import app store photos" */,
+				E8965F212F6CAABA00C9FAED /* Release configuration for PBXNativeTarget "Import app store photos" */,
+			);
+			defaultConfigurationName = Release;
+		};
 		E89F2A442E2BF9C800EE079C /* Build configuration list for PBXProject "LandShip" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				E89F2A532E2BF9C900EE079C /* Debug */,
-				E89F2A542E2BF9C900EE079C /* Release */,
+				E89F2A532E2BF9C900EE079C /* Debug configuration for PBXProject "LandShip" */,
+				E89F2A542E2BF9C900EE079C /* Release configuration for PBXProject "LandShip" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E89F2A552E2BF9C900EE079C /* Build configuration list for PBXNativeTarget "LandShip" */ = {
+		E89F2A552E2BF9C900EE079C /* Build configuration list for PBXNativeTarget "VehicleTrax" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				E89F2A562E2BF9C900EE079C /* Debug */,
-				E89F2A572E2BF9C900EE079C /* Release */,
+				E89F2A562E2BF9C900EE079C /* Debug configuration for PBXNativeTarget "VehicleTrax" */,
+				E89F2A572E2BF9C900EE079C /* Release configuration for PBXNativeTarget "VehicleTrax" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */

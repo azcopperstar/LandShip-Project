@@ -34,6 +34,52 @@ struct Picker_PartsUnit: View {
 	}
 }
 
+// MARK: label + editable dropdown for vehicle systems (pick existing or type a new one)
+struct Picker_VehicleSystem: View {
+	let label: String
+	@Binding var data: String
+
+	// Systems from every vehicle are offered as suggestions, since the same system
+	// name (e.g. "Engine") is commonly reused across a fleet.
+	@Query(sort: \VehicleSystems1.systemName, order: .forward) private var systems: [VehicleSystems1]
+
+	init(label: String, data: Binding<String>) {
+		self.label = label
+		self._data = data
+	}
+
+	// Existing system names across all vehicles, plus whatever is currently typed so the
+	// Picker always has a matching tag even for a not-yet-saved new name.
+	private var systemNames: [String] {
+		var names = Set(systems.map { $0.systemName }.filter { !$0.isEmpty })
+		if !data.isEmpty { names.insert(data) }
+		return names.sorted()
+	}
+
+	var body: some View {
+		HStack(spacing: 6) {
+			Text(label)
+				.textLabelModified()
+			// A custom Menu (rather than Picker) so we control the trigger's label directly —
+			// Picker's automatic menu-style trigger on iPad ignores SwiftUI's .lineLimit and
+			// wraps long system names, overlapping the row below it.
+			Menu {
+				Button("—") { data = "" }
+				ForEach(systemNames, id: \.self) { name in
+					Button(name) { data = name }
+				}
+			} label: {
+				Text(data.isEmpty ? "—" : data)
+					.lineLimit(1)
+					.truncationMode(.tail)
+			}
+			.pickerModifier_Short()
+			TextField("", text: $data)
+				.textViewModified_Medium()
+		}
+	}
+}
+
 // MARK: label + picker LWH
 struct Picker_LWH: View {
 	let label: String
@@ -343,7 +389,7 @@ struct PickerVehicle: View {
 			return "All Vehicles"
 		}
 		if let v = vehicles.first(where: { $0.name == selection }) {
-			return "\(v.year) \(v.name)"
+			return "\(v.year) \(v.displayName)"
 		}
 		return selection
 	}
@@ -358,7 +404,7 @@ struct PickerVehicle: View {
 			Picker(selection: $trackVehicleSelected, label: Text("")) {
 				ForEach(vehicles) { vehicle in
 					let year = String(vehicle.year)
-					Text("\(year) \(vehicle.name)")
+					Text("\(year) \(vehicle.displayName)")
 						.tag(vehicle.name)
 				}
 				Text("All Vehicles")

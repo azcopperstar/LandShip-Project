@@ -83,6 +83,8 @@ struct DisplayTripLog: View {
 	
 	// Sort handling
 	private enum PartsSort: String, CaseIterable, Identifiable {
+		case dateDesc = "Date ↓"
+		case dateAsc = "Date ↑"
 		case datedDesc_vehicleAsc = "Vehicle A–Z, Date Desc"
 		case vehicleAsc_nameAsc = "Vehicle A–Z, Travel Log A–Z"
 		case vehicleAsc_nameDesc = "Vehicle A–Z, Travel Log Z–A"
@@ -93,6 +95,10 @@ struct DisplayTripLog: View {
 		
 		var descriptors: [SortDescriptor<TripLog2>] {
 			switch self {
+				case .dateDesc:
+					return [ .init(\.tripDateTimeStart, order: .reverse) ]
+				case .dateAsc:
+					return [ .init(\.tripDateTimeStart, order: .forward) ]
 				case .datedDesc_vehicleAsc:
 					return [.init(\.vehicleId, order: .forward),.init(\.tripDateTimeStart, order: .reverse)]
 				case .vehicleAsc_nameAsc:
@@ -108,46 +114,26 @@ struct DisplayTripLog: View {
 			}
 		}
 	}
-	@State private var selectedSort: PartsSort = .datedDesc_vehicleAsc
+	@AppStorage("sort_triplog") private var selectedSort: PartsSort = .dateDesc
 
 	/// Main content that composes the vehicle filter, the trip list (via `QueryView`),
 	/// and toolbar actions for sorting, reporting, and adding new records.
 	var body: some View {
 		Group {
 			// MARK: - Vehicle Filter & Toolbar
-			HStack(spacing: 3) {
-				
-				LabeledContent {
-					// Custom model picker to choose a specific vehicle or "All Vehicles" (empty choice).
-					// The `filter` respects `showInactiveVehicles` to optionally hide inactive items.
-					ModelPicker(
-						selection: $selectedVehicle,
-						title: "Vehicle",
-						includeEmptyChoice: true,
-						emptyChoiceLabel: "All Vehicles",
-						autoSelectFirst: false,
-						filter: showInactiveVehicles ? nil : #Predicate { !$0.inactive },
-						sort: [SortDescriptor(\.name, order: .forward)],
-						labelProvider: { $0.name }
-					)
-					.fixedSize(horizontal: true, vertical: true)
-				} label: {
-					Text("Vehicle")
-						.textLabelModified()
-				}
-
-//                ModelPicker(
-//                    selection: $selectedVehicle,
-//                    title: "Vehicle",
-//                    includeEmptyChoice: true,
-//                    emptyChoiceLabel: "All Vehicles",
-//                    autoSelectFirst: false,
-//                    filter: nil,
-//                    sort: [SortDescriptor(\.name, order: .forward)],
-//                    labelProvider: { $0.name }
-//                )
-//                .frame(maxWidth: .infinity, alignment: .trailing)
-            }
+			// Custom model picker to choose a specific vehicle or "All Vehicles" (empty choice).
+			// The `filter` respects `showInactiveVehicles` to optionally hide inactive items.
+			ModelPicker(
+				selection: $selectedVehicle,
+				title: "",
+				includeEmptyChoice: true,
+				emptyChoiceLabel: "All Vehicles",
+				autoSelectFirst: false,
+				filter: showInactiveVehicles ? nil : #Predicate { !$0.inactive },
+				sort: [SortDescriptor(\.displayName, order: .forward)],
+				labelProvider: { v in "\(v.year) \(v.displayName)"},
+			)
+			.frame(maxWidth: .infinity)
             .onChange(of: selectedVehicle) { _, newVehicle in
                 let name = newVehicle?.name ?? "All Vehicles"
                 trackVehicleSelected = name
@@ -218,17 +204,58 @@ struct DisplayTripLog: View {
 									EditTripLog(dataSet: record)
 										.id(record.id) // work-around to get splitview to change details when selected
 								} label: {
-									let mxDate = functions.formatDate_DDMMMyy(date: record.tripDateTimeStart)
+									let mxDateStart = functions.formatDate_DDMMMyy_HHmm(date: record.tripDateTimeStart)
+									let mxDateEnd = functions.formatDate_DDMMMyy_HHmm(date: record.tripDateTimeEnd)
 									HStack {
-										let vehicleForImage = vehicles.first { $0.name == record.vehicleId }
-										Image_View_Thumbnail(imageData: vehicleForImage?.image1 ?? record.image1)
-										VStack {
+//										let vehicleForImage = vehicles.first { $0.name == record.vehicleId }
+//										Image_View_Thumbnail(imageData: vehicleForImage?.image1 ?? record.image1)
+										VStack(alignment: .leading, spacing: 1) {
 											Text("\(record.logName)")
-												.textModifier_ListTitle()
-											Text("\(mxDate)")
-												.textModifier_ListSubTitle_R()
-											Text("\(record.vehicleId)")
-												.textModifier_ListSubTitle_R()
+												.font(.headline)
+											let groupTotals = groupTotals(for: record)
+											let rowDistance = groupTotals?.distance ?? (record.odometerEnd > record.odometerStart ? record.odometerEnd - record.odometerStart : 0)
+											let rowFuel = groupTotals?.fuel ?? totalFuelUsed(for: record)
+											if !record.tripGroup.isEmpty || rowDistance > 0 || rowFuel > 0 {
+												HStack(spacing: 8) {
+													if !record.tripGroup.isEmpty {
+														Text("Group: \(record.tripGroup)")
+													}
+													if rowDistance > 0 {
+														Text("\(rowDistance)\(unit(UnitIndex.distance))")
+													}
+													if rowFuel > 0 {
+														Text("\(fuelQuantityFormatted(rowFuel))\(unit(UnitIndex.fuel))")
+													}
+												}
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+											}
+											Text("Start: \(mxDateStart)")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+											Text("Stop: \(mxDateEnd)")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+											if !movingTimeDescription(for: record).isEmpty {
+												Text("Time Underway: \(movingTimeDescription(for: record))")
+													.font(.subheadline)
+													.foregroundStyle(.secondary)
+											}
+											if totalFuelUsed(for: record) > 0 {
+												Text("Fuel Burn: \(fuelQuantityFormatted(totalFuelUsed(for: record))) \(unit(UnitIndex.fuel))")
+													.font(.subheadline)
+													.foregroundStyle(.secondary)
+											}
+											if trackVehicleSelected == "All Vehicles" {
+												Text("\(Functions().getVehicleDisplayName(vehicleId: record.vehicleId, context: modelContext))")
+													.font(.subheadline)
+													.foregroundStyle(.secondary)
+											}
+											if !routeDescription(for: record).isEmpty {
+												Text(routeDescription(for: record))
+													.font(.subheadline)
+													.foregroundStyle(.secondary)
+											}
 										}
 										.cardStyle(backgroundColor: .blue.opacity(0.6))
 									}
@@ -242,8 +269,18 @@ struct DisplayTripLog: View {
 									let frozen = trackVehicleSelected
 									reportDestination = ReportDestination(scope: frozen)
 								} label: {
-									Label("Report", systemImage: "list.clipboard")
+#if os(macOS)
+									Image(systemName: "doc.text")
+#else
+									VStack(spacing: 2) {
+									Image(systemName: "doc.text")
+									Text("Report")
+										.font(.caption2)
 								}
+#endif
+								}
+								.help("Report")
+								.accessibilityLabel("Report")
 							}
 							ToolbarItem(placement: .automatic) {
 								Menu {
@@ -253,9 +290,18 @@ struct DisplayTripLog: View {
 										}
 									}
 								} label: {
-									Label("Sort", systemImage: "arrow.up.arrow.down")
+#if os(macOS)
+									Image(systemName: "arrow.up.arrow.down")
+#else
+									VStack(spacing: 2) {
+									Image(systemName: "arrow.up.arrow.down")
+									Text("Sort")
+										.font(.caption2)
+								}
+#endif
 								}
 								.buttonStyle(GrowingButton(buttonColor: Color.gray))
+								.help("Sort")
 								.accessibilityLabel("Sort parts")
 							}
 							if !allVehiclesSelected {
@@ -263,16 +309,40 @@ struct DisplayTripLog: View {
 									Button {
 										addNewRecord()
 									} label: {
-										Label("Add", systemImage: "plus.capsule")
+#if os(macOS)
+										Image(systemName: "plus.capsule")
+#else
+										VStack(spacing: 2) {
+										Image(systemName: "plus.capsule")
+										Text("Add")
+											.font(.caption2)
+									}
+#endif
 									}
 									.disabled(false)
+									.help("Add")
+									.accessibilityLabel("Add")
 								}
 							}
 						}
 					} header: {
-						HStack(spacing: 6) {
-							Image(systemName: "arrow.up.arrow.down")
-							Text("Sort: \(selectedSort.rawValue)")
+						// Header reflects the active sort selection plus totals for the currently listed trips.
+						let totalMiles = records.reduce(0) { $0 + max(0, $1.odometerEnd - $1.odometerStart) }
+						let totalFuel = records.reduce(Float(0)) { $0 + totalFuelUsed(for: $1) }
+						let avgEconomy: Double = totalFuel > 0 ? Double(totalMiles) / Double(totalFuel) : 0
+						let totalUnderwaySeconds = records.reduce(0.0) { $0 + movingTimeInterval(for: $1) }
+						let avgSpeed: Double = totalUnderwaySeconds > 0 ? Double(totalMiles) / (totalUnderwaySeconds / 3600.0) : 0
+						VStack(alignment: .leading, spacing: 2) {
+							HStack(spacing: 6) {
+								Image(systemName: "arrow.up.arrow.down")
+								Text("Sort: \(selectedSort.rawValue)")
+							}
+							if totalMiles > 0 || totalFuel > 0 {
+								Text("Total Miles: \(totalMiles)\(unit(UnitIndex.distance)) · Total Fuel: \(fuelQuantityFormatted(totalFuel))\(unit(UnitIndex.fuel)) · Avg Economy: \(avgEconomy.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.distance))/\(unit(UnitIndex.fuel))")
+							}
+							if totalUnderwaySeconds > 0 {
+								Text("Time Underway: \(formattedDuration(totalUnderwaySeconds)) · Avg Speed: \(avgSpeed.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.distance))/hr")
+							}
 						}
 						.font(.caption)
 						.foregroundStyle(.secondary)
@@ -313,7 +383,89 @@ struct DisplayTripLog: View {
 				.ignoresSafeArea()
 		}
 	}
-	
+
+	/// Builds a "Start → Stop → Stop → End" string from the trip's start/end locations
+	/// plus any populated enroute fuel stop locations, in stop order.
+	private func routeDescription(for record: TripLog2) -> String {
+		let stops = [
+			record.fuelLocation1, record.fuelLocation2, record.fuelLocation3,
+			record.fuelLocation4, record.fuelLocation5, record.fuelLocation6
+		].filter { !$0.isEmpty }
+
+		let legs = [record.locationStart] + stops + [record.locationEnd]
+		let nonEmptyLegs = legs.filter { !$0.isEmpty }
+		guard nonEmptyLegs.count > 1 else { return "" }
+		return nonEmptyLegs.joined(separator: " → ")
+	}
+
+
+	/// Time actually underway: total elapsed time minus time spent at any enroute stops
+	/// (based on each stop's entry/exit time).
+	private func movingTimeInterval(for record: TripLog2) -> TimeInterval {
+		let totalInterval = record.tripDateTimeEnd.timeIntervalSince(record.tripDateTimeStart)
+		guard totalInterval > 0 else { return 0 }
+		let stops: [(active: Bool, enter: Date, exit: Date)] = [
+			(record.fuelAdded1 > 0 || !record.stopReason1.isEmpty, record.fuelDateTime1, record.fuelExitTime1),
+			(record.fuelAdded2 > 0 || !record.stopReason2.isEmpty, record.fuelDateTime2, record.fuelExitTime2),
+			(record.fuelAdded3 > 0 || !record.stopReason3.isEmpty, record.fuelDateTime3, record.fuelExitTime3),
+			(record.fuelAdded4 > 0 || !record.stopReason4.isEmpty, record.fuelDateTime4, record.fuelExitTime4),
+			(record.fuelAdded5 > 0 || !record.stopReason5.isEmpty, record.fuelDateTime5, record.fuelExitTime5),
+			(record.fuelAdded6 > 0 || !record.stopReason6.isEmpty, record.fuelDateTime6, record.fuelExitTime6),
+		]
+		let stopInterval = stops.reduce(0.0) { total, stop in
+			stop.active && stop.exit > stop.enter ? total + stop.exit.timeIntervalSince(stop.enter) : total
+		}
+		return max(0, totalInterval - stopInterval)
+	}
+
+	/// Builds a compact "1h 45m" style summary of a time interval. Returns an empty string for a non-positive interval.
+	private func formattedDuration(_ interval: TimeInterval) -> String {
+		guard interval > 0 else { return "" }
+		let formatter = DateComponentsFormatter()
+		formatter.allowedUnits = [.hour, .minute]
+		formatter.unitsStyle = .abbreviated
+		return formatter.string(from: interval) ?? ""
+	}
+
+	/// Builds a compact "1h 45m" style summary of time actually underway for a single trip.
+	private func movingTimeDescription(for record: TripLog2) -> String {
+		formattedDuration(movingTimeInterval(for: record))
+	}
+
+	/// Total fuel used on the trip: prefers the stored `fuelConsumed` field if set, otherwise
+	/// computes it from starting/ending fuel quantity plus fuel added at enroute stops.
+	private func totalFuelUsed(for record: TripLog2) -> Float {
+		if record.fuelConsumed > 0 { return record.fuelConsumed }
+		let enrouteAdds = record.fuelAdded1 + record.fuelAdded2 + record.fuelAdded3 + record.fuelAdded4 + record.fuelAdded5 + record.fuelAdded6
+		return max(0, (record.fuelQuantityStart - record.fuelQuantityEnd) + enrouteAdds)
+	}
+
+	/// Formats a fuel quantity to one decimal place.
+	private func fuelQuantityFormatted(_ value: Float) -> String {
+		let formatter = NumberFormatter()
+		formatter.numberStyle = .decimal
+		formatter.minimumFractionDigits = 1
+		formatter.maximumFractionDigits = 1
+		return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+	}
+
+	/// Sums distance and fuel used across every leg sharing this trip's group, so the group
+	/// line shows the group's overall totals rather than just this one leg.
+	/// Returns `nil` if the trip isn't part of a group.
+	private func groupTotals(for record: TripLog2) -> (distance: Int, fuel: Float)? {
+		guard !record.tripGroup.isEmpty else { return nil }
+		let groupName = record.tripGroup
+		do {
+			let fd = FetchDescriptor<TripLog2>(predicate: #Predicate<TripLog2> { $0.tripGroup == groupName })
+			let trips = try modelContext.fetch(fd)
+			let distance = trips.reduce(0) { $0 + max(0, $1.odometerEnd - $1.odometerStart) }
+			let fuel = trips.reduce(Float(0)) { $0 + totalFuelUsed(for: $1) }
+			return (distance, fuel)
+		} catch {
+			return nil
+		}
+	}
+
 	/// Creates a new `TripLog2` seeded from the most recent trip for the selected vehicle.
 	///
 	/// - Behavior: If seeding succeeds, odometer, engine hours, fuel level/quantity, location,
@@ -330,6 +482,8 @@ struct DisplayTripLog: View {
 		var fuelLevelStart: Float = 0.0
 		var locationStart: String = ""
 		var vehicleTowed: Bool = false
+		var defLevelStart: Float = 0.0
+		var defLevelStartFraction: String = ""
 
 		// Fetch the last trip record for this vehicle to seed starting values
 		do {
@@ -345,6 +499,8 @@ struct DisplayTripLog: View {
 				fuelLevelStart = last.fuelLevelEnd1
 				locationStart = last.locationEnd
 				vehicleTowed = last.vehicleTowed
+				defLevelStart = last.defLevelEnd1
+				defLevelStartFraction = last.defLevelEndFraction
 			}
 		} catch {
 			// If fetching last trip fails, just start with sensible defaults
@@ -371,6 +527,8 @@ struct DisplayTripLog: View {
 			fuelLevelEnd1: 1.0,
 			fuelLevelStart: "Full",
 			fuelLevelEnd: "Full",
+			defLevel1: defLevelStart,
+			defLevelFraction: defLevelStartFraction,
 			fuelAdded1: 0.0,
 			fuelAdded2: 0.0,
 			fuelAdded3: 0.0,

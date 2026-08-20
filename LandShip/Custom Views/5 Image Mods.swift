@@ -8,7 +8,7 @@
 import Foundation
 import SwiftUI
 import Combine
-import PhotosUI
+@preconcurrency import PhotosUI
 
 func formattedImageSize(from data: Data?) -> String {
 	guard let count = data?.count else { return "" }
@@ -314,15 +314,16 @@ struct Image_Edit: View {
 			
 #if os(macOS)
 		// if macOS, open PhotosPicker since no camera is available
+		let hasImage = imageData != nil
 		PhotosPicker(
 			selection: $selectedPhoto,
 			matching: .images,
 			photoLibrary: .shared()
 		) {
-			if imageData == nil {
-				Text("Select Photo From Library")
-			}else{
+			if hasImage {
 				Text("Change Photo")
+			}else{
+				Text("Select Photo From Library")
 			}
 		}
 		.onChange(of: selectedPhoto) {
@@ -393,5 +394,155 @@ struct Image_Edit: View {
 		}
 	}
 #endif
+}
+
+struct FuelStop_ImagePicker: View {
+	@Binding var imageData: Data?
+
+#if os(macOS)
+	@State private var selectedPhoto: PhotosPickerItem?
+#elseif os(iOS)
+	@State private var isConfirmationDialogPresented = false
+	@State private var isImagePickerPresented = false
+	@State private var sourceType: UIImagePickerController.SourceType = .camera
+	@State private var pickedImage: UIImage?
+#endif
+
+	@ViewBuilder private var thumbnailContent: some View {
+#if os(macOS)
+		if let imageData, let nsImage = NSImage(data: imageData) {
+			Image(nsImage: nsImage)
+				.resizable()
+				.scaledToFill()
+				.frame(width: 100, height: 70)
+				.clipped()
+				.clipShape(RoundedRectangle(cornerRadius: 6))
+		} else {
+			RoundedRectangle(cornerRadius: 6)
+				.fill(Color.secondary.opacity(0.15))
+				.frame(width: 100, height: 70)
+				.overlay(Image(systemName: "photo.badge.plus").foregroundStyle(.secondary))
+		}
+#elseif os(iOS)
+		if let imageData, let uiImage = UIImage(data: imageData) {
+			Image(uiImage: uiImage)
+				.resizable()
+				.scaledToFill()
+				.frame(width: 100, height: 70)
+				.clipped()
+				.clipShape(RoundedRectangle(cornerRadius: 6))
+		} else {
+			RoundedRectangle(cornerRadius: 6)
+				.fill(Color.secondary.opacity(0.15))
+				.frame(width: 100, height: 70)
+				.overlay(Image(systemName: "photo.badge.plus").foregroundStyle(.secondary))
+		}
+#endif
+	}
+
+	var body: some View {
+#if os(macOS)
+		ZStack(alignment: .topTrailing) {
+			PhotosPicker(selection: $selectedPhoto, matching: .images, photoLibrary: .shared()) {
+				thumbnailContent
+			}
+			.buttonStyle(.plain)
+			if imageData != nil {
+				Button { imageData = nil } label: {
+					Image(systemName: "xmark.circle.fill")
+						.font(.caption2)
+						.foregroundStyle(.red.opacity(0.8))
+						.background(Color.white.opacity(0.8).clipShape(Circle()))
+				}
+				.buttonStyle(.plain)
+				.padding(2)
+			}
+		}
+		.onChange(of: selectedPhoto) {
+			Task { await loadMacImage(from: selectedPhoto) }
+		}
+#elseif os(iOS)
+		ZStack(alignment: .topTrailing) {
+			thumbnailContent
+				.contentShape(Rectangle())
+				.onTapGesture { isConfirmationDialogPresented = true }
+			if imageData != nil {
+				Button { imageData = nil } label: {
+					Image(systemName: "xmark.circle.fill")
+						.font(.caption2)
+						.foregroundStyle(.red.opacity(0.8))
+						.background(Color.white.opacity(0.8).clipShape(Circle()))
+				}
+				.buttonStyle(.plain)
+				.padding(2)
+			}
+		}
+		.confirmationDialog("Select Photo", isPresented: $isConfirmationDialogPresented) {
+			Button("Camera") { sourceType = .camera; isImagePickerPresented = true }
+			Button("Photo Library") { sourceType = .photoLibrary; isImagePickerPresented = true }
+		}
+		.sheet(isPresented: $isImagePickerPresented) {
+			Image_Edit.ImagePicker(isPresented: $isImagePickerPresented, image: $pickedImage, sourceType: sourceType)
+		}
+		.onChange(of: pickedImage) { _, newValue in
+			guard let newValue else { return }
+			if let resized = newValue.resizeForCloudKit(maxDimension: 1024),
+			   let data = resized.jpegData(compressionQuality: 0.6) {
+				imageData = data
+			}
+		}
+#endif
+	}
+
+#if os(macOS)
+	private func loadMacImage(from item: PhotosPickerItem?) async {
+		guard let item,
+			  let data = try? await item.loadTransferable(type: Data.self),
+			  let nsImage = NSImage(data: data),
+			  let resized = nsImage.resizeForCloudKit(maxDimension: 1024),
+			  let tiff = resized.tiffRepresentation,
+			  let rep = NSBitmapImageRep(data: tiff),
+			  let jpeg = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.6])
+		else { return }
+		await MainActor.run { imageData = jpeg }
+	}
+#endif
+}
+
+struct FuelStop_ImageThumb: View {
+	var imageData: Data?
+	@State private var isLargeViewerPresented = false
+
+	var body: some View {
+		if let imageData {
+#if os(macOS)
+			if let nsImage = NSImage(data: imageData) {
+				Image(nsImage: nsImage)
+					.resizable()
+					.scaledToFill()
+					.frame(width: 130, height: 90)
+					.clipped()
+					.clipShape(RoundedRectangle(cornerRadius: 8))
+					.onTapGesture { isLargeViewerPresented = true }
+					.sheet(isPresented: $isLargeViewerPresented) {
+						LargeImageViewer(imageData: imageData)
+					}
+			}
+#elseif os(iOS)
+			if let uiImage = UIImage(data: imageData) {
+				Image(uiImage: uiImage)
+					.resizable()
+					.scaledToFill()
+					.frame(width: 130, height: 90)
+					.clipped()
+					.clipShape(RoundedRectangle(cornerRadius: 8))
+					.onTapGesture { isLargeViewerPresented = true }
+					.sheet(isPresented: $isLargeViewerPresented) {
+						LargeImageViewer(imageData: imageData)
+					}
+			}
+#endif
+		}
+	}
 }
 

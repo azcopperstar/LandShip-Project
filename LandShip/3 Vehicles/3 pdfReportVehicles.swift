@@ -144,6 +144,7 @@ struct pdfReportVehicles: View {
 				} label: {
 					Label("Print", systemImage: "printer")
 				}
+				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
 		}
@@ -177,7 +178,7 @@ struct pdfReportVehicles: View {
 		}
 
 		func makeNSView(context: Context) -> PDFView {
-			let pdfView = PDFView()
+			let pdfView = PrintablePDFView()
 			pdfView.document = pdfDocument
 			pdfView.autoScales = true
 			pdfView.displaysPageBreaks = true
@@ -272,7 +273,7 @@ struct pdfReportVehicles: View {
 	/// 6. ENGINE/TRANS
 	/// 7. VIN/PLATE
 	/// 8. NOTES
-	func valuesForRecord(_ record: Vehicle8) -> [ColumnContent] {
+	nonisolated func valuesForRecord(_ record: Vehicle8) -> [ColumnContent] {
 		let imageDesc = record.image1Description
 
 		let name = record.name
@@ -367,7 +368,7 @@ struct pdfReportVehicles: View {
 
 		func beginMacPage() {
 			cgContext.beginPDFPage(nil)
-			var nsGraphicsContext = NSGraphicsContext(cgContext: cgContext, flipped: false)
+			let nsGraphicsContext = NSGraphicsContext(cgContext: cgContext, flipped: false)
 			NSGraphicsContext.saveGraphicsState()
 			NSGraphicsContext.current = nsGraphicsContext
 
@@ -487,7 +488,7 @@ struct pdfReportVehicles: View {
 
 	/// Draws the page header including title, subtitle (vehicle scope), date, and page number.
 	/// Accounts for coordinate differences between macOS and iOS.
-	func drawPageHeader(margin: CGFloat,
+	nonisolated func drawPageHeader(margin: CGFloat,
 	                    pageWidth: CGFloat,
 	                    pageHeight: CGFloat,
 	                    headerHeight: CGFloat,
@@ -556,7 +557,7 @@ struct pdfReportVehicles: View {
 	}
 
 	/// Draws a simple centered page number in the footer area.
-	func drawPageFooter(margin: CGFloat,
+	nonisolated func drawPageFooter(margin: CGFloat,
 	                    pageWidth: CGFloat,
 	                    pageHeight: CGFloat,
 	                    footerHeight: CGFloat,
@@ -587,7 +588,7 @@ struct pdfReportVehicles: View {
 	/// Draws the header rows for the table and returns the total header block height.
 	/// Measures multi-line headers per column, fills background, and draws a grid.
 	@discardableResult
-	func drawTableHeaders(at origin: CGPoint, columnWidths: [CGFloat], headerRows: [[String]], minRowHeight: CGFloat, pageHeight: CGFloat? = nil) -> CGFloat {
+	nonisolated func drawTableHeaders(at origin: CGPoint, columnWidths: [CGFloat], headerRows: [[String]], minRowHeight: CGFloat, pageHeight: CGFloat? = nil) -> CGFloat {
 		#if os(macOS)
 		let topFont = NSFont.boldSystemFont(ofSize: 10)
 		let bottomFont = NSFont.boldSystemFont(ofSize: 9)
@@ -741,7 +742,7 @@ struct pdfReportVehicles: View {
 	// MARK: - macOS image decoding helpers (robust for HEIC/JPEG/PNG/etc.)
 	/// Decodes image data into a CGImage using ImageIO with caching enabled for reliability.
 	#if os(macOS)
-	private func cgImageFromData(_ data: Data) -> CGImage? {
+	nonisolated private func cgImageFromData(_ data: Data) -> CGImage? {
 		guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
 		// Decode first image; caching improves PDF rendering reliability
 		return CGImageSourceCreateImageAtIndex(src, 0, [
@@ -749,7 +750,7 @@ struct pdfReportVehicles: View {
 		] as CFDictionary)
 	}
 	/// Extracts the pixel dimensions from image data via ImageIO properties.
-	private func imagePixelSize(_ data: Data) -> CGSize? {
+	nonisolated private func imagePixelSize(_ data: Data) -> CGSize? {
 		guard let src = CGImageSourceCreateWithData(data as CFData, nil),
 					let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
 					let w = props[kCGImagePropertyPixelWidth] as? CGFloat,
@@ -761,7 +762,7 @@ struct pdfReportVehicles: View {
 
 	/// Computes the row height by measuring wrapped text across all columns and the
 	/// image+description block in column 0, returning the maximum to avoid clipping.
-	func computeRowHeight(for record: Vehicle8, columnWidths: [CGFloat], minRowHeight: CGFloat) -> CGFloat {
+	nonisolated func computeRowHeight(for record: Vehicle8, columnWidths: [CGFloat], minRowHeight: CGFloat) -> CGFloat {
 		let columns = valuesForRecord(record)
 		let notesIndex = 8
 
@@ -835,7 +836,7 @@ struct pdfReportVehicles: View {
 
 	/// Renders a single table row with alternating background, grid, and per-column content.
 	/// Column 0 renders a thumbnail (or placeholder) above a description; other columns draw text.
-	func drawTableRow(record: Vehicle8, at origin: CGPoint, columnWidths: [CGFloat], rowHeight: CGFloat, rowIndex: Int, pageHeight: CGFloat? = nil) {
+	nonisolated func drawTableRow(record: Vehicle8, at origin: CGPoint, columnWidths: [CGFloat], rowHeight: CGFloat, rowIndex: Int, pageHeight: CGFloat? = nil) {
 		let columns = valuesForRecord(record)
 		let notesIndex = 8
 
@@ -1072,20 +1073,17 @@ struct pdfReportVehicles: View {
 	private func printPDF() {
 		guard let doc = pdfDocument else { return }
 		#if os(macOS)
-		// Use a transient PDFView and a standard NSPrintOperation
-		let pdfView = PDFView()
-		pdfView.document = doc
-
 		let printInfo = NSPrintInfo.shared
 		printInfo.horizontalPagination = .automatic
 		printInfo.verticalPagination = .automatic
 		printInfo.isHorizontallyCentered = true
 		printInfo.isVerticallyCentered = true
 
-		let op = NSPrintOperation(view: pdfView, printInfo: printInfo)
-		op.showsPrintPanel = true
-		op.showsProgressPanel = true
-		op.run()
+		if let op = doc.printOperation(for: printInfo, scalingMode: .pageScaleDownToFit, autoRotate: true) {
+			op.showsPrintPanel = true
+			op.showsProgressPanel = true
+			op.runModal(for: NSApp.keyWindow ?? NSWindow(), delegate: nil, didRun: nil, contextInfo: nil)
+		}
 		#else
 		guard UIPrintInteractionController.isPrintingAvailable,
 		      let data = doc.dataRepresentation() else { return }

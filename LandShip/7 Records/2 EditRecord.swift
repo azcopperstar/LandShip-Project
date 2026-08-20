@@ -76,8 +76,6 @@ struct EditRecord: View {
 	@State private var Notes: String = ""
 	@State private var vendor: String = ""
 	@State private var laborCost: Float = 0
-
-	// Up to 5 parts per record, each with name, cost, unit, quantity.
 	@State private var part1: String = ""
 	@State private var part1cost: Float = 0
 	@State private var part1Unit: String = "Each"
@@ -98,6 +96,13 @@ struct EditRecord: View {
 	@State private var part5cost: Float = 0
 	@State private var part5Unit: String = "Each"
 	@State private var part5Quantity: Int = 0
+
+	// User-defined numeric field to complement Miles/engHours (e.g. "Water Gallons" in "gal")
+	@State private var customMeasureLabel: String = ""
+	@State private var customMeasureUnit: String = ""
+	@State private var customMeasureValue: Float = 0
+	@State private var availableCustomMeasureLabels: [String] = []
+	@State private var customMeasureLabelSelection: String = "__none__"
 
 	// Optional images and captions for the record
 	@State private var image1: Data?
@@ -148,6 +153,15 @@ struct EditRecord: View {
 	@State private var selectedPart5: MxParts1? = nil
 	@State private var selectedVehicle: Vehicle8? = nil
 
+	// Additions transfer link
+	@State private var additionsLinkId: String = ""
+	@State private var showAdditionsTransferSheet: Bool = false
+	@State private var transferCategory: String = ""
+	@State private var transferSubCategory: String = ""
+	@State private var allAdditionsCategories: [String] = []
+	@State private var allAdditionsSubCategories: [String] = []
+	@State private var linkedAdditionsCount: Int = 0
+
 	// Initializer
 	// Seeds all local @State fields from the incoming ServiceRecords1 record so the edit UI
 	// can be fully controlled by local state. The Save action writes these back to dataSet.
@@ -188,6 +202,10 @@ struct EditRecord: View {
 		self._part5cost = State.init(initialValue: dataSet.part5cost)
 		self._part5Unit = State.init(initialValue: dataSet.part5Unit)
 		self._part5Quantity = State.init(initialValue: dataSet.part5Quantity)
+		self._customMeasureLabel = State.init(initialValue: dataSet.customMeasureLabel)
+		self._customMeasureUnit = State.init(initialValue: dataSet.customMeasureUnit)
+		self._customMeasureValue = State.init(initialValue: dataSet.customMeasureValue)
+		self._customMeasureLabelSelection = State(initialValue: dataSet.customMeasureLabel.isEmpty ? "__none__" : dataSet.customMeasureLabel)
 		self._image1 = State.init(initialValue: dataSet.image1)
 		self._image2 = State.init(initialValue: dataSet.image2)
 		self._image3 = State.init(initialValue: dataSet.image3)
@@ -197,6 +215,7 @@ struct EditRecord: View {
 
 		// Start in edit mode if requested
 		self._isEditing = State(initialValue: startEditing)
+		self._additionsLinkId = State.init(initialValue: serviceRecords1.additionsLinkId)
 	}
 	
 	var body: some View {
@@ -219,8 +238,8 @@ struct EditRecord: View {
 								emptyChoiceLabel: "—",
 								autoSelectFirst: false,
 								filter: nil,
-								sort: [SortDescriptor(\.name, order: .forward)],
-								labelProvider: { $0.name }
+								sort: [SortDescriptor(\.displayName, order: .forward)],
+								labelProvider: { v in "\(v.year) \(v.displayName)"},
 							)
 							.frame(maxWidth: .infinity, alignment: .trailing)
 							.onChange(of: selectedVehicle) { _, newVehicle in
@@ -314,6 +333,13 @@ struct EditRecord: View {
 									part5cost = item.part5cost
 									part5Unit = item.part5Unit
 									part5Quantity = Int(item.part5Qty)
+									// Custom tracking field, if the selected item template defines one
+									if !item.customMeasureLabel.isEmpty {
+										customMeasureLabel = item.customMeasureLabel
+										customMeasureUnit = item.customMeasureUnit
+										customMeasureValue = item.customMeasureValue
+										customMeasureLabelSelection = item.customMeasureLabel
+									}
 									// Also sync the five parts ModelPicker selections to match the new item
 									syncPartSelectionsFromNames(
 										p1: part1, p2: part2, p3: part3, p4: part4, p5: part5
@@ -331,7 +357,7 @@ struct EditRecord: View {
 						// Manual overrides for the service item and descriptions
 						HStack{LabelDataTextview(label: "Manual Item", data: $mxName)}
 						HStack{LabelDataTextview(label: "Description", data: $mxDescription)}
-						HStack{LabelDataTextview(label: "Notes", data: $Notes)}
+//						HStack{LabelDataTextview(label: "Notes", data: $Notes)}
 
 						// Vendor selection (ModelPicker<Vendors1>)
 						HStack{
@@ -384,9 +410,41 @@ struct EditRecord: View {
 							.onChange(of: Miles) { _, _ in recomputeTotals() }
 						HStack{LabelDataTextview_Numberpad_Float(label: "Engine Hours", data: $engHours)}
 							.onChange(of: engHours) { _, _ in recomputeTotals() }
+						// User-defined numeric tracking field (e.g. Water Gallons). Selecting a
+						// previously used field name auto-fills the unit last used with it.
+						LabeledContent {
+							Picker("", selection: $customMeasureLabelSelection) {
+								Text("— None —").tag("__none__")
+								ForEach(availableCustomMeasureLabels, id: \.self) { name in
+									Text(name).tag(name)
+								}
+								Text("New Field...").tag("__new__")
+							}
+							.pickerStyle(.menu)
+							.fixedSize()
+							.onChange(of: customMeasureLabelSelection) { _, newVal in
+								if newVal == "__none__" {
+									customMeasureLabel = ""
+									customMeasureUnit = ""
+								} else if newVal != "__new__" {
+									customMeasureLabel = newVal
+									customMeasureUnit = unitForCustomMeasureLabel(newVal)
+								}
+							}
+						} label: {
+							Text("Custom Field Name")
+								.textLabelModified()
+						}
+						if customMeasureLabelSelection == "__new__" {
+							HStack{LabelDataTextview(label: "Field Name", data: $customMeasureLabel)}
+						}
+						if customMeasureLabelSelection != "__none__" {
+							HStack{LabelDataTextview(label: "Custom Field Unit", data: $customMeasureUnit)}
+							HStack{LabelDataTextview_Numberpad_Float(label: "Custom Field Value\(customMeasureUnit.isEmpty ? "" : " (\(customMeasureUnit))")", data: $customMeasureValue)}
+						}
 					}
 				}
-				
+
 				// PART 1
 				CardView {
 					VStack {
@@ -541,6 +599,33 @@ struct EditRecord: View {
 					}
 				}
 
+				// LINK TO ADDITIONS
+				CardView {
+					VStack(spacing: 8) {
+						SectionText(label: "LINK TO ADDITIONS")
+						if additionsLinkId.isEmpty {
+							Text("Transfer parts and labor costs to the Additions module by linking this service record to an Additions entry.")
+								.font(.caption)
+								.foregroundStyle(.secondary)
+								.frame(maxWidth: .infinity, alignment: .leading)
+							Button("Transfer to Additions") {
+								loadAdditionsCategories()
+								showAdditionsTransferSheet = true
+							}
+							.buttonStyle(GrowingButton(buttonColor: Color.blue))
+						} else {
+							HStack { LabelDataText(label: "Category", data: transferCategory) }
+							if !transferSubCategory.isEmpty {
+								HStack { LabelDataText(label: "Sub-Category", data: transferSubCategory) }
+							}
+							HStack { LabelDataNumber(label: "Linked Items", data: Float(linkedAdditionsCount), fractionalLength: 0) }
+							HStack { LabelDataCurrency(label: "Total Synced Cost", data: Float(trackAllCostTotal), unit: "") }
+							Button("Unlink All from Additions") { unlinkFromAdditions() }
+								.buttonStyle(GrowingButton(buttonColor: Color.gray))
+						}
+					}
+				}
+
 				// STATISTICS (computed values and aggregates)
 				CardView {
 					VStack {
@@ -568,7 +653,7 @@ struct EditRecord: View {
 					VStack {
 						SectionText(label: "SERVICE ITEM & VEHICLE STATS")
 						// Vehicle
-						HStack{LabelDataText(label: "Vehicle", data: vehicleId)}
+						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: vehicleId, context: modelContext))}
 						if vehicleCurrentMiles > 0 {
 							HStack{LabelDataText(label: "Current Odometer", data: "\(vehicleCurrentMiles) \(unit(UnitIndex.distance))")}
 						}
@@ -640,7 +725,7 @@ struct EditRecord: View {
 				PageTitle_Col3_Photo(
 					label: "",
 					action: "edit",
-					dbRecord: "service record")
+					dbRecord: "service")
 			}
 
 			.onAppear {
@@ -649,6 +734,7 @@ struct EditRecord: View {
 				loadUnits()
 				refreshVehicleDetails()
 				loadItemIntervalsIfNeeded()
+				loadAvailableCustomMeasureLabels()
 				recomputeTotals()
 
 				// Seed the vehicle picker from existing vehicleId if present
@@ -712,6 +798,20 @@ struct EditRecord: View {
 					fd.fetchLimit = 1
 					if let p = try? modelContext.fetch(fd).first { selectedPart5 = p }
 				}
+				// Load additions link state
+				additionsLinkId = dataSet.additionsLinkId
+				loadAdditionsCategories()
+				if !additionsLinkId.isEmpty { loadAdditionsLinkState() }
+			}
+			.sheet(isPresented: $showAdditionsTransferSheet) {
+				AdditionsTransferSheet(
+					existingCategories: allAdditionsCategories,
+					existingSubCategories: allAdditionsSubCategories,
+					lineItems: buildTransferLineItems(),
+					onTransfer: { cat, subcat in
+						transferToAdditions(category: cat, subCategory: subcat)
+					}
+				)
 			}
 			.toolbar {
 				// Edit mode toolbar: label, Cancel toggle, Save
@@ -740,7 +840,7 @@ struct EditRecord: View {
 				CardView {
 					VStack {
 						SectionText(label: "GENERAL")
-						HStack{LabelDataText(label: "Vehicle", data: dataSet.vehicleId)}
+						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						HStack{LabelDataText(label: "Service Date", data: "\(functions.formatDate_DDMMMyy(date:dataSet.mxDate))")}
 						HStack{LabelDataText(label: "Status", data: dataSet.inactive ? "INACTIVE" : "ACTIVE")}
 					}
@@ -774,9 +874,12 @@ struct EditRecord: View {
 						if dataSet.engHours > 0 {
 							HStack{LabelDataNumber(label: "Engine Hours", data: Float(dataSet.engHours), fractionalLength: 1)}
 						}
+						if !dataSet.customMeasureLabel.isEmpty {
+							HStack{LabelDataText(label: dataSet.customMeasureLabel, data: "\(dataSet.customMeasureValue.formatted(.number.precision(.fractionLength(1)))) \(dataSet.customMeasureUnit)")}
+						}
 					}
 				}
-				
+
 				// PARTS USED (read-only summary)
 				CardView {
 					VStack {
@@ -830,6 +933,21 @@ struct EditRecord: View {
 					}
 				}
 
+				// LINKED ADDITION (read-only)
+				if !additionsLinkId.isEmpty {
+					CardView {
+						VStack {
+							SectionText(label: "LINKED TO ADDITIONS")
+							HStack { LabelDataText(label: "Category", data: transferCategory) }
+							if !transferSubCategory.isEmpty {
+								HStack { LabelDataText(label: "Sub-Category", data: transferSubCategory) }
+							}
+							HStack { LabelDataNumber(label: "Linked Items", data: Float(linkedAdditionsCount), fractionalLength: 0) }
+							HStack { LabelDataCurrency(label: "Total Synced Cost", data: Float(trackAllCostTotal), unit: "") }
+						}
+					}
+				}
+
 				// STATISTICS (read-only)
 				CardView {
 					VStack {
@@ -849,7 +967,7 @@ struct EditRecord: View {
 				CardView {
 					VStack {
 						SectionText(label: "VEHICLE STATS")
-						HStack{LabelDataText(label: "Vehicle", data: dataSet.vehicleId)}
+						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						if vehicleCurrentMiles > 0 {
 							HStack{LabelDataText(label: "Current Odometer", data: "\(vehicleCurrentMiles) \(unit(UnitIndex.distance))")}
 						}
@@ -900,7 +1018,7 @@ struct EditRecord: View {
 				PageTitle_Col3_Photo(
 					label: "",
 					action: "details",
-					dbRecord: "service record")
+					dbRecord: "service")
 			}
 
 			.onAppear {
@@ -909,6 +1027,9 @@ struct EditRecord: View {
 				refreshVehicleDetails()
 				loadItemIntervalsIfNeeded()
 				recomputeTotals()
+				// Load additions link state
+				additionsLinkId = dataSet.additionsLinkId
+				if !additionsLinkId.isEmpty { loadAdditionsLinkState() }
 			}
 
 			.toolbar {
@@ -1000,6 +1121,9 @@ struct EditRecord: View {
 		dataSet.part5cost = part5cost
 		dataSet.part5Unit = part5Unit
 		dataSet.part5Quantity = part5Quantity
+		dataSet.customMeasureLabel = customMeasureLabel
+		dataSet.customMeasureUnit = customMeasureUnit
+		dataSet.customMeasureValue = customMeasureValue
 		dataSet.image1 = image1
 		dataSet.image2 = image2
 		dataSet.image3 = image3
@@ -1036,6 +1160,9 @@ struct EditRecord: View {
 		// Refresh derived info after save
 		refreshVehicleDetails()
 		recomputeTotals()
+		// Sync linked Additions record if one exists
+		if !additionsLinkId.isEmpty { syncLinkedAddition() }
+		dataSet.additionsLinkId = additionsLinkId
 	}
 
 	// MARK: - Helpers
@@ -1072,6 +1199,50 @@ struct EditRecord: View {
 				itemIntervalHours = item.intervalHours
 			}
 		} catch {}
+	}
+
+	// Loads the distinct custom tracking field names previously used, cross-referencing both
+	// ServiceRecords1 (service records) and MxItems3 (service item templates), so the
+	// "Custom Field Name" picker offers names entered in either place for reuse.
+	private func loadAvailableCustomMeasureLabels() {
+		var labels = Set<String>()
+		if let records = try? modelContext.fetch(FetchDescriptor<ServiceRecords1>()) {
+			labels.formUnion(records.compactMap { $0.customMeasureLabel.isEmpty ? nil : $0.customMeasureLabel })
+		}
+		if let items = try? modelContext.fetch(FetchDescriptor<MxItems3>()) {
+			labels.formUnion(items.compactMap { $0.customMeasureLabel.isEmpty ? nil : $0.customMeasureLabel })
+		}
+		var sortedLabels = labels.sorted()
+		if !customMeasureLabel.isEmpty && !sortedLabels.contains(customMeasureLabel) {
+			sortedLabels.insert(customMeasureLabel, at: 0)
+		}
+		availableCustomMeasureLabels = sortedLabels
+		if !customMeasureLabel.isEmpty && sortedLabels.contains(customMeasureLabel) && customMeasureLabelSelection == "__none__" {
+			customMeasureLabelSelection = customMeasureLabel
+		}
+	}
+
+	// Looks up the unit of measure most recently used with a given custom field name,
+	// checking both ServiceRecords1 and MxItems3, so choosing that name auto-completes its unit.
+	private func unitForCustomMeasureLabel(_ label: String) -> String {
+		var recordFd = FetchDescriptor<ServiceRecords1>(predicate: #Predicate<ServiceRecords1> { $0.customMeasureLabel == label })
+		recordFd.sortBy = [SortDescriptor(\.updatedAt, order: .reverse)]
+		recordFd.fetchLimit = 1
+		var itemFd = FetchDescriptor<MxItems3>(predicate: #Predicate<MxItems3> { $0.customMeasureLabel == label })
+		itemFd.sortBy = [SortDescriptor(\.updatedAt, order: .reverse)]
+		itemFd.fetchLimit = 1
+		let recordMatch = try? modelContext.fetch(recordFd).first
+		let itemMatch = try? modelContext.fetch(itemFd).first
+		switch (recordMatch, itemMatch) {
+		case (.some(let record), .some(let item)):
+			return record.updatedAt >= item.updatedAt ? record.customMeasureUnit : item.customMeasureUnit
+		case (.some(let record), nil):
+			return record.customMeasureUnit
+		case (nil, .some(let item)):
+			return item.customMeasureUnit
+		default:
+			return ""
+		}
 	}
 
 	// Sync selectedPart1...5 from the current part name strings.
@@ -1209,12 +1380,239 @@ struct EditRecord: View {
 			daysRemainingToDue = 0
 		}
 	}
+
+	// Loads distinct category/subcategory values from all Additions records.
+	private func loadAdditionsCategories() {
+		if let results = try? modelContext.fetch(FetchDescriptor<Additions>()) {
+			let cats = results.filter { !$0.category.isEmpty }.map { $0.category }
+			allAdditionsCategories = Array(Set(cats)).sorted()
+			let subs = results.filter { !$0.subCategory.isEmpty }.map { $0.subCategory }
+			allAdditionsSubCategories = Array(Set(subs)).sorted()
+		}
+	}
+
+	// Reads category/subcategory from the linked Additions record into local state.
+	private func loadAdditionsLinkState() {
+		let lid = additionsLinkId
+		guard !lid.isEmpty else { return }
+		let fd = FetchDescriptor<Additions>(predicate: #Predicate { $0.serviceRecordLinkId == lid })
+		if let additions = try? modelContext.fetch(fd), !additions.isEmpty {
+			transferCategory = additions[0].category
+			transferSubCategory = additions[0].subCategory
+			linkedAdditionsCount = additions.count
+		}
+	}
+
+	// Builds the list of line items (label + cost) that will be transferred to Additions.
+	private func buildTransferLineItems() -> [(name: String, cost: Float)] {
+		var items: [(name: String, cost: Float)] = []
+		if laborCost > 0 {
+			items.append((name: "Labor", cost: laborCost))
+		}
+		let parts: [(String, Float, Int)] = [
+			(part1, part1cost, part1Quantity),
+			(part2, part2cost, part2Quantity),
+			(part3, part3cost, part3Quantity),
+			(part4, part4cost, part4Quantity),
+			(part5, part5cost, part5Quantity),
+		]
+		for (name, cost, qty) in parts where !name.isEmpty {
+			items.append((name: name, cost: Float(Double(qty) * Double(cost))))
+		}
+		return items
+	}
+
+	// Creates individual Additions records (one per part + one for labor) linked to this service record.
+	private func transferToAdditions(category: String, subCategory: String) {
+		let linkId = UUID().uuidString
+		let vId = vehicleId.isEmpty ? dataSet.vehicleId : vehicleId
+		let serviceName = mxName.isEmpty ? dataSet.mxName : mxName
+		let vend = vendor.isEmpty ? dataSet.vendor : vendor
+		var count = 0
+		// Labor entry
+		if laborCost > 0 {
+			let entry = Additions(
+				vehicleId: vId, miles: Miles, engHours: engHours,
+				itemName: "Labor", itemDescription: serviceName,
+				itemVendor: vend, category: category,
+				subCategory: subCategory, itemCost: laborCost
+			)
+			entry.serviceRecordLinkId = linkId
+			modelContext.insert(entry)
+			count += 1
+		}
+		// Part entries
+		let parts: [(String, Float, Int)] = [
+			(part1, part1cost, part1Quantity),
+			(part2, part2cost, part2Quantity),
+			(part3, part3cost, part3Quantity),
+			(part4, part4cost, part4Quantity),
+			(part5, part5cost, part5Quantity),
+		]
+		for (pName, pCost, pQty) in parts where !pName.isEmpty {
+			let entry = Additions(
+				vehicleId: vId, miles: Miles, engHours: engHours,
+				itemName: pName, itemDescription: serviceName,
+				itemVendor: vend, category: category,
+				subCategory: subCategory,
+				itemCost: Float(Double(pQty) * Double(pCost))
+			)
+			entry.serviceRecordLinkId = linkId
+			modelContext.insert(entry)
+			count += 1
+		}
+		dataSet.additionsLinkId = linkId
+		additionsLinkId = linkId
+		transferCategory = category
+		transferSubCategory = subCategory
+		linkedAdditionsCount = count
+		try? modelContext.save()
+	}
+
+	// Removes the link between this service record and ALL its linked Additions entries.
+	private func unlinkFromAdditions() {
+		let lid = additionsLinkId
+		let fd = FetchDescriptor<Additions>(predicate: #Predicate { $0.serviceRecordLinkId == lid })
+		if let additions = try? modelContext.fetch(fd) {
+			for addition in additions { addition.serviceRecordLinkId = "" }
+		}
+		dataSet.additionsLinkId = ""
+		additionsLinkId = ""
+		transferCategory = ""
+		transferSubCategory = ""
+		linkedAdditionsCount = 0
+		try? modelContext.save()
+	}
+
+	// Syncs costs on all linked Additions records by matching their itemName to current parts/labor.
+	private func syncLinkedAddition() {
+		let lid = additionsLinkId
+		guard !lid.isEmpty else { return }
+		let fd = FetchDescriptor<Additions>(predicate: #Predicate { $0.serviceRecordLinkId == lid })
+		guard let additions = try? modelContext.fetch(fd), !additions.isEmpty else { return }
+		let serviceName = mxName.isEmpty ? dataSet.mxName : mxName
+		let vend = vendor.isEmpty ? dataSet.vendor : vendor
+		for addition in additions {
+			addition.itemDescription = serviceName
+			addition.itemVendor = vend
+			addition.updatedAt = Date()
+			if addition.itemName == "Labor" {
+				addition.itemCost = laborCost
+			} else if addition.itemName == part1 {
+				addition.itemCost = Float(Double(part1Quantity) * Double(part1cost))
+			} else if addition.itemName == part2 {
+				addition.itemCost = Float(Double(part2Quantity) * Double(part2cost))
+			} else if addition.itemName == part3 {
+				addition.itemCost = Float(Double(part3Quantity) * Double(part3cost))
+			} else if addition.itemName == part4 {
+				addition.itemCost = Float(Double(part4Quantity) * Double(part4cost))
+			} else if addition.itemName == part5 {
+				addition.itemCost = Float(Double(part5Quantity) * Double(part5cost))
+			}
+		}
+		try? modelContext.save()
+		transferCategory = additions[0].category
+		transferSubCategory = additions[0].subCategory
+		linkedAdditionsCount = additions.count
+	}
 }
 
 // Safe index helper for arrays to avoid out-of-bounds if settings are missing
 private extension Array {
 	subscript(safe index: Int) -> Element? {
 		indices.contains(index) ? self[index] : nil
+	}
+}
+
+// Sheet presented when transferring a service record's costs to the Additions module.
+private struct AdditionsTransferSheet: View {
+	let existingCategories: [String]
+	let existingSubCategories: [String]
+	let lineItems: [(name: String, cost: Float)]
+	let onTransfer: (String, String) -> Void
+
+	@Environment(\.dismiss) private var dismiss
+	@State private var selectedCategory: String = ""
+	@State private var newCategoryName: String = ""
+	@State private var useNewCategory: Bool = false
+	@State private var selectedSubCategory: String = ""
+	@State private var newSubCategoryName: String = ""
+	@State private var useNewSubCategory: Bool = false
+
+	var chosenCategory: String { useNewCategory ? newCategoryName : selectedCategory }
+	var chosenSubCategory: String { (useNewSubCategory || existingSubCategories.isEmpty) ? newSubCategoryName : selectedSubCategory }
+	var canTransfer: Bool { !chosenCategory.trimmingCharacters(in: .whitespaces).isEmpty }
+	var totalCost: Float { lineItems.reduce(0) { $0 + $1.cost } }
+
+	var body: some View {
+		NavigationStack {
+			Form {
+				Section("Items to Transfer") {
+					ForEach(lineItems, id: \.name) { item in
+						LabeledContent(item.name) {
+							Text(item.cost, format: .currency(code: "USD"))
+						}
+					}
+					LabeledContent("Total") {
+						Text(totalCost, format: .currency(code: "USD"))
+							.bold()
+					}
+				}
+				Section("Category") {
+					if !existingCategories.isEmpty {
+						Toggle("Use Existing Category", isOn: Binding(
+							get: { !useNewCategory },
+							set: { useNewCategory = !$0 }
+						))
+					}
+					if !useNewCategory && !existingCategories.isEmpty {
+						Picker("Category", selection: $selectedCategory) {
+							Text("— Select —").tag("")
+							ForEach(existingCategories, id: \.self) { cat in
+								Text(cat).tag(cat)
+							}
+						}
+					} else {
+						TextField("New Category Name", text: $newCategoryName)
+					}
+				}
+				Section("Sub-Category (optional)") {
+					if !existingSubCategories.isEmpty {
+						Toggle("Use Existing Sub-Category", isOn: Binding(
+							get: { !useNewSubCategory },
+							set: { useNewSubCategory = !$0 }
+						))
+					}
+					if !useNewSubCategory && !existingSubCategories.isEmpty {
+						Picker("Sub-Category", selection: $selectedSubCategory) {
+							Text("— None —").tag("")
+							ForEach(existingSubCategories, id: \.self) { sub in
+								Text(sub).tag(sub)
+							}
+						}
+					} else {
+						TextField("New Sub-Category Name", text: $newSubCategoryName)
+					}
+				}
+			}
+			.navigationTitle("Transfer to Additions")
+			.toolbar {
+				ToolbarItem(placement: .cancellationAction) {
+					Button("Cancel") { dismiss() }
+				}
+				ToolbarItem(placement: .confirmationAction) {
+					Button("Transfer") {
+						onTransfer(chosenCategory.trimmingCharacters(in: .whitespaces), chosenSubCategory)
+						dismiss()
+					}
+					.disabled(!canTransfer)
+				}
+			}
+			.onAppear {
+				// Default to new category if no existing ones
+				if existingCategories.isEmpty { useNewCategory = true }
+			}
+		}
 	}
 }
 
@@ -1228,6 +1626,7 @@ private extension Array {
 				 MxParts1.self,
 				 Vendors1.self,
 				 Settings1.self,
+				 Additions.self,
 				 configurations: config
 	)
 
@@ -1305,6 +1704,7 @@ private extension Array {
 				 MxParts1.self,
 				 Vendors1.self,
 				 Settings1.self,
+				 Additions.self,
 				 configurations: config
 	)
 

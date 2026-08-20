@@ -96,6 +96,8 @@ struct DisplaySystems: View {
 	
 	/// User-facing sort modes for the systems list, with associated sort descriptors.
 	private enum PartsSort: String, CaseIterable, Identifiable {
+		case dateDesc = "Date ↓"
+		case dateAsc = "Date ↑"
 		case vehicleAsc_nameAsc = "Vehicle A–Z, System A–Z"
 		case vehicleAsc_nameDesc = "Vehicle A–Z, System Z–A"
 		case nameAsc = "System A–Z"
@@ -106,6 +108,10 @@ struct DisplaySystems: View {
 		/// The concrete SwiftData sort descriptors used by `QueryView` for this sort mode.
 		var descriptors: [SortDescriptor<VehicleSystems1>] {
 			switch self {
+				case .dateDesc:
+					return [ .init(\.createdAt, order: .reverse) ]
+				case .dateAsc:
+					return [ .init(\.createdAt, order: .forward) ]
 				case .vehicleAsc_nameAsc:
 					return [
 						.init(\.vehicleId, order: .forward),
@@ -127,49 +133,44 @@ struct DisplaySystems: View {
 	}
 	
 	/// The currently selected sort mode; reflected in the toolbar and header.
-	@State private var selectedSort: PartsSort = .vehicleAsc_nameAsc
+	@AppStorage("sort_systems") private var selectedSort: PartsSort = .dateDesc
 	
 	// MARK: - Body
 	var body: some View {
 		
 		// Vehicle scope picker — choose a specific vehicle or show all systems.
-		LabeledContent {
-			ModelPicker(
-				selection: $selectedVehicle,
-				title: "Vehicle",
-				includeEmptyChoice: true,
-				emptyChoiceLabel: "All Vehicles",
-				autoSelectFirst: false,
-				filter: nil,
-				sort: [SortDescriptor(\.name, order: .forward)],
-				labelProvider: { v in "\(v.year) \(v.name)" }
-			)
-			.onChange(of: selectedVehicle) { _, newVehicle in
-				// Keep the cross-view binding in sync with the local selection.
-				trackVehicleSelected = newVehicle?.name ?? "All Vehicles"
-			}
-			.onAppear {
-				// Resolve initial selection from the shared binding, defaulting to "All Vehicles".
-				if trackVehicleSelected.isEmpty { trackVehicleSelected = "All Vehicles" }
-				if trackVehicleSelected != "All Vehicles" {
-					var fd = FetchDescriptor<Vehicle8>(predicate: #Predicate { $0.name == trackVehicleSelected })
-					fd.fetchLimit = 1
-					if let v = try? modelContext.fetch(fd).first {
-						selectedVehicle = v
-					} else {
-						selectedVehicle = nil
-						trackVehicleSelected = "All Vehicles"
-					}
+		ModelPicker(
+			selection: $selectedVehicle,
+			title: "",
+			includeEmptyChoice: true,
+			emptyChoiceLabel: "All Vehicles",
+			autoSelectFirst: false,
+			filter: nil,
+			sort: [SortDescriptor(\.displayName, order: .forward)],
+			labelProvider: { v in "\(v.year) \(v.displayName)" }
+		)
+		.onChange(of: selectedVehicle) { _, newVehicle in
+			// Keep the cross-view binding in sync with the local selection.
+			trackVehicleSelected = newVehicle?.name ?? "All Vehicles"
+		}
+		.onAppear {
+			// Resolve initial selection from the shared binding, defaulting to "All Vehicles".
+			if trackVehicleSelected.isEmpty { trackVehicleSelected = "All Vehicles" }
+			if trackVehicleSelected != "All Vehicles" {
+				var fd = FetchDescriptor<Vehicle8>(predicate: #Predicate { $0.name == trackVehicleSelected })
+				fd.fetchLimit = 1
+				if let v = try? modelContext.fetch(fd).first {
+					selectedVehicle = v
 				} else {
 					selectedVehicle = nil
+					trackVehicleSelected = "All Vehicles"
 				}
+			} else {
+				selectedVehicle = nil
 			}
-			.fixedSize(horizontal: true, vertical: true)
-		} label: {
-			Text("Vehicle:")
-				.textLabelModified()
 		}
-		
+		.frame(maxWidth: .infinity)
+
 		// Page title banner for this screen.
 		.safeAreaInset(edge: .top) {
 			PageTitle_Col2_NoPhoto(label: "SYSTEMS")
@@ -199,15 +200,26 @@ struct DisplaySystems: View {
 									.id(record.id) // <<< work-around to get splitview to change details when selected
 							} label: {
 								HStack{
-									let vehicleForImage = vehicles.first { $0.name == record.vehicleId }
-									Image_View_Thumbnail(imageData: vehicleForImage?.image1 ?? record.image1)
-									VStack{
+//									let vehicleForImage = vehicles.first { $0.name == record.vehicleId }
+//									Image_View_Thumbnail(imageData: vehicleForImage?.image1 ?? record.image1)
+									VStack(alignment: .leading, spacing: 1) {
 										Text("\(record.systemName)")
-											.textModifier_ListTitle()
-										Text("\(record.vehicleId)")
-											.textModifier_ListSubTitle_R()
-										Text("\(record.systemDescription)")
-											.textModifier_ListSubTitle_L()
+											.font(.headline)
+										if !record.systemType.isEmpty || !record.systemStatus.isEmpty {
+											Text("\([record.systemType, record.systemStatus].filter { !$0.isEmpty }.joined(separator: " · "))")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
+										if !record.systemDescription.isEmpty {
+											Text("\(record.systemDescription)")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
+										if trackVehicleSelected == "All Vehicles" {
+											Text("\(Functions().getVehicleDisplayName(vehicleId: record.vehicleId, context: modelContext))")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
 									}
 									.cardStyle(backgroundColor: .blue.opacity(0.6))
 								}
@@ -224,9 +236,18 @@ struct DisplaySystems: View {
 									}
 								}
 							} label: {
-								Label("Sort", systemImage: "arrow.up.arrow.down")
+#if os(macOS)
+								Image(systemName: "arrow.up.arrow.down")
+#else
+								VStack(spacing: 2) {
+								Image(systemName: "arrow.up.arrow.down")
+								Text("Sort")
+									.font(.caption2)
+							}
+#endif
 							}
 							.buttonStyle(GrowingButton(buttonColor: Color.gray))
+							.help("Sort")
 							.accessibilityLabel("Sort parts")
 						}
 						// Add button — creates a new record and navigates to its edit form.
@@ -234,9 +255,19 @@ struct DisplaySystems: View {
 							Button {
 								addNewRecord()
 							} label: {
-								Label("Add", systemImage: "plus.capsule")
+#if os(macOS)
+								Image(systemName: "plus.capsule")
+#else
+								VStack(spacing: 2) {
+								Image(systemName: "plus.capsule")
+								Text("Add")
+									.font(.caption2)
+							}
+#endif
 							}
 							.disabled(false)
+							.help("Add")
+							.accessibilityLabel("Add")
 						}
 					}
 				} header: {
@@ -340,6 +371,76 @@ struct DisplaySystems: View {
 	}
 }
 
-#Preview {
-	//    DisplayItems()
+#Preview("DisplaySystems - Seeded") {
+	let config = ModelConfiguration(isStoredInMemoryOnly: true)
+	let container = try! ModelContainer(for: Vehicle8.self, VehicleSystems1.self, configurations: config)
+	let ctx = container.mainContext
+
+	// Seed a vehicle
+	let truck = Vehicle8()
+	truck.name = "Big Red"
+	truck.displayName = "Big Red"
+	truck.year = 2021
+	truck.manufacturer = "Ford"
+	truck.model = "F-250"
+	ctx.insert(truck)
+
+	let van = Vehicle8()
+	van.name = "White Van"
+	van.displayName = "White Van"
+	van.year = 2019
+	van.manufacturer = "Ford"
+	van.model = "Transit"
+	ctx.insert(van)
+
+	// Seed systems
+	let systemsData: [(vehicle: String, name: String, type: String, desc: String, status: String)] = [
+		("Big Red", "Engine",           "Powertrain",   "6.7L Power Stroke Diesel V8",        "Operational"),
+		("Big Red", "Transmission",     "Drivetrain",   "TorqShift 10-speed automatic",        "Operational"),
+		("Big Red", "Suspension",       "Chassis",      "Front: Twin I-Beam, Rear: Leaf Spring","Operational"),
+		("Big Red", "Brakes",           "Safety",       "4-wheel disc with ABS",               "Needs Inspection"),
+		("Big Red", "Electrical",       "Electrical",   "12V / 24V dual battery system",       "Operational"),
+		("White Van","Engine",          "Powertrain",   "3.5L EcoBoost V6",                    "Operational"),
+		("White Van","HVAC",            "Climate",      "Dual-zone automatic climate control",  "Operational"),
+	]
+
+	for s in systemsData {
+		let sys = VehicleSystems1(
+			vehicleId: s.vehicle,
+			systemName: s.name,
+			systemDescription: s.desc,
+			systemType: s.type,
+			systemManufacturer: "",
+			systemModel: "",
+			systemSerialNumber: "",
+			systemPartNumber: "",
+			systemLocation: "",
+			systemStatus: s.status,
+			systemNotes: "",
+			systemImage: nil
+		)
+		ctx.insert(sys)
+	}
+
+	return NavigationStack {
+		DisplaySystems(trackVehicleSelected: .constant("Big Red"))
+	}
+	.modelContainer(container)
+}
+
+#Preview("DisplaySystems - Empty") {
+	let config = ModelConfiguration(isStoredInMemoryOnly: true)
+	let container = try! ModelContainer(for: Vehicle8.self, VehicleSystems1.self, configurations: config)
+	let ctx = container.mainContext
+
+	let truck = Vehicle8()
+	truck.name = "Big Red"
+	truck.displayName = "Big Red"
+	truck.year = 2021
+	ctx.insert(truck)
+
+	return NavigationStack {
+		DisplaySystems(trackVehicleSelected: .constant("Big Red"))
+	}
+	.modelContainer(container)
 }

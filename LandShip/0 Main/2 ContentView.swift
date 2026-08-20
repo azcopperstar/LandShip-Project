@@ -52,6 +52,7 @@ struct ContentView: View {
 	@State private var showingPreferences = false // Reserved for future use if needed
 	@State private var showingSettingsSheet = false
 	@State private var showingHelpSheet = false
+	@State private var showingChangelogSheet = false
 	// Removed showingUpgrades property as per instructions
 	
 	// Hidden Debug Tools sheet (appears on long-press of title)
@@ -66,15 +67,22 @@ struct ContentView: View {
 	@State private var preferredCompactColumn: NavigationSplitViewColumn = .sidebar
 	
 	@AppStorage(StorageKey.hasCompletedOnboarding) private var hasCompletedOnboarding: Bool = false
+	@AppStorage(StorageKey.launchScreen) private var launchScreen: String = "dashboard"
+	@AppStorage(StorageKey.lastSidebarSection) private var lastSidebarSection: String = "dashboard"
 	@State private var showingOnboarding: Bool = false
+	
+	// Column width persistence (primarily for iPad, macOS uses autosave)
+	@SceneStorage(StorageKey.sidebarColumnWidth) private var sidebarWidth: Double = 240
+	@SceneStorage(StorageKey.contentColumnWidth) private var contentWidth: Double = 450
+	@SceneStorage(StorageKey.detailColumnWidth) private var detailWidth: Double = 400
 	
 	// MARK: - Sidebar selection
 	
 	@State private var sidebarSelection: SidebarItem? = {
 #if os(iOS)
-		return UIDevice.current.userInterfaceIdiom == .pad ? .vehicles : nil
+		return UIDevice.current.userInterfaceIdiom == .pad ? .dashboard : nil
 #else
-		return .vehicles
+		return .dashboard
 #endif
 	}()
     @State private var detailPath = NavigationPath()
@@ -82,6 +90,8 @@ struct ContentView: View {
 	
 	// MARK: - Backup / Restore state
 	
+	@AppStorage(StorageKey.lastBackupDate) private var lastBackupDateInterval: Double = 0
+
 	@State private var isExportingBackup: Bool = false
 	@State private var backupDocument: BackupDocument = .empty
 	@State private var backupErrorMessage: String?
@@ -109,52 +119,90 @@ struct ContentView: View {
 	
 	// MARK: - Body
 
-    // Extracted root NavigationSplitView to reduce type-checking complexity
-    private var splitRoot: some View {
+    // Sidebar column, shared between the 3-column layout and the iPad-Dashboard 2-column layout.
+    @ViewBuilder
+    private var sidebarColumn: some View {
+        SidebarView(
+            sidebarSelection: $sidebarSelection,
+            showingSettingsSheet: $showingSettingsSheet,
+            showingHelpSheet: $showingHelpSheet,
+            showingChangelogSheet: $showingChangelogSheet,
+            onBackupTapped: handleBackupTapped,
+            onRestoreTapped: { isImportingRestore = true }
+        )
+        .listStyle(.sidebar)
+        .navigationSplitViewColumnWidth(min: 150, ideal: sidebarWidth, max: 300)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                // Hidden long-press to open Debug Tools (available in all builds)
+                AppTitleView()
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 2.0)
+                            .onEnded { _ in
+                                showingDebugTools = true
+                                InAppLogger.shared.log("DebugTools opened via long-press")
+                            }
+                    )
+                    .accessibilityHint("Long-press for debug tools")
+            }
+        }
+    }
+
+    // On iPad, the Dashboard has no middle "content" column to show, so the standard 3-column
+    // NavigationSplitView leaves that column visible-but-empty, wasting a wide strip of screen
+    // width. Using a genuine 2-column split for this case lets the Dashboard fill that space.
+#if os(iOS)
+    private var dashboardIPadSplit: some View {
         NavigationSplitView(
             columnVisibility: $splitVisibility,
             preferredCompactColumn: $preferredCompactColumn
         ) {
-            SidebarView(
-                sidebarSelection: $sidebarSelection,
-                showingSettingsSheet: $showingSettingsSheet,
-                showingHelpSheet: $showingHelpSheet,
-                onBackupTapped: handleBackupTapped,
-                onRestoreTapped: { isImportingRestore = true }
-            )
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    // Hidden long-press to open Debug Tools (available in all builds)
-                    AppTitleView()
-                        .simultaneousGesture(
-                            LongPressGesture(minimumDuration: 2.0)
-                                .onEnded { _ in
-                                    showingDebugTools = true
-                                    InAppLogger.shared.log("DebugTools opened via long-press")
-                                }
-                        )
-                        .accessibilityHint("Long-press for debug tools")
-                }
+            sidebarColumn
+        } detail: {
+            NavigationStack {
+                DashboardView()
             }
-#if !os(macOS)
-            // Removed the toolbar block containing the Upgrades button as per instructions
+        }
+    }
 #endif
+
+    private var threeColumnSplit: some View {
+        NavigationSplitView(
+            columnVisibility: $splitVisibility,
+            preferredCompactColumn: $preferredCompactColumn
+        ) {
+            sidebarColumn
         } content: {
             MiddleColumnView(
                 sidebarSelection: $sidebarSelection,
                 trackVehicleSelected: $trackVehicleSelected
             )
+            .navigationSplitViewColumnWidth(min: 200, ideal: contentWidth, max: 500)
         } detail: {
             DetailColumnView(
                 detailPath: $detailPath,
                 selectionID: sidebarSelection
             )
+            .navigationSplitViewColumnWidth(min: 100, ideal: detailWidth, max: 600)
         }
 #if os(macOS)
         .splitViewAutosave("MainSplit")
 #endif
+    }
+
+    // Extracted root NavigationSplitView to reduce type-checking complexity
+    private var splitRoot: some View {
+        Group {
+#if os(iOS)
+            if isPad && sidebarSelection == .dashboard {
+                dashboardIPadSplit
+            } else {
+                threeColumnSplit
+            }
+#else
+            threeColumnSplit
+#endif
+        }
         .id(splitResetID)
     }
 
@@ -176,6 +224,9 @@ struct ContentView: View {
 					}
 			}
 		}
+		.sheet(isPresented: $showingChangelogSheet) {
+			ChangelogSheet { showingChangelogSheet = false }
+		}
 #endif
 		
 		// Removed the purchases sheet block as per instructions
@@ -192,6 +243,7 @@ struct ContentView: View {
                     let summary = BackupService.summarizeBackupFolder(at: url)
                     backupSuccessMessage = summary
                     isBackupSuccessPresented = true
+                    lastBackupDateInterval = Date().timeIntervalSince1970
                     InAppLogger.shared.log("Backup export succeeded: \(url.lastPathComponent)")
                 case .failure(let error):
                     backupErrorMessage = error.localizedDescription
@@ -250,10 +302,10 @@ struct ContentView: View {
 		} message: {
 			Text(backupErrorMessage ?? "")
 		}
-        .alert("Backup Complete", isPresented: $isBackupSuccessPresented) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(backupSuccessMessage ?? "")
+        .sheet(isPresented: $isBackupSuccessPresented) {
+            BackupSummarySheet(message: backupSuccessMessage ?? "") {
+                isBackupSuccessPresented = false
+            }
         }
 		.alert("Restore Failed", isPresented: $isRestoreErrorPresented) {
 			Button("OK", role: .cancel) { }
@@ -293,14 +345,28 @@ struct ContentView: View {
 				showingOnboarding = true
 			}
 			
+			// Migrate existing vehicles to populate displayName from name
+			migrateVehicleDisplayNames()
+			deduplicateSettings()
+			
+			// Resolve the launch screen preference
+			let launchItem: SidebarItem
+			if launchScreen == "lastSection" {
+				launchItem = SidebarItem(rawValue: lastSidebarSection) ?? .dashboard
+			} else {
+				launchItem = SidebarItem(rawValue: launchScreen) ?? .dashboard
+			}
 #if os(iOS)
 			if isPad {
-				Task { @MainActor in sidebarSelection = .vehicles }
+				Task { @MainActor in
+					sidebarSelection = launchItem
+					splitVisibility = .all
+				}
 			} else {
 				Task { @MainActor in sidebarSelection = nil }
 			}
 #else
-			Task { @MainActor in sidebarSelection = .vehicles }
+			Task { @MainActor in sidebarSelection = launchItem }
 #endif
 			
 			// Log iCloud account status (also printed to console)
@@ -323,10 +389,20 @@ struct ContentView: View {
 		.onChangeCompat(of: splitVisibility) { _, newValue in
 			columnVisibilityRawValue = raw(from: newValue)
 		}
-        .onChangeCompat(of: sidebarSelection) { _, _ in
+        .onChangeCompat(of: sidebarSelection) { _, newValue in
             // Clear the detail navigation when switching sections to avoid stale detail views
             detailPath = NavigationPath()
             splitResetID = UUID()
+            // Persist last section for "Last Section Open" launch preference
+            if let item = newValue {
+                lastSidebarSection = item.rawValue
+            }
+#if os(iOS)
+            if isPad {
+                // Always keep all columns visible so the sidebar remains accessible
+                splitVisibility = .all
+            }
+#endif
         }
 #if !os(macOS)
 		.navigationBarTitleDisplayMode(.inline)
@@ -364,7 +440,25 @@ struct ContentView: View {
 	}
 	
 	// MARK: - Actions
-	
+
+	/// Removes duplicate Settings1 records that can appear when multiple devices each create
+	/// a record before CloudKit sync delivers the other device's copy.
+	/// All devices independently converge on the same winner by sorting on persistentModelID.
+	private func deduplicateSettings() {
+		let descriptor = FetchDescriptor<Settings1>(
+			predicate: #Predicate { $0.userName == "primary1" }
+		)
+		guard let all = try? modelContext.fetch(descriptor), all.count > 1 else { return }
+		let enc = JSONEncoder()
+		func idData2(_ m: Settings1) -> Data { (try? enc.encode(m.persistentModelID)) ?? Data() }
+		let sorted = all.sorted { idData2($0).lexicographicallyPrecedes(idData2($1)) }
+		for duplicate in sorted.dropFirst() {
+			modelContext.delete(duplicate)
+		}
+		try? modelContext.save()
+		print("[LandShip] Deduplicated \(all.count - 1) extra Settings1 record(s)")
+	}
+
 	private func handleBackupTapped() {
 		do {
 			let doc = try BackupService.makeBackupDocument(context: modelContext)
@@ -375,6 +469,249 @@ struct ContentView: View {
 			self.backupErrorMessage = error.localizedDescription
 			self.isBackupErrorPresented = true
 			InAppLogger.shared.log("Backup export failed early: \(error.localizedDescription)")
+		}
+	}
+	
+	/// Migrates existing Vehicle8 records to populate displayName from name if displayName is empty
+	private func migrateVehicleDisplayNames() {
+		let descriptor = FetchDescriptor<Vehicle8>()
+		guard let vehicles = try? modelContext.fetch(descriptor) else {
+			print("[Migration] Failed to fetch vehicles for displayName migration")
+			return
+		}
+		
+		var migratedCount = 0
+		for vehicle in vehicles {
+			if vehicle.displayName.isEmpty {
+				// Check if name looks like a UUID (contains dashes and is long)
+				if vehicle.name.contains("-") && vehicle.name.count > 30 {
+					// It's a UUID, use a friendly default
+					vehicle.displayName = "Unnamed Vehicle"
+				} else {
+					// It's a regular name, copy it to displayName
+					vehicle.displayName = vehicle.name
+				}
+				migratedCount += 1
+			}
+		}
+		
+		if migratedCount > 0 {
+			do {
+				try modelContext.save()
+				print("[Migration] Successfully migrated displayName for \(migratedCount) vehicle(s)")
+			} catch {
+				print("[Migration] Failed to save displayName migration: \(error.localizedDescription)")
+			}
+		} else {
+			print("[Migration] No vehicles needed displayName migration")
+		}
+		
+		// Also migrate vehicleId fields in all data models
+		migrateVehicleIds()
+	}
+	
+	/// Migrates vehicleId fields across all models to use vehicle names instead of UUIDs
+	private func migrateVehicleIds() {
+		// First, fetch all vehicles to create a UUID -> name mapping
+		let vehicleDescriptor = FetchDescriptor<Vehicle8>()
+		guard let vehicles = try? modelContext.fetch(vehicleDescriptor) else {
+			print("[Migration] Failed to fetch vehicles for vehicleId migration")
+			return
+		}
+		
+		// Build lookup map: try matching by id string representation
+		var totalMigrated = 0
+		// Some migrations are commented out because their model types are unavailable in this target; re-enable when models are added.
+		
+		// Helper to check if a string looks like a UUID
+		func looksLikeUUID(_ string: String) -> Bool {
+			return string.contains("-") && string.count > 30
+		}
+		
+		// Helper to find vehicle by matching UUID pattern in name or other fields
+		func findVehicleForUUID(_ uuid: String) -> Vehicle8? {
+			return vehicles.first { vehicle in
+				vehicle.name == uuid || 
+				vehicle.displayName == uuid ||
+				String(describing: vehicle.id) == uuid
+			}
+		}
+		
+		// Migrate MxItems3
+		if let items = try? modelContext.fetch(FetchDescriptor<MxItems3>()) {
+			var count = 0
+			for item in items where looksLikeUUID(item.vehicleId) {
+				if let vehicle = findVehicleForUUID(item.vehicleId) {
+					item.vehicleId = vehicle.name
+					count += 1
+				}
+			}
+			if count > 0 {
+				print("[Migration] Migrated vehicleId for \(count) MxItems3 record(s)")
+				totalMigrated += count
+			}
+		}
+		
+		// Migrate ServiceRecords3
+		/*
+		if let records = try? modelContext.fetch(FetchDescriptor<ServiceRecords3>()) {
+			var count = 0
+			for record in records where looksLikeUUID(record.vehicleId) {
+				if let vehicle = findVehicleForUUID(record.vehicleId) {
+					record.vehicleId = vehicle.name
+					count += 1
+				}
+			}
+			if count > 0 {
+				print("[Migration] Migrated vehicleId for \(count) ServiceRecords3 record(s)")
+				totalMigrated += count
+			}
+		}
+		*/
+		// TODO: ServiceRecords3 type not found in this target. Enable this block when the model is available.
+		
+		// Migrate FuelLog3
+		/*
+		if let logs = try? modelContext.fetch(FetchDescriptor<FuelLog3>()) {
+			var count = 0
+			for log in logs where looksLikeUUID(log.vehicleId) {
+				if let vehicle = findVehicleForUUID(log.vehicleId) {
+					log.vehicleId = vehicle.name
+					count += 1
+				}
+			}
+			if count > 0 {
+				print("[Migration] Migrated vehicleId for \(count) FuelLog3 record(s)")
+				totalMigrated += count
+			}
+		}
+		*/
+		// TODO: FuelLog3 type not found in this target. Enable this block when the model is available.
+		
+		// Migrate TripLog3
+		/*
+		if let trips = try? modelContext.fetch(FetchDescriptor<TripLog3>()) {
+			var count = 0
+			for trip in trips where looksLikeUUID(trip.vehicleId) {
+				if let vehicle = findVehicleForUUID(trip.vehicleId) {
+					trip.vehicleId = vehicle.name
+					count += 1
+				}
+			}
+			if count > 0 {
+				print("[Migration] Migrated vehicleId for \(count) TripLog3 record(s)")
+				totalMigrated += count
+			}
+		}
+		*/
+		// TODO: TripLog3 type not found in this target. Enable this block when the model is available.
+		
+		// Migrate MxParts3
+		/*
+		if let parts = try? modelContext.fetch(FetchDescriptor<MxParts3>()) {
+			var count = 0
+			for part in parts where looksLikeUUID(part.vehicleId) {
+				if let vehicle = findVehicleForUUID(part.vehicleId) {
+					part.vehicleId = vehicle.name
+					count += 1
+				}
+			}
+			if count > 0 {
+				print("[Migration] Migrated vehicleId for \(count) MxParts3 record(s)")
+				totalMigrated += count
+			}
+		}
+		*/
+		// TODO: MxParts3 type not found in this target. Enable this block when the model is available.
+
+		// Migrate VehicleSystems2
+		/*
+		if let systems = try? modelContext.fetch(FetchDescriptor<VehicleSystems2>()) {
+			var count = 0
+			for system in systems where looksLikeUUID(system.vehicleId) {
+				if let vehicle = findVehicleForUUID(system.vehicleId) {
+					system.vehicleId = vehicle.name
+					count += 1
+				}
+			}
+			if count > 0 {
+				print("[Migration] Migrated vehicleId for \(count) VehicleSystems2 record(s)")
+				totalMigrated += count
+			}
+		}
+		*/
+		// TODO: VehicleSystems2 type not found in this target. Enable this block when the model is available.
+		
+		// Migrate ProjectList
+		if let projects = try? modelContext.fetch(FetchDescriptor<ProjectList>()) {
+			var count = 0
+			for project in projects where looksLikeUUID(project.vehicleId) {
+				if let vehicle = findVehicleForUUID(project.vehicleId) {
+					project.vehicleId = vehicle.name
+					count += 1
+				}
+			}
+			if count > 0 {
+				print("[Migration] Migrated vehicleId for \(count) ProjectList record(s)")
+				totalMigrated += count
+			}
+		}
+		
+		// Migrate CheckList
+		if let checklists = try? modelContext.fetch(FetchDescriptor<CheckList>()) {
+			var count = 0
+			for checklist in checklists where looksLikeUUID(checklist.vehicleId) {
+				if let vehicle = findVehicleForUUID(checklist.vehicleId) {
+					checklist.vehicleId = vehicle.name
+					count += 1
+				}
+			}
+			if count > 0 {
+				print("[Migration] Migrated vehicleId for \(count) CheckList record(s)")
+				totalMigrated += count
+			}
+		}
+		
+		// Migrate Additions
+		if let additions = try? modelContext.fetch(FetchDescriptor<Additions>()) {
+			var count = 0
+			for addition in additions where looksLikeUUID(addition.vehicleId) {
+				if let vehicle = findVehicleForUUID(addition.vehicleId) {
+					addition.vehicleId = vehicle.name
+					count += 1
+				}
+			}
+			if count > 0 {
+				print("[Migration] Migrated vehicleId for \(count) Additions record(s)")
+				totalMigrated += count
+			}
+		}
+		
+		// Migrate Subscriptions
+		if let subscriptions = try? modelContext.fetch(FetchDescriptor<Subscriptions>()) {
+			var count = 0
+			for subscription in subscriptions where looksLikeUUID(subscription.vehicleId) {
+				if let vehicle = findVehicleForUUID(subscription.vehicleId) {
+					subscription.vehicleId = vehicle.name
+					count += 1
+				}
+			}
+			if count > 0 {
+				print("[Migration] Migrated vehicleId for \(count) Subscriptions record(s)")
+				totalMigrated += count
+			}
+		}
+		
+		// Save all changes
+		if totalMigrated > 0 {
+			do {
+				try modelContext.save()
+				print("[Migration] Successfully migrated vehicleId for \(totalMigrated) total record(s)")
+			} catch {
+				print("[Migration] Failed to save vehicleId migration: \(error.localizedDescription)")
+			}
+		} else {
+			print("[Migration] No records needed vehicleId migration")
 		}
 	}
 }
@@ -409,9 +746,21 @@ private struct SidebarView: View {
 	@Binding var sidebarSelection: SidebarItem?
 	@Binding var showingSettingsSheet: Bool
 	@Binding var showingHelpSheet: Bool
+	@Binding var showingChangelogSheet: Bool
 	var onBackupTapped: () -> Void
 	var onRestoreTapped: () -> Void
-	
+
+	@AppStorage(StorageKey.lastBackupDate) private var lastBackupDateInterval: Double = 0
+
+	private var lastBackupLabel: String {
+		guard lastBackupDateInterval > 0 else { return "No backup on record" }
+		let date = Date(timeIntervalSince1970: lastBackupDateInterval)
+		let df = DateFormatter()
+		df.dateStyle = .medium
+		df.timeStyle = .short
+		return df.string(from: date)
+	}
+
 	var body: some View {
 		List(selection: $sidebarSelection) {
 			Section(header: CenteredSectionHeader(title: "")) {
@@ -421,10 +770,10 @@ private struct SidebarView: View {
 			}
 
 			Section(header: CenteredSectionHeader(title: "Garage")) {
-				Label("Vehicles", systemImage: "truck.pickup.side.front.open")
+				Label("Vehicles", systemImage: "car.2.fill")
 					.sidebarRowStyle(selected: sidebarSelection == .vehicles)
 					.tag(SidebarItem.vehicles)
-				Label("Parts", systemImage: "engine.combustion.badge.exclamationmark")
+				Label("Parts", systemImage: "gearshape.2.fill")
 					.sidebarRowStyle(selected: sidebarSelection == .parts)
 					.tag(SidebarItem.parts)
 			}
@@ -439,7 +788,7 @@ private struct SidebarView: View {
 			}
 			
 			Section(header: CenteredSectionHeader(title: "Vehicle Service")) {
-				Label("Records", systemImage: "square.grid.3x1.folder.badge.plus")
+				Label("Records", systemImage: "wrench.and.screwdriver.fill")
 					.sidebarRowStyle(selected: sidebarSelection == .records)
 					.tag(SidebarItem.records)
 				Label("Items", systemImage: "folder.badge.gearshape")
@@ -447,6 +796,32 @@ private struct SidebarView: View {
 					.tag(SidebarItem.items)
 			}
 			
+			Section(header: CenteredSectionHeader(title: "Vehicle Financials")) {
+				Label("Improvements", systemImage: "cart.badge.plus")
+					.sidebarRowStyle(selected: sidebarSelection == .additions)
+					.tag(SidebarItem.additions)
+				Label("Expenditures", systemImage: "calendar.badge.clock")
+					.sidebarRowStyle(selected: sidebarSelection == .subscriptions)
+					.tag(SidebarItem.subscriptions)
+			}
+
+			Section(header: CenteredSectionHeader(title: "Projects/Checklists")) {
+				Label("Projects", systemImage: "list.number.badge.ellipsis")
+					.sidebarRowStyle(selected: sidebarSelection == .projectList)
+					.tag(SidebarItem.projectList)
+//				Label("Punch-Lists", systemImage: "iphone.badge.checkmark")
+//					.sidebarRowStyle(selected: sidebarSelection == .livePunchList)
+//					.tag(SidebarItem.livePunchList)
+
+//				Divider()
+//					.listRowBackground(Color.clear)
+//					.listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+
+				Label("Checklists", systemImage: "checklist")
+					.sidebarRowStyle(selected: sidebarSelection == .displayChecklist)
+					.tag(SidebarItem.displayChecklist)
+			}
+
 			Section(header: CenteredSectionHeader(title: "Setup")) {
 				Label("Systems", systemImage: "glowplug")
 					.sidebarRowStyle(selected: sidebarSelection == .systems)
@@ -473,7 +848,16 @@ private struct SidebarView: View {
 						.sidebarRowStyle(selected: sidebarSelection == .backup)
 				}
 				.buttonStyle(.plain)
-				
+
+				HStack(spacing: 0) {
+					Spacer().frame(width: 32)
+					Text("Last: " + lastBackupLabel)
+						.font(.caption2)
+						.foregroundStyle(.secondary)
+					Spacer()
+				}
+				.listRowBackground(Color.clear)
+
 				Button {
 					onRestoreTapped()
 				} label: {
@@ -493,6 +877,15 @@ private struct SidebarView: View {
 						.sidebarRowStyle(selected: false)
 				}
 				.buttonStyle(.plain)
+
+				Button {
+					showingChangelogSheet = true
+					InAppLogger.shared.log("Opened What's New")
+				} label: {
+					Label("What's New", systemImage: "clock.arrow.circlepath")
+						.sidebarRowStyle(selected: false)
+				}
+				.buttonStyle(.plain)
 			}
 #endif
 		}
@@ -500,39 +893,92 @@ private struct SidebarView: View {
 }
 
 /// Extracted middle column content to reduce type-checking complexity
-private struct MiddleColumnView: View {
+struct MiddleColumnView: View {
     @Binding var sidebarSelection: SidebarItem?
     @Binding var trackVehicleSelected: String
 
+    @Query private var projectLists: [ProjectList]
+
+    @State private var selectedProjectSubcategory: String = "Oil"
+
+    @ViewBuilder
     var body: some View {
+        let selection = sidebarSelection ?? .none
+
+        // Derive unique, non-empty subcategory names from ProjectList.subCategory
+        let subcategories: [String] = Array(
+            Set(
+                projectLists.compactMap { item in
+                    let trimmed = item.subCategory.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+                    return trimmed.isEmpty ? nil : trimmed
+                }
+            )
+        ).sorted()
+
+        let safeSubcategories = subcategories.isEmpty ? ["General"] : subcategories
+
         Group {
-            switch sidebarSelection {
-                case .dashboard:
+            switch selection {
+            case .dashboard:
+#if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    Color.clear  // Dashboard shown full-width in detail column on iPad
+                } else {
                     DashboardView()
-                case .vehicles:
-                    ChooseVehicle(trackVehicleSelected: $trackVehicleSelected)
-                case .parts:
-                    DisplayParts(trackVehicleSelected: $trackVehicleSelected)
-                case .fuelLog:
-                    DisplayFuelLog(trackVehicleSelected: $trackVehicleSelected)
-                case .tripLog:
-                    DisplayTripLog(trackVehicleSelected: $trackVehicleSelected)
-                case .records:
-                    DisplayRecords(trackVehicleSelected: $trackVehicleSelected)
-                case .items:
-                    DisplayItems(trackVehicleSelected: $trackVehicleSelected)
-                case .systems:
-                    DisplaySystems(trackVehicleSelected: $trackVehicleSelected)
-                case .vendors:
-                    DisplayVendors()
-                case .settings:
-                    ContentUnavailableView("Settings opens in a sheet", systemImage: "gearshape")
-                case .backup:
-                    ContentUnavailableView("Use Backup in Data Management", systemImage: "square.and.arrow.up")
-                case .restore:
-                    ContentUnavailableView("Use Restore in Data Management", systemImage: "square.and.arrow.down")
-                case .none:
-                    ContentPlaceholderView()
+                }
+#else
+                DashboardView()
+#endif
+            case .vehicles:
+                ChooseVehicle(trackVehicleSelected: $trackVehicleSelected)
+            case .parts:
+                DisplayParts(trackVehicleSelected: $trackVehicleSelected)
+            case .fuelLog:
+                DisplayFuelLog(trackVehicleSelected: $trackVehicleSelected)
+            case .tripLog:
+                DisplayTripLog(trackVehicleSelected: $trackVehicleSelected)
+            case .records:
+                DisplayRecords(trackVehicleSelected: $trackVehicleSelected)
+            case .items:
+                DisplayItems(trackVehicleSelected: $trackVehicleSelected)
+            case .systems:
+                DisplaySystems(trackVehicleSelected: $trackVehicleSelected)
+            case .vendors:
+                DisplayVendors()
+            case .settings:
+                ContentUnavailableView("Settings opens in a sheet", systemImage: "gearshape")
+            case .backup:
+                ContentUnavailableView("Use Backup in Data Management", systemImage: "square.and.arrow.up")
+            case .restore:
+                ContentUnavailableView("Use Restore in Data Management", systemImage: "square.and.arrow.down")
+            case .additions:
+                DisplayAdditions()
+            case .subscriptions:
+                DisplaySubscriptions()
+            case .projectList:
+                DisplayProjectList(trackVehicleSelected: $trackVehicleSelected)
+            case .livePunchList:
+                LivePunchListView()
+            case .punchList:
+                pdfReportPunchList(
+                    trackVehicleSelected: trackVehicleSelected,
+                    projectSubcategory: selectedProjectSubcategory
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+							case .displayChecklist:
+								DisplayCheckList(trackVehicleSelected: $trackVehicleSelected)
+							case .none:
+                ContentPlaceholderView()
+            }
+        }
+        .onAppear {
+            if selectedProjectSubcategory.isEmpty, let first = safeSubcategories.first {
+                selectedProjectSubcategory = first
+            }
+        }
+        .onChange(of: subcategories) {
+            if !subcategories.contains(selectedProjectSubcategory) {
+                selectedProjectSubcategory = safeSubcategories.first ?? "General"
             }
         }
         .navigationSplitViewColumnWidth(min: 160, ideal: 300)
@@ -848,14 +1294,4 @@ private struct ActivityView: UIViewControllerRepresentable {
 	func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 #endif
-
-
-
-
-
-
-
-
-
-
 

@@ -34,6 +34,7 @@
 
 import SwiftUI
 import SwiftData
+import TipKit
 
 /// A list-based browser for vendor/shop records.
 ///
@@ -57,10 +58,15 @@ struct DisplayVendors: View {
 
 	/// Holds a newly-created vendor to trigger programmatic navigation to its edit screen.
 	@State private var newRecordToEdit: Vendors1?
-	
+
+	/// Controls navigation to the PDF report destination.
+	@State private var isShowingPDFReport: Bool = false
+
 	/// Sort options for the vendors list. Backed by a SwiftData SortDescriptor.
 	private enum VendorSort: String, CaseIterable, Identifiable {
 		// Name ascending (A–Z)
+		case dateDesc = "Date ↓"
+		case dateAsc = "Date ↑"
 		case nameAsc = "Name A–Z"
 		// Name descending (Z–A)
 		case nameDesc = "Name Z–A"
@@ -71,6 +77,10 @@ struct DisplayVendors: View {
 		/// Maps the UI selection to a concrete SwiftData SortDescriptor.
 		var sortDescriptor: SortDescriptor<Vendors1> {
 			switch self {
+			case .dateDesc:
+				return .init(\.createdAt, order: .reverse)
+			case .dateAsc:
+				return .init(\.createdAt, order: .forward)
 			case .nameAsc:
 				return .init(\.vendorName, order: .forward)
 			case .nameDesc:
@@ -81,7 +91,7 @@ struct DisplayVendors: View {
 		}
 	}
 	/// The currently selected sort option (defaults to name ascending).
-	@State private var selectedSort: VendorSort = .nameAsc
+	@AppStorage("sort_vendors") private var selectedSort: VendorSort = .dateDesc
 
 	var body: some View {
 		// Normalize the search term once to keep predicates simple and stable.
@@ -154,16 +164,27 @@ struct DisplayVendors: View {
 									EditIVendors(vendors: record)
 										.id(record.persistentModelID) // Keeps your split view detail refresh workaround
 								} label: {
-									VStack(alignment: .leading, spacing: 6) {
-										Text(record.vendorName)
-											.textModifier_ListTitle()
-										HStack {
-											Text(record.vendorContact1)
-												.textModifier_ListSubTitle_L()
-											Spacer()
-											Text(record.vendorType)
-												.textModifier_ListSubTitle_R()
+									HStack {
+										VStack(alignment: .leading, spacing: 1) {
+											Text(record.vendorName)
+												.font(.headline)
+											if !record.vendorType.isEmpty {
+												Text(record.vendorType)
+													.font(.subheadline)
+													.foregroundStyle(.secondary)
+											}
+											if !record.vendorContact1.isEmpty {
+												Text(record.vendorContact1)
+													.font(.subheadline)
+													.foregroundStyle(.secondary)
+											}
+											if !cityStateDescription(for: record).isEmpty {
+												Text(cityStateDescription(for: record))
+													.font(.subheadline)
+													.foregroundStyle(.secondary)
+											}
 										}
+										.cardStyle(backgroundColor: .blue.opacity(0.6))
 									}
 									.accessibilityElement(children: .combine)
 									.accessibilityLabel("\(record.vendorName), \(record.vendorType), contact \(record.vendorContact1)")
@@ -176,6 +197,23 @@ struct DisplayVendors: View {
 						// Toolbar actions for sorting and adding vendors.
 						.toolbar {
 							ToolbarItem(placement: .automatic) {
+								Button {
+									isShowingPDFReport = true
+								} label: {
+#if os(macOS)
+									Image(systemName: "doc.text")
+#else
+									VStack(spacing: 2) {
+									Image(systemName: "doc.text")
+									Text("Report")
+										.font(.caption2)
+								}
+#endif
+								}
+								.help("Report")
+								.accessibilityLabel("Report")
+							}
+							ToolbarItem(placement: .automatic) {
 								Menu {
 									Picker("Sort by", selection: $selectedSort) {
 										ForEach(VendorSort.allCases) { sortCase in
@@ -183,18 +221,37 @@ struct DisplayVendors: View {
 										}
 									}
 								} label: {
-									Label("Sort", systemImage: "arrow.up.arrow.down")
+#if os(macOS)
+									Image(systemName: "arrow.up.arrow.down")
+#else
+									VStack(spacing: 2) {
+									Image(systemName: "arrow.up.arrow.down")
+									Text("Sort")
+										.font(.caption2)
+								}
+#endif
 								}
 								.buttonStyle(GrowingButton(buttonColor: Color.gray))
+								.help("Sort")
 								.accessibilityLabel("Sort parts")
 							}
 							ToolbarItem(placement: .automatic) {
 								Button {
 									addNewRecord()
 								} label: {
-									Label("Add", systemImage: "plus.capsule")
+#if os(macOS)
+									Image(systemName: "plus.capsule")
+#else
+									VStack(spacing: 2) {
+									Image(systemName: "plus.capsule")
+									Text("Add")
+										.font(.caption2)
+								}
+#endif
 								}
 								.disabled(false)
+								.help("Add")
+								.accessibilityLabel("Add")
 							}
 						}
 
@@ -207,16 +264,13 @@ struct DisplayVendors: View {
 						.font(.caption)
 						.foregroundStyle(.secondary)
 						.padding(.top, 4)
-
-						// Column title pinned to the safe area (large header style).
-						.safeAreaInset(edge: .top) {
-							PageTitle_Col2_NoPhoto(label: "VENDORS/SHOPS")
-						}
 					}
-					
 				}
 			}
 		}, filter: filterClosure)
+		.safeAreaInset(edge: .top) {
+			PageTitle_Col2_NoPhoto(label: "VENDORS / SHOPS")
+		}
 		// System search field binds to `searchText` and updates the predicate.
 		.searchable(text: $searchText, placement: .automatic, prompt: "Search vendors")
 		// Pull to refresh is a no-op here; yielding allows UI to complete the gesture.
@@ -227,6 +281,10 @@ struct DisplayVendors: View {
 		.navigationDestination(item: $newRecordToEdit) { record in
 			EditIVendors(vendors: record, startEditing: true)
 				.id(record.persistentModelID)
+		}
+		.navigationDestination(isPresented: $isShowingPDFReport) {
+			pdfReportVendors()
+				.ignoresSafeArea()
 		}
 	}
 
@@ -248,6 +306,11 @@ struct DisplayVendors: View {
 				print("Failed to save new vendor: \(error.localizedDescription)")
 			}
 		}
+	}
+
+	/// Builds a "City, State" summary for a vendor, omitting either component if empty.
+	private func cityStateDescription(for record: Vendors1) -> String {
+		[record.vendorCity, record.vendorState].filter { !$0.isEmpty }.joined(separator: ", ")
 	}
 
 	/// Deletes vendors at the given list offsets.
@@ -298,6 +361,15 @@ struct DisplayVendors: View {
 	}
 }
 
+// MARK: - Tips
+struct VendorTips: Tip {
+	var title: Text { Text("Vendor / Shop Tracking") }
+	var message: Text? {
+		Text("Track your vendors and repair shops for easy reference when creating service records and purchases.")
+	}
+	var image: Image? { Image(systemName: "person.2.badge.gearshape") }
+}
+
 /// Interactive preview with an in-memory model container and seeded vendors.
 #Preview("Vendors – Sample Data") {
 	makeVendorsPreview()
@@ -311,7 +383,7 @@ struct DisplayVendors: View {
 @MainActor
 private func makeVendorsPreview() -> some View {
 	let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-	let container = try! ModelContainer(for: Vendors1.self, configurations: configuration)
+	let container = try! ModelContainer(for: Vendors1.self, Vehicle8.self, configurations: configuration)
 
 	// Seed a few vendors
 	let samples: [Vendors1] = [
@@ -378,6 +450,11 @@ private func makeVendorsPreview() -> some View {
 	]
 	let context = container.mainContext
 	samples.forEach { context.insert($0) }
+	
+	// Add sample vehicle
+	let vehicle = Vehicle8(name: "Test Vehicle", year: 2021, mileage: 50000, mileageVirtual: 0, engHours: 500.0, fuelType: "Gasoline", fuelCapacity: 15)
+	context.insert(vehicle)
+	
 	try? context.save()
 
 	// Wrap in NavigationStack so NavigationLink works in preview

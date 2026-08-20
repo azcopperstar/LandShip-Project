@@ -6,32 +6,44 @@ struct HelpView: View {
 	private enum SectionID: String, CaseIterable, Hashable {
 		case overview
 		case navigation
+		case dashboard
 		case garageVehicles
 		case garageParts
-		case vehicleServiceItems
-		case vehicleServiceRecords
 		case dataTrackingFuel
 		case dataTrackingTravel
+		case vehicleServiceRecords
+		case vehicleServiceItems
+		case additions
+		case subscriptions
+		case projects
+		case checkLists
 		case setupSystems
 		case setupVendors
 		case setupSettings
 		case dataManagementBackupRestore
+		case releaseNotes
 		case support
 
 		var title: String {
 			switch self {
 			case .overview: return OnboardingCopy.Overview.title
 			case .navigation: return OnboardingCopy.Navigation.title
+			case .dashboard: return OnboardingCopy.Dashboard.title
 			case .garageVehicles: return OnboardingCopy.GarageVehicles.title
 			case .garageParts: return OnboardingCopy.GarageParts.title
-			case .vehicleServiceItems: return OnboardingCopy.VehicleService_Items.title
-			case .vehicleServiceRecords: return OnboardingCopy.VehicleService_Records.title
 			case .dataTrackingFuel: return OnboardingCopy.DataTracking_Fuel.title
 			case .dataTrackingTravel: return OnboardingCopy.DataTracking_Travel.title
+			case .vehicleServiceRecords: return OnboardingCopy.VehicleService_Records.title
+			case .vehicleServiceItems: return OnboardingCopy.VehicleService_Items.title
+			case .additions: return OnboardingCopy.Additions.title
+			case .subscriptions: return OnboardingCopy.Subscriptions.title
+			case .projects: return OnboardingCopy.Projects.title
+			case .checkLists: return OnboardingCopy.CheckLists.title
 			case .setupSystems: return OnboardingCopy.Setup_Systems.title
 			case .setupVendors: return OnboardingCopy.Setup_Vendors.title
 			case .setupSettings: return OnboardingCopy.Setup_Settings.title
 			case .dataManagementBackupRestore: return OnboardingCopy.DataManagement_BackupRestore.title
+			case .releaseNotes: return "What's New"
 			case .support: return "Support"
 			}
 		}
@@ -102,6 +114,19 @@ struct HelpView: View {
 					)
 					.id(SectionID.navigation)
 
+					// Dashboard
+					HelpSectionView(
+						title: OnboardingCopy.Dashboard.title,
+						systemImage: OnboardingCopy.Dashboard.systemImage,
+						sections: [
+							(OnboardingCopy.Dashboard.header1, OnboardingCopy.Dashboard.message1),
+							(OnboardingCopy.Dashboard.header2, OnboardingCopy.Dashboard.message2),
+							(OnboardingCopy.Dashboard.header3, OnboardingCopy.Dashboard.message3),
+							(OnboardingCopy.Dashboard.header4, OnboardingCopy.Dashboard.message4)
+						]
+					)
+					.id(SectionID.dashboard)
+
 					// Garage - Vehicles
 					HelpSectionView(
 						title: OnboardingCopy.GarageVehicles.title,
@@ -110,7 +135,9 @@ struct HelpView: View {
 							(OnboardingCopy.GarageVehicles.header1, OnboardingCopy.GarageVehicles.message1),
 							(OnboardingCopy.GarageVehicles.header2, OnboardingCopy.GarageVehicles.message2),
 							(OnboardingCopy.GarageVehicles.header3, OnboardingCopy.GarageVehicles.message3),
-							(OnboardingCopy.GarageVehicles.header4, OnboardingCopy.GarageVehicles.message4)
+							(OnboardingCopy.GarageVehicles.header4, OnboardingCopy.GarageVehicles.message4),
+							(OnboardingCopy.GarageVehicles.header5, OnboardingCopy.GarageVehicles.message5),
+							(OnboardingCopy.GarageVehicles.header6, OnboardingCopy.GarageVehicles.message6)
 						]
 					)
 					.id(SectionID.garageVehicles)
@@ -127,32 +154,6 @@ struct HelpView: View {
 						]
 					)
 					.id(SectionID.garageParts)
-
-					// Vehicle Service - Items
-					HelpSectionView(
-						title: OnboardingCopy.VehicleService_Items.title,
-						systemImage: OnboardingCopy.VehicleService_Items.systemImage,
-						sections: [
-							(OnboardingCopy.VehicleService_Items.header1, OnboardingCopy.VehicleService_Items.message1),
-							(OnboardingCopy.VehicleService_Items.header2, OnboardingCopy.VehicleService_Items.message2),
-							(OnboardingCopy.VehicleService_Items.header3, OnboardingCopy.VehicleService_Items.message3),
-							(OnboardingCopy.VehicleService_Items.header4, OnboardingCopy.VehicleService_Items.message4)
-						]
-					)
-					.id(SectionID.vehicleServiceItems)
-
-					// Vehicle Service - Records
-					HelpSectionView(
-						title: OnboardingCopy.VehicleService_Records.title,
-						systemImage: OnboardingCopy.VehicleService_Records.systemImage,
-						sections: [
-							(OnboardingCopy.VehicleService_Records.header1, OnboardingCopy.VehicleService_Records.message1),
-							(OnboardingCopy.VehicleService_Records.header2, OnboardingCopy.VehicleService_Records.message2),
-							(OnboardingCopy.VehicleService_Records.header3, OnboardingCopy.VehicleService_Records.message3),
-							(OnboardingCopy.VehicleService_Records.header4, OnboardingCopy.VehicleService_Records.message4)
-						]
-					)
-					.id(SectionID.vehicleServiceRecords)
 
 					// Data Tracking - Fuel
 					HelpSectionView(
@@ -179,6 +180,84 @@ struct HelpView: View {
 						]
 					)
 					.id(SectionID.dataTrackingTravel)
+
+					// Vehicle Service - Records
+					HelpSectionView(
+						title: OnboardingCopy.VehicleService_Records.title,
+						systemImage: OnboardingCopy.VehicleService_Records.systemImage,
+						sections: [
+							(OnboardingCopy.VehicleService_Records.header1, OnboardingCopy.VehicleService_Records.message1),
+							(OnboardingCopy.VehicleService_Records.header2, OnboardingCopy.VehicleService_Records.message2),
+							(OnboardingCopy.VehicleService_Records.header3, OnboardingCopy.VehicleService_Records.message3),
+							(OnboardingCopy.VehicleService_Records.header4, OnboardingCopy.VehicleService_Records.message4)
+						]
+					)
+					.id(SectionID.vehicleServiceRecords)
+
+					// Vehicle Service - Items
+					HelpSectionView(
+						title: OnboardingCopy.VehicleService_Items.title,
+						systemImage: OnboardingCopy.VehicleService_Items.systemImage,
+						sections: [
+							(OnboardingCopy.VehicleService_Items.header1, OnboardingCopy.VehicleService_Items.message1),
+							(OnboardingCopy.VehicleService_Items.header2, OnboardingCopy.VehicleService_Items.message2),
+							(OnboardingCopy.VehicleService_Items.header3, OnboardingCopy.VehicleService_Items.message3),
+							(OnboardingCopy.VehicleService_Items.header4, OnboardingCopy.VehicleService_Items.message4)
+						]
+					)
+					.id(SectionID.vehicleServiceItems)
+
+					// Vehicle Financials - Improvements & Add-Ins
+					HelpSectionView(
+						title: OnboardingCopy.Additions.title,
+						systemImage: OnboardingCopy.Additions.systemImage,
+						sections: [
+							(OnboardingCopy.Additions.header1, OnboardingCopy.Additions.message1),
+							(OnboardingCopy.Additions.header2, OnboardingCopy.Additions.message2),
+							(OnboardingCopy.Additions.header3, OnboardingCopy.Additions.message3),
+							(OnboardingCopy.Additions.header4, OnboardingCopy.Additions.message4)
+						]
+					)
+					.id(SectionID.additions)
+
+					// Vehicle Financials - Expenses & Subscriptions
+					HelpSectionView(
+						title: OnboardingCopy.Subscriptions.title,
+						systemImage: OnboardingCopy.Subscriptions.systemImage,
+						sections: [
+							(OnboardingCopy.Subscriptions.header1, OnboardingCopy.Subscriptions.message1),
+							(OnboardingCopy.Subscriptions.header2, OnboardingCopy.Subscriptions.message2),
+							(OnboardingCopy.Subscriptions.header3, OnboardingCopy.Subscriptions.message3),
+							(OnboardingCopy.Subscriptions.header4, OnboardingCopy.Subscriptions.message4)
+						]
+					)
+					.id(SectionID.subscriptions)
+
+					// Projects & Punch Lists
+					HelpSectionView(
+						title: OnboardingCopy.Projects.title,
+						systemImage: OnboardingCopy.Projects.systemImage,
+						sections: [
+							(OnboardingCopy.Projects.header1, OnboardingCopy.Projects.message1),
+							(OnboardingCopy.Projects.header2, OnboardingCopy.Projects.message2),
+							(OnboardingCopy.Projects.header3, OnboardingCopy.Projects.message3),
+							(OnboardingCopy.Projects.header4, OnboardingCopy.Projects.message4)
+						]
+					)
+					.id(SectionID.projects)
+
+					// CheckLists & Sub-Items
+					HelpSectionView(
+						title: OnboardingCopy.CheckLists.title,
+						systemImage: OnboardingCopy.CheckLists.systemImage,
+						sections: [
+							(OnboardingCopy.CheckLists.header1, OnboardingCopy.CheckLists.message1),
+							(OnboardingCopy.CheckLists.header2, OnboardingCopy.CheckLists.message2),
+							(OnboardingCopy.CheckLists.header3, OnboardingCopy.CheckLists.message3),
+							(OnboardingCopy.CheckLists.header4, OnboardingCopy.CheckLists.message4)
+						]
+					)
+					.id(SectionID.checkLists)
 
 					// Setup - Systems
 					HelpSectionView(
@@ -234,13 +313,26 @@ struct HelpView: View {
 
 					Divider()
 
+					// What's New (live from changelog.md — always reflects the current file, no manual updates needed here)
+					VStack(alignment: .leading, spacing: 8) {
+						Label("What's New", systemImage: "clock.arrow.circlepath")
+							.font(.headline)
+						Text("This section is generated live from the app's built-in changelog. Whenever that file changes, the version history below updates automatically.")
+							.font(.subheadline)
+							.foregroundStyle(.secondary)
+						ChangelogList()
+							.padding(.top, 4)
+					}
+					.id(SectionID.releaseNotes)
+
+					Divider()
+
 					// Support
 					Group {
 						Text("Support")
 							.font(.headline)
-						Text("If you need help or have feedback, please contact support.")
-						// Replace with your real URL/email when available
-						Link("Visit Support Website", destination: URL(string: "https://example.com/landship-support")!)
+						Text("If you need help or have feedback, please reach out.")
+						Link("Email Support: info@aeronauticaltrax.com", destination: URL(string: "mailto:info@aeronauticaltrax.com")!)
 					}
 					.id(SectionID.support)
 				}

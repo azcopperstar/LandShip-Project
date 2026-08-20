@@ -11,12 +11,12 @@ extension DashboardView {
 		let hours: Float
 	}
 
-	func fetchRecentServices(limit: Int = 5) {
+	func fetchRecentServices(limit: Int = 30) {
 		let sort = [SortDescriptor(\ServiceRecords1.mxDate, order: .reverse),
 								SortDescriptor(\.updatedAt, order: .reverse)]
 		var fd = FetchDescriptor<ServiceRecords1>(sortBy: sort)
-		if trackVehicleSelected != "All Vehicles" && !trackVehicleSelected.isEmpty {
-			fd.predicate = #Predicate { $0.vehicleId == trackVehicleSelected }
+		if let ids = scopeIds {
+			fd.predicate = #Predicate<ServiceRecords1> { ids.contains($0.vehicleId) }
 		}
 		fd.fetchLimit = limit
 		do {
@@ -34,6 +34,7 @@ struct RecentServiceCard: View {
 	let recentServices: [DashboardView.RecentService]
 	let distanceUnit: String
 	let formatDate: (Date) -> String
+	@Environment(\.modelContext) private var modelContext
 
 	var body: some View {
 		CardView {
@@ -54,7 +55,7 @@ struct RecentServiceCard: View {
 						HStack {
 							VStack(alignment: .leading, spacing: 2) {
 								Text(rec.mxName).font(.subheadline).bold()
-								Text("\(rec.vehicleId) • \(formatDate(rec.mxDate))")
+								Text("\(Functions().getVehicleDisplayName(vehicleId: rec.vehicleId, context: modelContext)) • \(formatDate(rec.mxDate))")
 									.font(.caption)
 									.foregroundStyle(.secondary)
 							}

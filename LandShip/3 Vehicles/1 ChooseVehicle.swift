@@ -59,13 +59,13 @@ struct ChooseVehicle: View {
 	/// The view chooses which to render at runtime via the `vehicles` computed property.
 	@Query(
 		filter: #Predicate<Vehicle8> { $0.inactive == false },
-		sort: \Vehicle8.name,
+		sort: \Vehicle8.sortOrder,
 		order: .forward
 	)
 	private var activeVehicles: [Vehicle8]
 
 	@Query(
-		sort: \Vehicle8.name,
+		sort: \Vehicle8.sortOrder,
 		order: .forward
 	)
 	private var allVehicles: [Vehicle8]
@@ -91,6 +91,9 @@ struct ChooseVehicle: View {
 	/// When set during creation, triggers navigation to the editor for the new vehicle.
 	@State private var newRecordToEdit: Vehicle8?
 	
+	/// Edit mode for manual reordering
+	@State private var isEditMode: Bool = false
+	
 	/// Derived list used to back the `ForEach` in the UI. This performs a simple in-memory search across
 	/// commonly queried fields (name, manufacturer, model, trim, VIN, license plate). This is sufficient
 	/// for moderate datasets and provides instant feedback while typing. If your dataset grows large,
@@ -100,6 +103,7 @@ struct ChooseVehicle: View {
 		guard !query.isEmpty else { return vehicles }
 		return vehicles.filter { v in
 			let haystack = [
+				v.displayName,
 				v.name,
 				v.manufacturer,
 				v.model,
@@ -112,28 +116,6 @@ struct ChooseVehicle: View {
 			return haystack.contains(query.lowercased())
 		}
 	}
-
-	/// User-facing sort options for the vehicles list. The selected case exposes one or more
-	/// `SortDescriptor` values that can be applied to a query when integrating store-side sorting.
-	private enum PartsSort: String, CaseIterable, Identifiable {
-		case vehicleAsc = "Vehicle A–Z"
-		case vehicleDesc = "Vehicle Z-A"
-		case updatedDesc = "Recently Updated"
-		var id: String { rawValue }
-		
-		/// Sort descriptors associated with each user-facing option.
-		var descriptors: [SortDescriptor<Vehicle8>] {
-			switch self {
-				case .vehicleAsc:
-					return [.init(\.name, order: .forward)]
-				case .vehicleDesc:
-					return [.init(\.name, order: .reverse)]
-				case .updatedDesc:
-					return [ .init(\.updatedAt, order: .reverse) ]
-			}
-		}
-	}
-	@State private var selectedSort: PartsSort = .vehicleAsc
 	
 	var body: some View {
 		// Layout: List with empty state fallback, row navigation to editor, and toolbar with report, sort, and add actions.
@@ -142,7 +124,7 @@ struct ChooseVehicle: View {
 			if vehicles.isEmpty {
 					EmptyStateSection(
 						title: "Add your first vehicle",
-						systemImage: "truck.pickup.side.front.open",
+						systemImage: "car.2.fill",
 						description: "Create a new vehicle to begin tracking, parts, fuel logs, travel logs, service items, service records.\n\nThe vehicles entered here will be available in all the other tables.\n\nTo add additional vehicles, after this first one, select the '+' button at the top of the form.",
 						actionTitle: "Add First Vehicle",
 						action: { addNewRecord() }
@@ -158,37 +140,58 @@ struct ChooseVehicle: View {
 							// Row layout: thumbnail + key vehicle details with accessible labels.
 							VStack(alignment: .leading) {
 								HStack {
-									Image_View_Thumbnail(imageData: vehicle.image1)
+									if !isEditMode {
+						Image_View_Thumbnail(imageData: vehicle.image1)
+					}
 									VStack(alignment: .leading, spacing: 1) {
 										let year = String(vehicle.year)
 										let manufacturer = vehicle.manufacturer
 										let trim = vehicle.trim
-										Text(vehicle.name)
+										Text(vehicle.displayName)
 											.font(.headline)
 										Text("\(year) \(manufacturer) \(trim)")
 											.font(.subheadline)
 											.foregroundStyle(.secondary)
-										Text("Odometer: \(vehicle.mileage)")
-											.font(.subheadline)
-											.foregroundStyle(.secondary)
+										if vehicle.mileage > 0 {
+											Text("Odometer: \(vehicle.mileage)")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
+										if vehicle.engHours > 0 {
+											Text("Engine Hours: \(vehicle.engHours, specifier: "%.1f")")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
+										if let masterName = masterDisplayName(for: vehicle) {
+											Text("Linked to: \(masterName)")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
+										let linkedChildren = linkedChildrenNames(for: vehicle)
+										if !linkedChildren.isEmpty {
+											Text("Linked vehicles: \(linkedChildren.joined(separator: ", "))")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
 									}
 									.cardStyle(backgroundColor: .blue.opacity(0.6))
 									.frame(maxWidth: .infinity, alignment: .leading)
 								}
 							}
 							.accessibilityElement(children: .combine)
-							.accessibilityLabel("\(vehicle.name), \(yearDescription(vehicle))")
+							.accessibilityLabel("\(vehicle.displayName), \(yearDescription(vehicle))")
 							.accessibilityHint("Opens vehicle details")
 						}
 					}
 					// Map deletions from the filtered view back to the underlying model objects.
 					.onDelete(perform: deleteFilteredVehicles)
+					.conditionalModifier(isEditMode) { view in
+						view.onMove(perform: performMove)
+					}
 				} header: {
-					// Static header currently reflects name-ascending order. If you wire `selectedSort`
-					// into a query, consider reflecting the active sort choice here dynamically.
-					HStack(spacing: 6) {
-						Image(systemName: "arrow.up.arrow.down")
-						Text("Sort: Name A–Z")
+					HStack() {
+						Image(systemName: "pencil")
+						Text(isEditMode ? "Drag to reorder" : "Pencil icon in toolbar sets sort order")
 					}
 					.font(.caption)
 					.foregroundStyle(.secondary)
@@ -196,12 +199,12 @@ struct ChooseVehicle: View {
 				}
 			}
 		}
-
+		
 		.safeAreaInset(edge: .top) {
 			PageTitle_Col2_NoPhoto(label: "VEHICLES")
 		}
 
-		// Toolbar: title label, report button, sort menu, and add button.
+		// Toolbar: title label, report button, edit button, and add button.
 		.toolbar {
 			if !vehicles.isEmpty {
 				ToolbarItem(placement: .automatic) {
@@ -209,22 +212,37 @@ struct ChooseVehicle: View {
 						let frozen = trackVehicleSelected
 						reportDestination = ReportDestination(scope: frozen)
 					} label: {
-						Label("Report", systemImage: "list.clipboard")
+#if os(macOS)
+						Image(systemName: "doc.text")
+#else
+						VStack(spacing: 2) {
+						Image(systemName: "doc.text")
+						Text("Report")
+							.font(.caption2)
 					}
+#endif
+					}
+					.help("Report")
+					.accessibilityLabel("Report")
 				}
 				ToolbarItem(placement: .automatic) {
-					Menu {
-						// Sort selection. Currently updates UI state; wire into queries to change store-side order.
-						Picker("Sort by", selection: $selectedSort) {
-							ForEach(PartsSort.allCases) { sortCase in
-								Text(sortCase.rawValue).tag(sortCase)
-							}
+					Button {
+						withAnimation {
+							isEditMode.toggle()
 						}
 					} label: {
-						Label("Sort", systemImage: "arrow.up.arrow.down")
+#if os(macOS)
+						Image(systemName: isEditMode ? "checkmark" : "pencil")
+#else
+						VStack(spacing: 2) {
+						Image(systemName: isEditMode ? "checkmark" : "pencil")
+						Text(isEditMode ? "Done" : "Edit")
+							.font(.caption2)
 					}
-					.buttonStyle(GrowingButton(buttonColor: Color.gray))
-					.accessibilityLabel("Sort vehicles")
+#endif
+					}
+					.help(isEditMode ? "Done" : "Edit")
+					.accessibilityLabel(isEditMode ? "Done editing" : "Edit order")
 				}
 			}
 			// Moved the "Show Inactive" toggle to SettingsEditorView; no toggle here anymore.
@@ -232,8 +250,18 @@ struct ChooseVehicle: View {
 				Button {
 					addNewRecord()
 				} label: {
-					Label("Add", systemImage: "plus.capsule")
+#if os(macOS)
+					Image(systemName: "plus.capsule")
+#else
+					VStack(spacing: 2) {
+					Image(systemName: "plus.capsule")
+					Text("Add")
+						.font(.caption2)
 				}
+#endif
+				}
+				.help("Add")
+				.accessibilityLabel("Add")
 			}
 		}
 
@@ -248,7 +276,7 @@ struct ChooseVehicle: View {
 		}
 		// Navigation destination for editing a newly created record (item-driven).
 		.navigationDestination(item: $newRecordToEdit) { vehicle in
-			EditVehicle(dataSet: vehicle, trackVehicleSelected: $trackVehicleSelected, startEditing: true)
+			EditVehicle(dataSet: vehicle, trackVehicleSelected: $trackVehicleSelected, startEditing: true, isNewRecord: true)
 				.id(vehicle.id)
 		}
 	}
@@ -260,12 +288,30 @@ struct ChooseVehicle: View {
 		return parts.joined(separator: " ")
 	}
 
+	/// Resolves the display name of the master vehicle this record links to, if any.
+	/// Looks across `allVehicles` (not just the currently filtered/visible list) so the
+	/// master's name still resolves even if it's inactive and hidden from view.
+	private func masterDisplayName(for vehicle: Vehicle8) -> String? {
+		guard !vehicle.linkedMasterVehicleId.isEmpty else { return nil }
+		guard let master = allVehicles.first(where: { $0.name == vehicle.linkedMasterVehicleId }) else { return nil }
+		return master.displayName.isEmpty ? master.name : master.displayName
+	}
+
+	/// Display names of any vehicles linked to this one as their master.
+	private func linkedChildrenNames(for vehicle: Vehicle8) -> [String] {
+		allVehicles
+			.filter { $0.linkedMasterVehicleId == vehicle.name }
+			.map { $0.displayName.isEmpty ? $0.name : $0.displayName }
+	}
+
 	/// Creates a new `Vehicle8` with minimal defaults, saves it, and navigates directly to its
 	/// editor so the user can immediately provide details.
 	private func addNewRecord() {
+		let maxSortOrder = vehicles.map { $0.sortOrder }.max() ?? -1
 		let newRecord = Vehicle8(
 			inactive: false,
-			name: "New vehicle",
+			name: UUID().uuidString,
+			displayName: "New vehicle",
 			manufacturer: "",
 			model: "",
 			year: Calendar.current.component(.year, from: Date()),
@@ -290,6 +336,7 @@ struct ChooseVehicle: View {
 			locationId: "",
 			vin: "",
 			licensePlate: "",
+			sortOrder: maxSortOrder + 1,
 			image1: nil,
 			image1Description: "",
 			image2: nil,
@@ -307,6 +354,24 @@ struct ChooseVehicle: View {
 		}
 	}
 
+	/// Handles reordering of vehicles in the list by updating their sortOrder values.
+	private func performMove(from source: IndexSet, to destination: Int) {
+		var reorderedVehicles = filteredVehicles
+		reorderedVehicles.move(fromOffsets: source, toOffset: destination)
+		
+		// Update sortOrder for all vehicles based on their new positions
+		for (index, vehicle) in reorderedVehicles.enumerated() {
+			vehicle.sortOrder = index
+			vehicle.updatedAt = Date()
+		}
+		
+		do {
+			try modelContext.save()
+		} catch {
+			print("Failed to save reordered vehicles: \(error.localizedDescription)")
+		}
+	}
+	
 	/// Handles deletions from the filtered list by resolving each visible index back to the
 	/// corresponding model object, deleting it from the context, and saving changes.
 	private func deleteFilteredVehicles(at offsets: IndexSet) {

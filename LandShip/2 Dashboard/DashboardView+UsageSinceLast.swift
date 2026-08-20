@@ -12,12 +12,8 @@ extension DashboardView {
 	}
 
 	func computeUsageSinceLastService() {
-		let scopedVehicles: [Vehicle8]
-		if trackVehicleSelected != "All Vehicles" && !trackVehicleSelected.isEmpty {
-			scopedVehicles = vehicles.filter { $0.name == trackVehicleSelected }
-		} else {
-			scopedVehicles = vehicles
-		}
+		// `scopedVehicles` resolves to the DashboardView computed property, which already
+		// applies both the toolbar's single-vehicle pick and the saved vehicle scheme.
 		var rows: [UsageSinceLast] = []
 		for v in scopedVehicles {
 			let vid = v.name

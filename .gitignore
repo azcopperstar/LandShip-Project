@@ -1,0 +1,18 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+
+# Dropbox conflicted copies (this project syncs via Dropbox across machines)
+*'s conflicted copy*
+*conflicted copy*
+
+# macOS
+.DS_Store

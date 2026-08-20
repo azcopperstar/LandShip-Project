@@ -18,15 +18,26 @@ extension DashboardView {
 		let dueSoonCount: Int
 	}
 
+	struct VehicleMaintenanceStatus: Identifiable, Equatable {
+		let id = UUID()
+		let vehicleId: String   // matches vehicle.name / UpcomingDue.vehicleId
+		let vehicleName: String
+		let overdueCount: Int
+		let dueSoonCount: Int
+		let okCount: Int
+		let totalEvaluated: Int
+	}
+
 	func recomputeDueSummaryAndSystemHotlist() {
 		var fd = FetchDescriptor<MxItems3>()
-		if trackVehicleSelected != "All Vehicles" && !trackVehicleSelected.isEmpty {
-			fd.predicate = #Predicate { $0.vehicleId == trackVehicleSelected }
+		if let ids = scopeIds {
+			fd.predicate = #Predicate<MxItems3> { ids.contains($0.vehicleId) }
 		}
 		do {
 			let items = try modelContext.fetch(fd)
 			var summary = DueSummary()
 			var systemBuckets: [String: (overdue: Int, soon: Int)] = [:]
+			var vehicleBuckets: [String: (overdue: Int, soon: Int, ok: Int, total: Int)] = [:]
 
 			for item in items {
 				guard item.intervalMiles > 0 || item.intervalHours > 0 || item.intervalMonths > 0 else { continue }
@@ -89,25 +100,29 @@ extension DashboardView {
 					if frac <= dueSoonFraction || rd <= daysWindow { soon = true }
 				}
 
+				let isOverdue = overdueMiles || overdueHours || overdueTime
+
 				summary.totalItemsEvaluated += 1
 				if overdueMiles { summary.overdueMiles += 1 }
 				if overdueHours { summary.overdueHours += 1 }
 				if overdueTime { summary.overdueTime += 1 }
-				if !overdueMiles && !overdueHours && !overdueTime && soon {
-					summary.dueSoonCount += 1
-				}
+				if !isOverdue && soon { summary.dueSoonCount += 1 }
 
-				let key = item.vehicleSystem
-				var bucket = systemBuckets[key, default: (0, 0)]
-				if overdueMiles || overdueHours || overdueTime {
-					bucket.overdue += 1
-				} else if soon {
-					bucket.soon += 1
-				}
-				systemBuckets[key] = bucket
+				let sysKey = item.vehicleSystem
+				var sysBucket = systemBuckets[sysKey, default: (0, 0)]
+				if isOverdue { sysBucket.overdue += 1 } else if soon { sysBucket.soon += 1 }
+				systemBuckets[sysKey] = sysBucket
+
+				var vBucket = vehicleBuckets[vId, default: (0, 0, 0, 0)]
+				vBucket.total += 1
+				if isOverdue { vBucket.overdue += 1 }
+				else if soon { vBucket.soon += 1 }
+				else { vBucket.ok += 1 }
+				vehicleBuckets[vId] = vBucket
 			}
 
 			self.dueSummary = summary
+
 			let sysArray = systemBuckets.map { (k, v) in
 				SystemHot(system: k, overdueCount: v.overdue, dueSoonCount: v.soon)
 			}
@@ -116,51 +131,249 @@ extension DashboardView {
 				return lhs.dueSoonCount > rhs.dueSoonCount
 			}
 			self.systemHotlist = sysArray
+
+			let vehicleStatuses = vehicleBuckets.map { (vId, counts) in
+				let displayName: String
+				if let v = vehicles.first(where: { $0.name == vId }), !v.displayName.isEmpty {
+					displayName = v.displayName
+				} else {
+					displayName = vId
+				}
+				return VehicleMaintenanceStatus(
+					vehicleId: vId,
+					vehicleName: displayName,
+					overdueCount: counts.overdue,
+					dueSoonCount: counts.soon,
+					okCount: counts.ok,
+					totalEvaluated: counts.total
+				)
+			}
+			.sorted { lhs, rhs in
+				if lhs.overdueCount != rhs.overdueCount { return lhs.overdueCount > rhs.overdueCount }
+				if lhs.dueSoonCount != rhs.dueSoonCount { return lhs.dueSoonCount > rhs.dueSoonCount }
+				return lhs.vehicleName < rhs.vehicleName
+			}
+			self.vehicleMaintenanceStatuses = vehicleStatuses
+
 		} catch {
 			self.dueSummary = DueSummary()
 			self.systemHotlist = []
+			self.vehicleMaintenanceStatuses = []
 		}
 	}
 }
 
+// MARK: - Fleet Maintenance Status Card
+
 struct MaintenanceStatusCard: View {
+	let vehicleStatuses: [DashboardView.VehicleMaintenanceStatus]
+	let nextDue: [DashboardView.UpcomingDue]
+	let recentServices: [DashboardView.RecentService]
 	let dueSummary: DashboardView.DueSummary
+	let distanceUnit: String
+	let formatDate: (Date) -> String
+
+	private var nextDueByVehicle: [String: DashboardView.UpcomingDue] {
+		var result: [String: DashboardView.UpcomingDue] = [:]
+		for item in nextDue { if result[item.vehicleId] == nil { result[item.vehicleId] = item } }
+		return result
+	}
+
+	private var recentByVehicle: [String: [DashboardView.RecentService]] {
+		var result: [String: [DashboardView.RecentService]] = [:]
+		for rec in recentServices {
+			result[rec.vehicleId, default: []].append(rec)
+		}
+		// recentServices is already sorted newest-first; keep that order, limit to 3
+		return result.mapValues { Array($0.prefix(3)) }
+	}
 
 	var body: some View {
 		CardView {
-			VStack(alignment: .leading, spacing: 8) {
+			VStack(alignment: .leading, spacing: 10) {
 				HStack(spacing: 8) {
-					Image(systemName: "exclamationmark.triangle.fill")
-						.foregroundStyle(.orange)
-					Text("MAINTENANCE STATUS")
+					Image(systemName: "wrench.and.screwdriver.fill")
+						.foregroundStyle(.blue)
+					Text("FLEET MAINTENANCE STATUS")
 						.font(.headline)
 				}
-				if dueSummary.totalItemsEvaluated == 0 {
+
+				if vehicleStatuses.isEmpty {
 					Text("No maintenance items found.")
 						.font(.subheadline)
 						.foregroundStyle(.secondary)
 				} else {
-					HStack {
-						VStack(alignment: .leading) {
-							Text("Overdue").bold()
-							Text("• Miles: \(dueSummary.overdueMiles)")
-							Text("• Hours: \(dueSummary.overdueHours)")
-							Text("• Time: \(dueSummary.overdueTime)")
-						}
-						Spacer()
-						VStack(alignment: .leading) {
-							Text("Due soon").bold()
-							Text("• Items: \(dueSummary.dueSoonCount)")
-							Text("• Evaluated: \(dueSummary.totalItemsEvaluated)")
+					ForEach(vehicleStatuses) { vs in
+						VehicleStatusRow(
+							status: vs,
+							nextDue: nextDueByVehicle[vs.vehicleId],
+							recentServices: recentByVehicle[vs.vehicleId] ?? [],
+							distanceUnit: distanceUnit,
+							formatDate: formatDate
+						)
+						if vs.id != vehicleStatuses.last?.id {
+							Divider()
 						}
 					}
-					.font(.caption)
-					.foregroundStyle(.primary)
 				}
 			}
 		}
 	}
 }
+
+private struct VehicleStatusRow: View {
+	let status: DashboardView.VehicleMaintenanceStatus
+	let nextDue: DashboardView.UpcomingDue?
+	let recentServices: [DashboardView.RecentService]
+	let distanceUnit: String
+	let formatDate: (Date) -> String
+
+	var statusColor: Color {
+		if status.overdueCount > 0 { return .red }
+		if status.dueSoonCount > 0 { return .orange }
+		if status.totalEvaluated > 0 { return .green }
+		return .secondary
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 5) {
+			// Vehicle name + status badges
+			HStack(spacing: 8) {
+				Circle()
+					.fill(statusColor)
+					.frame(width: 9, height: 9)
+
+				Text(status.vehicleName)
+					.font(.subheadline)
+					.lineLimit(1)
+
+				Spacer()
+
+				if status.totalEvaluated == 0 {
+					Text("No items")
+						.font(.caption)
+						.foregroundStyle(.secondary)
+				} else {
+					HStack(spacing: 10) {
+						if status.overdueCount > 0 {
+							Label("\(status.overdueCount)", systemImage: "exclamationmark.circle.fill")
+								.font(.caption).bold()
+								.foregroundStyle(.red)
+						}
+						if status.dueSoonCount > 0 {
+							Label("\(status.dueSoonCount)", systemImage: "clock.fill")
+								.font(.caption)
+								.foregroundStyle(.orange)
+						}
+						if status.overdueCount == 0 && status.dueSoonCount == 0 {
+							Label("OK", systemImage: "checkmark.circle.fill")
+								.font(.caption)
+								.foregroundStyle(.green)
+						}
+					}
+				}
+			}
+
+			// Next service due
+			if let due = nextDue {
+				NextDueRow(due: due)
+					.padding(.leading, 17)
+			}
+
+			// Last 3 service records
+			if !recentServices.isEmpty {
+				HStack(spacing: 4) {
+					Rectangle()
+						.fill(Color.secondary.opacity(0.3))
+						.frame(height: 1)
+					Text("Recent")
+						.font(.caption2)
+						.foregroundStyle(.secondary)
+					Rectangle()
+						.fill(Color.secondary.opacity(0.3))
+						.frame(height: 1)
+				}
+				.padding(.leading, 17)
+				.padding(.top, 2)
+
+				ForEach(recentServices) { rec in
+					HStack(spacing: 5) {
+						Image(systemName: "checkmark.circle")
+							.font(.caption2)
+							.foregroundStyle(.secondary)
+						Text(rec.mxName)
+							.font(.caption)
+							.foregroundStyle(.secondary)
+							.lineLimit(1)
+						Spacer()
+						if rec.miles > 0 {
+							Text("\(rec.miles) \(distanceUnit)")
+								.font(.caption2)
+								.foregroundStyle(.secondary)
+						}
+						Text(formatDate(rec.mxDate))
+							.font(.caption2)
+							.foregroundStyle(.secondary)
+					}
+					.padding(.leading, 17)
+				}
+			}
+		}
+	}
+}
+
+
+// MARK: - Shared next-due sub-row (used in card and detail view)
+
+struct NextDueRow: View {
+	let due: DashboardView.UpcomingDue
+
+	var isOverdue: Bool { due.score < 0.001 }
+
+	var urgencyColor: Color {
+		if isOverdue { return .red }
+		if due.score < 0.10 { return .orange }
+		return .secondary
+	}
+
+	var remainingText: String {
+		var parts: [String] = []
+		if let rm = due.remainingMiles, due.intervalMiles > 0 {
+			parts.append(isOverdue ? "0 mi" : "\(rm) mi")
+		}
+		if let rh = due.remainingHours, due.intervalHours > 0 {
+			parts.append(isOverdue ? "0 hrs" : "\(Int(rh)) hrs")
+		}
+		if let rd = due.remainingDays, due.intervalMonths > 0 {
+			parts.append(isOverdue ? "0 days" : "\(rd) days")
+		}
+		return parts.joined(separator: " / ")
+	}
+
+	var body: some View {
+		HStack(spacing: 5) {
+			Image(systemName: isOverdue ? "exclamationmark.circle.fill" : "arrow.right.circle")
+				.font(.caption2)
+				.foregroundStyle(urgencyColor)
+			Text(due.itemName)
+				.font(.caption)
+				.foregroundStyle(.primary)
+				.lineLimit(1)
+			Spacer()
+			if isOverdue {
+				Text("OVERDUE")
+					.font(.caption2).bold()
+					.foregroundStyle(.red)
+			} else if !remainingText.isEmpty {
+				Text(remainingText)
+					.font(.caption2)
+					.foregroundStyle(urgencyColor)
+			}
+		}
+	}
+}
+
+// MARK: - System Hotlist Card
 
 struct SystemHotlistCard: View {
 	let systems: [DashboardView.SystemHot]

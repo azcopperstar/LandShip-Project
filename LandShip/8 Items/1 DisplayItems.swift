@@ -61,6 +61,8 @@ struct DisplayItems: View {
 	/// Sort options for listing service items.
 	/// Provides a set of `SortDescriptor` arrays used by `QueryView`.
 	private enum PartsSort: String, CaseIterable, Identifiable {
+		case dateDesc = "Date ↓"
+		case dateAsc = "Date ↑"
 		case vehicleAsc_nameAsc = "Vehicle A–Z, Items A–Z"
 		case vehicleAsc_nameDesc = "Vehicle A–Z, Items Z–A"
 		case nameAsc = "Items A–Z"
@@ -70,6 +72,10 @@ struct DisplayItems: View {
 		
 		var descriptors: [SortDescriptor<MxItems3>] {
 			switch self {
+				case .dateDesc:
+					return [ .init(\.createdAt, order: .reverse) ]
+				case .dateAsc:
+					return [ .init(\.createdAt, order: .forward) ]
 				case .vehicleAsc_nameAsc:
 					return [
 						.init(\.vehicleId, order: .forward),
@@ -91,31 +97,24 @@ struct DisplayItems: View {
 	}
 	
 	// MARK: - Active sort selection
-	@State private var selectedSort: PartsSort = .vehicleAsc_nameAsc
+	@AppStorage("sort_items") private var selectedSort: PartsSort = .dateDesc
 
 	var body: some View {
 
-		// Vehicle scope picker and toolbar title.
-        HStack(spacing: 3) {
-			// Selecting a vehicle scopes the items list; "All Vehicles" shows all.
-            Text("Vehicle:")
-                .textLabelModified()
-            ModelPicker<Vehicle8>(
-                selection: $selectedVehicle,
-                title: "Vehicle",
-                includeEmptyChoice: true,
-                emptyChoiceLabel: "All Vehicles",
-                autoSelectFirst: false,
-                sort: [SortDescriptor(\.name, order: .forward)],
-                labelProvider: { v in
-                    "\(v.year) \(v.name)"
-                },
-                onSelectionChanged: { sel in
-                    trackVehicleSelected = sel?.name ?? "All Vehicles"
-                }
-            )
-			.frame(maxWidth: .infinity, alignment: .trailing)
-        }
+		// Vehicle scope picker. Selecting a vehicle scopes the items list; "All Vehicles" shows all.
+        ModelPicker<Vehicle8>(
+            selection: $selectedVehicle,
+            title: "",
+            includeEmptyChoice: true,
+            emptyChoiceLabel: "All Vehicles",
+            autoSelectFirst: false,
+            sort: [SortDescriptor(\.displayName, order: .forward)],
+            labelProvider: { v in "\(v.year) \(v.displayName)"},
+            onSelectionChanged: { sel in
+                trackVehicleSelected = sel?.name ?? "All Vehicles"
+            }
+        )
+        .frame(maxWidth: .infinity)
 		// Keep `selectedVehicle` in sync with the cross-view binding on appear.
         .onAppear {
             if trackVehicleSelected.isEmpty || trackVehicleSelected == "All Vehicles" {
@@ -133,7 +132,7 @@ struct DisplayItems: View {
             }
         }
 				.safeAreaInset(edge: .top) {
-					PageTitle_Col2_NoPhoto(label: "SERVICE ITEMS")
+					PageTitle_Col2_NoPhoto(label: "ITEMS")
 				}
 
 
@@ -160,15 +159,31 @@ struct DisplayItems: View {
 									.id(record.id) // <<< work-around to get splitview to change details when selected
 							} label: {
 								HStack{
-									let vehicleForImage = vehicles.first { $0.name == record.vehicleId }
-									Image_View_Thumbnail(imageData: vehicleForImage?.image1 ?? record.image1)
-									VStack{
+//									let vehicleForImage = vehicles.first { $0.name == record.vehicleId }
+//									Image_View_Thumbnail(imageData: vehicleForImage?.image1 ?? record.image1)
+									VStack(alignment: .leading, spacing: 1) {
 										Text("\(record.mxName)")
-											.textModifier_ListTitle()
-										Text("\(record.mxDescription)")
-											.textModifier_ListSubTitle_R()
-										Text("\(record.vehicleId)")
-											.textModifier_ListSubTitle_R()
+											.font(.headline)
+										if !record.mxDescription.isEmpty {
+											Text("\(record.mxDescription)")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
+										if !intervalDescription(for: record).isEmpty {
+											Text("Interval: \(intervalDescription(for: record))")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
+										if !record.vendor.isEmpty {
+											Text("\(record.vendor)")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
+										if trackVehicleSelected == "All Vehicles" {
+											Text("\(Functions().getVehicleDisplayName(vehicleId: record.vehicleId, context: modelContext))")
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
+										}
 									}
 									.cardStyle(backgroundColor: .blue.opacity(0.6))
 								}
@@ -186,18 +201,37 @@ struct DisplayItems: View {
 									}
 								}
 							} label: {
-								Label("Sort", systemImage: "arrow.up.arrow.down")
+#if os(macOS)
+								Image(systemName: "arrow.up.arrow.down")
+#else
+								VStack(spacing: 2) {
+								Image(systemName: "arrow.up.arrow.down")
+								Text("Sort")
+									.font(.caption2)
+							}
+#endif
 							}
 							.buttonStyle(GrowingButton(buttonColor: Color.gray))
+							.help("Sort")
 							.accessibilityLabel("Sort parts")
 						}
 						ToolbarItem(placement: .automatic) {
 							Button {
 								addNewRecord()
 							} label: {
-								Label("Add", systemImage: "plus.capsule")
+#if os(macOS)
+								Image(systemName: "plus.capsule")
+#else
+								VStack(spacing: 2) {
+								Image(systemName: "plus.capsule")
+								Text("Add")
+									.font(.caption2)
+							}
+#endif
 							}
 							.disabled(false)
+							.help("Add")
+							.accessibilityLabel("Add")
 						}
 					}
 				}
@@ -224,7 +258,17 @@ struct DisplayItems: View {
 				.id(record.id)
 		}
 	}
-	
+
+	/// Builds a compact "6 mo / 5,000 mi / 200 hrs" style summary of the item's service interval,
+	/// omitting any component that is zero.
+	private func intervalDescription(for record: MxItems3) -> String {
+		var parts: [String] = []
+		if record.intervalMonths != 0 { parts.append("\(record.intervalMonths) mo") }
+		if record.intervalMiles != 0 { parts.append("\(record.intervalMiles) mi") }
+		if record.intervalHours != 0 { parts.append("\(record.intervalHours.formatted(.number.precision(.fractionLength(0)))) hrs") }
+		return parts.joined(separator: " / ")
+	}
+
 	/// Creates a new `MxItems3` for the currently selected vehicle and saves it.
 	/// On success, selects it in the list and navigates to `EditItems` in edit mode.
 	private func addNewRecord() {
@@ -237,7 +281,7 @@ struct DisplayItems: View {
 			updatedAt: Date(),
 			vehicleId: trackVehicleSelected,
 			vehicleSystem: "",
-			mxName: "New service item...",
+			mxName: "(New service item)",
 			mxDescription: "",
 			Notes: "",
 			vendor: "",
