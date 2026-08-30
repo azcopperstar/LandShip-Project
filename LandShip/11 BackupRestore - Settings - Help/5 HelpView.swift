@@ -2,6 +2,10 @@
 import SwiftUI
 
 struct HelpView: View {
+	// Presents the feedback form. Lives here as well as in the iOS sidebar's Resources
+	// section, since on macOS the Help window is the only route to it.
+	@State private var showingFeedbackSheet = false
+
 	// Stable identifiers for each section we want to link to
 	private enum SectionID: String, CaseIterable, Hashable {
 		case overview
@@ -328,15 +332,26 @@ struct HelpView: View {
 					Divider()
 
 					// Support
-					Group {
+					VStack(alignment: .leading, spacing: 8) {
 						Text("Support")
 							.font(.headline)
-						Text("If you need help or have feedback, please reach out.")
-						Link("Email Support: info@aeronauticaltrax.com", destination: URL(string: "mailto:info@aeronauticaltrax.com")!)
+						Text("If you need help or have feedback, please reach out. The form below collects a suggestion, improvement or problem report and hands it to your mail app, already filled in.")
+						Button {
+							showingFeedbackSheet = true
+						} label: {
+							Label("Send Feedback…", systemImage: "paperplane")
+						}
+						.buttonStyle(.borderedProminent)
+						Link("Email Support: \(FeedbackView.supportAddress)",
+							 destination: URL(string: "mailto:\(FeedbackView.supportAddress)")!)
 					}
+					.frame(maxWidth: .infinity, alignment: .leading)
 					.id(SectionID.support)
 				}
 				.padding()
+			}
+			.sheet(isPresented: $showingFeedbackSheet) {
+				FeedbackSheet { showingFeedbackSheet = false }
 			}
 			// Optional: support deep-linking like myapp://help/overview
 			.onOpenURL { url in

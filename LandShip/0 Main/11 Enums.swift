@@ -161,4 +161,39 @@ enum StorageKey {
 	static let launchScreen = "launchScreen"
 	static let lastSidebarSection = "lastSidebarSection"
 	static let lastBackupDate = "lastBackupDate"
+	static let lastManualBackupBookmark = "lastManualBackupBookmark"
+	static let lastAutoBackupDate = "lastAutoBackupDate"
+	static let autoBackupInterval = "autoBackupInterval"
+	static let autoBackupRetentionCount = "autoBackupRetentionCount"
+}
+
+// How often automatic backups should be created. rawValue is persisted via
+// AppStorage — never rename or reorder cases without a migration.
+enum AutoBackupInterval: String, CaseIterable, Identifiable, Hashable {
+	case off
+	case daily
+	case weekly
+	case monthly
+
+	var id: String { rawValue }
+
+	var label: String {
+		switch self {
+			case .off: return "Off"
+			case .daily: return "Daily"
+			case .weekly: return "Weekly"
+			case .monthly: return "Monthly"
+		}
+	}
+
+	/// Minimum elapsed time since the last backup (of any kind) before an
+	/// automatic backup is due again. `nil` for `.off`.
+	var minimumElapsed: TimeInterval? {
+		switch self {
+			case .off: return nil
+			case .daily: return 60 * 60 * 24
+			case .weekly: return 60 * 60 * 24 * 7
+			case .monthly: return 60 * 60 * 24 * 30
+		}
+	}
 }

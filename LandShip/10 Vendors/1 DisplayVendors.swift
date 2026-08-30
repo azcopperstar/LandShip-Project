@@ -138,6 +138,16 @@ struct DisplayVendors: View {
 			}
 		}()
 
+		// Page title banner, on a stable anchor view rather than on QueryView itself.
+		// QueryView's content switches between a List (empty state) and a Section
+		// wrapping a List (populated state); attaching .safeAreaInset directly to it
+		// causes the inset content to be duplicated into the List's own layout.
+		Color.clear
+			.frame(height: 0)
+			.safeAreaInset(edge: .top) {
+				PageTitle_Col2_NoPhoto(label: "VENDORS / SHOPS")
+			}
+
 		// QueryView executes the SwiftData fetch and supplies results to the content closure.
 		QueryView(for: Vendors1.self,
 							sort: [selectedSort.sortDescriptor],
@@ -268,9 +278,6 @@ struct DisplayVendors: View {
 				}
 			}
 		}, filter: filterClosure)
-		.safeAreaInset(edge: .top) {
-			PageTitle_Col2_NoPhoto(label: "VENDORS / SHOPS")
-		}
 		// System search field binds to `searchText` and updates the predicate.
 		.searchable(text: $searchText, placement: .automatic, prompt: "Search vendors")
 		// Pull to refresh is a no-op here; yielding allows UI to complete the gesture.

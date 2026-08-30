@@ -864,8 +864,9 @@ struct EditRecord: View {
 					TextNoteDisplay_FullWidth(sectionText: "SERVICE RECORD NOTES", data: dataSet.Notes)}
 				}
 				
-				// SERVICE COMPLETED AT
-				CardView {
+				// SERVICE COMPLETED AT — hidden when no usage values were recorded
+				if hasServiceCompletedAt {
+					CardView {
 					VStack {
 						SectionText(label: "SERVICE COMPLETED AT")
 						if dataSet.Miles > 0 {
@@ -878,10 +879,12 @@ struct EditRecord: View {
 							HStack{LabelDataText(label: dataSet.customMeasureLabel, data: "\(dataSet.customMeasureValue.formatted(.number.precision(.fractionLength(1)))) \(dataSet.customMeasureUnit)")}
 						}
 					}
+					}
 				}
 
-				// PARTS USED (read-only summary)
-				CardView {
+				// PARTS USED (read-only summary) — hidden when no parts were entered
+				if hasPartsUsed {
+					CardView {
 					VStack {
 						SectionText(label: "PARTS USED")
 						if dataSet.part1 != "" {
@@ -918,6 +921,7 @@ struct EditRecord: View {
 							HStack{LabelDataCurrency(label: "Cost/Unit", data: Float(part5cost), unit: "/ \(part5Unit)")}
 							HStack{LabelDataCurrency(label: "Part Total", data: Float(Double(part5Quantity) * Double(part5cost)), unit: "")}
 						}
+					}
 					}
 				}
 				
@@ -1000,13 +1004,15 @@ struct EditRecord: View {
 					}
 				}
 				
-				// SERVICE RECORDS GRAPHICS (read-only images)
-				CardView {
+				// SERVICE RECORDS GRAPHICS (read-only images) — hidden when none attached
+				if hasGraphics {
+					CardView {
 					VStack {
 						SectionText(label: "SERVICE RECORDS GRAPHICS")
 						Image_View_Details(label:"1", imageData: dataSet.image1, imageDescription: dataSet.image1Description)
 						Image_View_Details(label:"2", imageData: dataSet.image2, imageDescription: dataSet.image2Description)
 						Image_View_Details(label:"3", imageData: dataSet.image3, imageDescription: dataSet.image3Description)
+					}
 					}
 				}
 
@@ -1163,6 +1169,29 @@ struct EditRecord: View {
 		// Sync linked Additions record if one exists
 		if !additionsLinkId.isEmpty { syncLinkedAddition() }
 		dataSet.additionsLinkId = additionsLinkId
+	}
+
+	// MARK: - Details section visibility
+	// Card sections in Details mode are only rendered when at least one of their
+	// fields holds data, so a section title never appears above an empty card.
+
+	/// True when a usage reading was recorded for the service.
+	private var hasServiceCompletedAt: Bool {
+		dataSet.Miles > 0 || dataSet.engHours > 0 || !dataSet.customMeasureLabel.isEmpty
+	}
+
+	/// True when at least one part was entered.
+	private var hasPartsUsed: Bool {
+		!(dataSet.part1.isEmpty
+		  && dataSet.part2.isEmpty
+		  && dataSet.part3.isEmpty
+		  && dataSet.part4.isEmpty
+		  && dataSet.part5.isEmpty)
+	}
+
+	/// True when at least one image is attached.
+	private var hasGraphics: Bool {
+		dataSet.image1 != nil || dataSet.image2 != nil || dataSet.image3 != nil
 	}
 
 	// MARK: - Helpers

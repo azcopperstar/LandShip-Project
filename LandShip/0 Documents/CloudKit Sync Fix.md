@@ -1,5 +1,15 @@
 # CloudKit Sync Fix - Quick Action Steps
 
+> **Correction notice — 2026-08-30.** This document is kept as a historical
+> troubleshooting log. Parts of it are based on a mistaken premise: that
+> `aps-environment` selects which CloudKit database the app uses. It does not —
+> `aps-environment` controls APNs only. The database is selected solely by the
+> `com.apple.developer.icloud-container-environment` entitlement.
+>
+> The sections below have been corrected in place where they gave wrong
+> instructions. For the current, accurate setup see **`cloudkit enviro fix.md`**.
+> The logging guidance and `log stream` commands here remain valid.
+
 ## ✅ What Was Done
 
 1. **Changed entitlements** to use Production environment
@@ -79,15 +89,21 @@ Just to be safe, restart after clearing caches.
 
 ## ❓ What About Running from Xcode?
 
-When you run from Xcode (Cmd+R), it will still try to use **Development** environment. This is normal behavior.
+**Corrected.** Which CloudKit database a build uses is decided by the
+`com.apple.developer.icloud-container-environment` entitlement — not by whether
+you pressed Cmd+R. Note that when the key is absent, macOS builds default to
+**Production**, which is the opposite of iOS.
 
-**Two options:**
+The project now resolves this per build configuration:
 
-### Option A: Always Use Production (Simplest)
-No additional changes needed. Even Xcode builds will use Production now because we changed the entitlements.
+```
+CODE_SIGN_ENTITLEMENTS = LandShip/LandShip-$(CONFIGURATION).entitlements
+```
 
-### Option B: Development for Xcode, Production for Archives
-See the full guide in `CLOUDKIT_ENVIRONMENT_FIX.md` for instructions on creating separate entitlements files.
+- Debug (including Cmd+R on My Mac) → `Development`
+- Release / Archive → `Production`
+
+See `cloudkit enviro fix.md` for the full setup and verification steps.
 
 ## 🔍 Troubleshooting
 
@@ -107,32 +123,50 @@ See the full guide in `CLOUDKIT_ENVIRONMENT_FIX.md` for instructions on creating
 - Verify schema deployed successfully in CloudKit Dashboard
 - Try force-quitting and relaunching both apps
 
-## 📊 Expected Behavior After Fix
+## 📊 Expected Behavior
 
 ### iOS Devices (TestFlight/App Store)
-- ✅ Uses Production CloudKit
-- ✅ Syncs with other iOS devices
-- ✅ Will now sync with macOS archived builds
+- Uses **Production** CloudKit
+- Syncs with other Production devices
 
-### macOS (Archived/Installed)
-- ✅ Uses Production CloudKit
-- ✅ Syncs with iOS devices
-- ✅ Logs show "PRODUCTION" environment
+### macOS (Archived / Installed Release build)
+- Uses **Production** CloudKit
+- Syncs with iOS TestFlight/App Store devices
 
-### macOS (Running from Xcode)
-- ⚠️ Uses Production CloudKit (with current changes)
-- ✅ Syncs with iOS and installed macOS builds
-- 💡 Shows "PRODUCTION" in logs
+### macOS (Debug build, run from Xcode)
+- Uses **Development** CloudKit — a separate, initially empty database
+- Does **not** sync with Production devices, by design
+- An empty app on first launch is the expected, correct signal
+
+### iOS Simulator
+- Always **Development**, regardless of entitlement
 
 ## 📝 Files Changed
 
-1. **LandShip/LandShip.entitlements**
-   - `aps-environment` changed to `production`
+Superseded by the 2026-08-30 rework:
 
-2. **LandShip/0 Main/1 LandShipApp.swift**
-   - Added `detectCloudKitEnvironment()` function
-   - Added `isRunningFromXcode()` check
-   - Enhanced logging with environment detection
+1. **LandShip/LandShip-Debug.entitlements** (new)
+   - `com.apple.developer.icloud-container-environment` = `Development`
+   - `aps-environment` = `development` (must match the container environment)
+
+2. **LandShip/LandShip-Release.entitlements** (new)
+   - `com.apple.developer.icloud-container-environment` = `Production`
+   - `aps-environment` = `production`
+
+3. **Build setting on target `VehicleTrax`**
+   - `CODE_SIGN_ENTITLEMENTS = LandShip/LandShip-$(CONFIGURATION).entitlements`
+
+4. **LandShip/LandShip.entitlements** — no longer referenced by the build
+
+5. **LandShip/0 Main/1 LandShipApp.swift**
+   - `detectCloudKitEnvironment()` reduced to a compile-time constant; the old
+     Info.plist and `embedded.mobileprovision` probing never worked
+   - `isRunningFromXcode()` removed
+   - CloudKit event observer fixed to use
+     `NSPersistentCloudKitContainer.eventChangedNotification` and to read the
+     typed `Event` from `eventNotificationUserInfoKey`, so failures now log the
+     real `CKError` including `partialErrorsByItemID`
+   - Timer-driven `startPolling()` disabled — it invites CloudKit throttling
 
 ## 📚 Additional Resources
 
@@ -252,7 +286,7 @@ Keep this Terminal window open and visible.
 
 **If you see this instead, there's a problem:**
 ```
-[LandShip] 🌐 CloudKit Environment: DEVELOPMENT  ← WRONG!
+[LandShip] 🌐 CloudKit Environment: PRODUCTION  ← WRONG for a Debug build!
 [LandShip] ⚠️ Failed to create CloudKit container  ← PROBLEM!
 [LandShip] Store mode: Local-only  ← NOT SYNCING!
 [LandShip] ❌ iCloud account status: noAccount  ← PROBLEM!

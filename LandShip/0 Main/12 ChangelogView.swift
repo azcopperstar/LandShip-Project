@@ -10,15 +10,23 @@
 
 import SwiftUI
 
+/// A run of bullets sharing one "## Section" heading inside an ADDED/FIXED/CHANGED/NOTES
+/// block. `title` is empty for bullets written without a heading above them.
+struct ChangelogItemGroup: Identifiable {
+	let id = UUID()
+	let title: String
+	let items: [String]
+}
+
 /// A single parsed version entry from the bundled changelog.md file.
 struct ChangelogVersionBlock: Identifiable {
 	let id = UUID()
 	let label: String
 	let date: String
-	let added: [String]
-	let fixed: [String]
-	let changed: [String]
-	let notes: [String]
+	let added: [ChangelogItemGroup]
+	let fixed: [ChangelogItemGroup]
+	let changed: [ChangelogItemGroup]
+	let notes: [ChangelogItemGroup]
 }
 
 /// Parses the bundled `changelog.md` file into structured version blocks.
@@ -33,10 +41,29 @@ enum ChangelogParser {
 
 		var result: [ChangelogVersionBlock] = []
 		var label = "", date = ""
-		var added: [String] = [], fixed: [String] = [], changed: [String] = [], notes: [String] = []
+		var added: [ChangelogItemGroup] = [], fixed: [ChangelogItemGroup] = [],
+			changed: [ChangelogItemGroup] = [], notes: [ChangelogItemGroup] = []
 		var currentSection = ""
+		var groupTitle = ""
+		var groupItems: [String] = []
+
+		/// Files the bullets gathered since the last "## Section" heading into the
+		/// block being read. Must run before `currentSection` changes.
+		func flushGroup() {
+			defer { groupTitle = ""; groupItems = [] }
+			guard !groupItems.isEmpty else { return }
+			let group = ChangelogItemGroup(title: groupTitle, items: groupItems)
+			switch currentSection {
+			case "added":   added.append(group)
+			case "fixed":   fixed.append(group)
+			case "changed": changed.append(group)
+			case "notes":   notes.append(group)
+			default: break
+			}
+		}
 
 		func flush() {
+			flushGroup()
 			guard !label.isEmpty else { return }
 			result.append(ChangelogVersionBlock(label: label, date: date,
 											   added: added, fixed: fixed,
@@ -56,22 +83,21 @@ enum ChangelogParser {
 				continue
 			}
 			switch line {
-			case "ADDED":   currentSection = "added";   continue
-			case "FIXED":   currentSection = "fixed";   continue
-			case "CHANGED": currentSection = "changed"; continue
-			case "NOTES":   currentSection = "notes";   continue
+			case "ADDED":   flushGroup(); currentSection = "added";   continue
+			case "FIXED":   flushGroup(); currentSection = "fixed";   continue
+			case "CHANGED": flushGroup(); currentSection = "changed"; continue
+			case "NOTES":   flushGroup(); currentSection = "notes";   continue
 			default: break
+			}
+			if line.hasPrefix("## ") {
+				flushGroup()
+				groupTitle = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+				continue
 			}
 			guard line.hasPrefix("- ") else { continue }
 			let item = String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces)
 			guard !item.isEmpty && item != "-" else { continue }
-			switch currentSection {
-			case "added":   added.append(item)
-			case "fixed":   fixed.append(item)
-			case "changed": changed.append(item)
-			case "notes":   notes.append(item)
-			default: break
-			}
+			groupItems.append(item)
 		}
 		flush()
 		return result
@@ -124,37 +150,51 @@ struct ChangelogList: View {
 						.monospacedDigit()
 				}
 			}
-			if !v.added.isEmpty   { itemGroup("Added",   items: v.added,   color: .green)  }
-			if !v.fixed.isEmpty   { itemGroup("Fixed",   items: v.fixed,   color: .orange) }
-			if !v.changed.isEmpty { itemGroup("Changed", items: v.changed, color: .blue)   }
-			if !v.notes.isEmpty   { itemGroup("Notes",   items: v.notes,   color: .secondary) }
+			if !v.added.isEmpty   { itemGroup("Added",   groups: v.added,   color: .green)  }
+			if !v.fixed.isEmpty   { itemGroup("Fixed",   groups: v.fixed,   color: .orange) }
+			if !v.changed.isEmpty { itemGroup("Changed", groups: v.changed, color: .blue)   }
+			if !v.notes.isEmpty   { itemGroup("Notes",   groups: v.notes,   color: .secondary) }
 		}
 		.padding()
 		.background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
 	}
 
-	@ViewBuilder private func itemGroup(_ label: String, items: [String], color: Color) -> some View {
+	@ViewBuilder private func itemGroup(_ label: String, groups: [ChangelogItemGroup], color: Color) -> some View {
 		VStack(alignment: .leading, spacing: 4) {
 			Divider()
 			Text(label.uppercased())
 				.font(.caption2.bold())
 				.foregroundStyle(color)
-			ForEach(items, id: \.self) { item in
-				HStack(alignment: .top, spacing: 6) {
-					Circle()
-						.fill(color.opacity(0.5))
-						.frame(width: 5, height: 5)
+			ForEach(groups) { group in
+				if !group.title.isEmpty {
+					// Faint bar tinted to the block's own colour, so the affected area
+					// stands out from the bullets without competing with the ADDED/FIXED heading.
+					Text(group.title)
+						.font(.caption.bold())
+						.frame(maxWidth: .infinity, alignment: .leading)
+						.padding(.vertical, 3)
+						.padding(.horizontal, 6)
+						.background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
 						.padding(.top, 5)
-					Group {
-						if let attr = try? AttributedString(markdown: item,
-							options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-							Text(attr)
-						} else {
-							Text(item)
+						.accessibilityAddTraits(.isHeader)
+				}
+				ForEach(group.items, id: \.self) { item in
+					HStack(alignment: .top, spacing: 6) {
+						Circle()
+							.fill(color.opacity(0.5))
+							.frame(width: 5, height: 5)
+							.padding(.top, 5)
+						Group {
+							if let attr = try? AttributedString(markdown: item,
+								options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+								Text(attr)
+							} else {
+								Text(item)
+							}
 						}
+						.font(.caption)
+						.fixedSize(horizontal: false, vertical: true)
 					}
-					.font(.caption)
-					.fixedSize(horizontal: false, vertical: true)
 				}
 			}
 		}

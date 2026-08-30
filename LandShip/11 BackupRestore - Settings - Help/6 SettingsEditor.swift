@@ -9,16 +9,23 @@ import SwiftUI
 import SwiftData
 
 struct SettingsEditorView: View {
+	// Called when the user picks "Restore" on an entry in Manage Auto-Backups.
+	// ContentView supplies this to dismiss Settings and hand off to its own
+	// restore confirmation flow, which already handles the iCloud-aware choice
+	// and post-restore restart enforcement — kept in one place rather than
+	// duplicated here.
+	var onRestoreRequested: (URL) -> Void = { _ in }
+
 	@Environment(\.modelContext) private var modelContext
 	@Environment(\.dismiss) private var dismiss
-	
+
 	// Fetch the primary settings if it exists
 	@Query(filter: #Predicate<Settings1> { $0.userName == "primary1" })
 	private var fetched: [Settings1]
-	
+
 	// Hold a reference to the editable model (created if missing)
 	@State private var settings: Settings1?
-	
+
 	// App-wide onboarding completion flag (shared with ContentView)
 	@AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
 	@State private var showResetOnboardingConfirm: Bool = false
@@ -26,6 +33,13 @@ struct SettingsEditorView: View {
 	// App-wide vehicle list preference moved here from ChooseVehicle
 	@AppStorage("showInactiveVehicles") private var showInactiveVehicles: Bool = false
 	@AppStorage(StorageKey.launchScreen) private var launchScreen: String = "dashboard"
+
+	// Automatic backup preferences
+	@AppStorage(StorageKey.autoBackupInterval) private var autoBackupIntervalRaw: String = AutoBackupInterval.off.rawValue
+	@AppStorage(StorageKey.autoBackupRetentionCount) private var autoBackupRetentionCount: Int = 5
+	private var autoBackupInterval: AutoBackupInterval {
+		AutoBackupInterval(rawValue: autoBackupIntervalRaw) ?? .off
+	}
 	// Create-or-load on appear; deduplicates if CloudKit synced multiple records
 	private func ensureSettings() {
 		if fetched.isEmpty {
@@ -124,6 +138,26 @@ struct SettingsEditorView: View {
 				Text("Checklists").tag("displayChecklist")
 				Text("Last Section Open").tag("lastSection")
 			}
+		}
+
+		Section {
+			Picker("Frequency", selection: $autoBackupIntervalRaw) {
+				ForEach(AutoBackupInterval.allCases) { interval in
+					Text(interval.label).tag(interval.rawValue)
+				}
+			}
+			if autoBackupInterval != .off {
+				Stepper(value: $autoBackupRetentionCount, in: 1...20) {
+					Text("Keep last \(autoBackupRetentionCount) backup\(autoBackupRetentionCount == 1 ? "" : "s")")
+				}
+			}
+			NavigationLink("Manage Auto-Backups…") {
+				ManageAutoBackupsView(onRestoreRequested: onRestoreRequested)
+			}
+		} header: {
+			Text("Automatic Backups")
+		} footer: {
+			Text("When enabled, \(AppInfo.displayName) creates a backup automatically the next time you open the app after the chosen interval has passed — no file picker needed. Automatic backups are stored in the app's own Documents folder and pruned to the number kept above; use \u{201C}Manage Auto-Backups…\u{201D} to restore, share a copy elsewhere, or delete one.")
 		}
 
 		Section("Fuel Log — Fluid Checks") {

@@ -318,7 +318,9 @@ struct EditParts: View {
 					TextNoteDisplay_FullWidth(sectionText: "PART NOTES", data: dataSet.Notes)}
 				}
 
-				CardView {
+				// Hidden when no cost fields have data
+				if hasPartCosts {
+					CardView {
 					VStack{
 						SectionText(label: "PART COSTS")
 						if dataSet.costPerUnit != 0 {
@@ -331,9 +333,12 @@ struct EditParts: View {
 							HStack{LabelDataText(label: "Quantity", data: "\(dataSet.partQuantity) \(dataSet.partUnit)")}
 						}
 					}
+					}
 				}
 				
-				CardView {
+				// Hidden when no source fields have data
+				if hasPartSource {
+					CardView {
 					VStack{
 						SectionText(label: "PART SOURCE")
 						if dataSet.partSource != "" {
@@ -349,14 +354,18 @@ struct EditParts: View {
 							HStack{LabelDataText(label: "Supplier", data: functions.cleanOptional(inputString: dataSet.partSupplier))}
 						}
 					}
+					}
 				}
 				
-				CardView {
+				// Hidden when no images are attached
+				if hasGraphics {
+					CardView {
 					VStack {
 						SectionText(label: "PARTS GRAPHICS")
 						Image_View_Details(label:"1", imageData: dataSet.image1, imageDescription: dataSet.image1Description)
 						Image_View_Details(label:"2", imageData: dataSet.image2, imageDescription: dataSet.image2Description)
 						Image_View_Details(label:"3", imageData: dataSet.image3, imageDescription: dataSet.image3Description)
+					}
 					}
 				}
 			}
@@ -397,6 +406,28 @@ struct EditParts: View {
 			}
 		}
 	}
+	// MARK: - Details section visibility
+	// Card sections in Details mode are only rendered when at least one of their
+	// fields holds data, so a section title never appears above an empty card.
+
+	/// True when any cost field has data.
+	private var hasPartCosts: Bool {
+		dataSet.costPerUnit != 0 || !dataSet.partUnit.isEmpty || dataSet.partQuantity != 0
+	}
+
+	/// True when any source field has data.
+	private var hasPartSource: Bool {
+		!(dataSet.partSource.isEmpty
+		  && dataSet.partLocation.isEmpty
+		  && dataSet.partStatus.isEmpty
+		  && dataSet.partSupplier.isEmpty)
+	}
+
+	/// True when at least one image is attached.
+	private var hasGraphics: Bool {
+		dataSet.image1 != nil || dataSet.image2 != nil || dataSet.image3 != nil
+	}
+
 	/// Commits staged edits from local `@State` back to `dataSet` and saves the context.
 	///
 	/// This method mirrors all editable properties from the view's state to the

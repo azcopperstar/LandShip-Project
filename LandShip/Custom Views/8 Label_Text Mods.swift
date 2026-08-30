@@ -51,6 +51,23 @@ struct SectionText: View {
 	}
 }
 
+// MARK: section heading on a tinted banner
+/// A `SectionText` on a filled bar, for headings that separate repeated blocks of fields
+/// — an enroute stop, say — where a plain centred label is easy to scroll past.
+struct SectionBanner: View {
+	let label: String
+	var body: some View {
+		Text(label)
+			.font(.system(size: 15, weight: .black, design: .rounded))
+			.foregroundColor(.white)
+			.frame(maxWidth: .infinity, alignment: .center)
+			.padding(.vertical, 5)
+			.background(Color.blue.opacity(0.85), in: RoundedRectangle(cornerRadius: 6))
+			.padding(.top, 6)
+			.accessibilityAddTraits(.isHeader)
+	}
+}
+
 // MARK: label + text (string)
 struct LabelDataText_Toolbar: View {
 	let label: String

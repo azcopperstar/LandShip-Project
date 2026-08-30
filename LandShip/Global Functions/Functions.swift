@@ -114,6 +114,12 @@ private enum Formatters {
         f.dateFormat = "ddMMMyyyyHHmmss"
         return f
     }()
+
+    static let ddMMM: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "ddMMM"
+        return f
+    }()
 }
 
 
@@ -278,6 +284,11 @@ class Functions {
 	}
 	func formatDate_DDMMMyy_HHmmss(date: Date) -> String {
 		return Formatters.ddMMMyyyy_HHmmss.string(from: date).uppercased()
+	}
+	/// Day and month only (e.g. "26AUG"), for compact pickers and menus where the surrounding
+	/// list is already ordered by full date.
+	func formatDate_DDMMM(date: Date) -> String {
+		return Formatters.ddMMM.string(from: date).uppercased()
 	}
 
     /// Localized date-time formatting using a template, respecting the provided locale.

@@ -34,6 +34,10 @@ class TripLog2	{
 	var defLevelFraction: String = ""
 	var defLevelEnd1: Float = 0.0
 	var defLevelEndFraction: String = ""
+	// Actual DEF in the tank at each end of the trip. The fraction fields above are the
+	// eighths estimate; these hold what was really there, typed or derived.
+	var defQuantityStart: Float = 0.0
+	var defQuantityEnd: Float = 0.0
 	var fuelAdded1Log: String = ""
 	var fuelAdded1: Float = 0.0
 	var fuelAdded2Log: String = ""
@@ -46,18 +50,20 @@ class TripLog2	{
 	var fuelAdded5: Float = 0.0
 	var fuelAdded6Log: String = ""
 	var fuelAdded6: Float = 0.0
-	var fuelDateTime1: Date = Date()
-	var fuelDateTime2: Date = Date()
-	var fuelDateTime3: Date = Date()
-	var fuelDateTime4: Date = Date()
-	var fuelDateTime5: Date = Date()
-	var fuelDateTime6: Date = Date()
-	var fuelExitTime1: Date = Date()
-	var fuelExitTime2: Date = Date()
-	var fuelExitTime3: Date = Date()
-	var fuelExitTime4: Date = Date()
-	var fuelExitTime5: Date = Date()
-	var fuelExitTime6: Date = Date()
+	// Entry and exit time for each enroute stop. `nil` means the time was never
+	// recorded, which the editors distinguish from a real value.
+	var fuelDateTime1: Date?
+	var fuelDateTime2: Date?
+	var fuelDateTime3: Date?
+	var fuelDateTime4: Date?
+	var fuelDateTime5: Date?
+	var fuelDateTime6: Date?
+	var fuelExitTime1: Date?
+	var fuelExitTime2: Date?
+	var fuelExitTime3: Date?
+	var fuelExitTime4: Date?
+	var fuelExitTime5: Date?
+	var fuelExitTime6: Date?
 	var stopReason1: String = ""
 	var stopReason2: String = ""
 	var stopReason3: String = ""
@@ -78,6 +84,28 @@ class TripLog2	{
 	var fuelLocation6: String = ""
 	var locationStart: String = ""
 	var locationEnd: String = ""
+	// Fluid checks performed at travel start
+	var startOilChecked: Bool = false
+	var startEngineCoolantChecked: Bool = false
+	var startSecondaryCoolantChecked: Bool = false
+	var startPowerSteeringChecked: Bool = false
+	var startBrakeFluidChecked: Bool = false
+	var startTransmissionFluidChecked: Bool = false
+	var startRearAxleChecked: Bool = false
+	var startFrontAxleChecked: Bool = false
+	var startFuelWaterSeparatorChecked: Bool = false
+	var startAirSystemWaterBleedChecked: Bool = false
+	// Fluid checks performed at travel end
+	var endOilChecked: Bool = false
+	var endEngineCoolantChecked: Bool = false
+	var endSecondaryCoolantChecked: Bool = false
+	var endPowerSteeringChecked: Bool = false
+	var endBrakeFluidChecked: Bool = false
+	var endTransmissionFluidChecked: Bool = false
+	var endRearAxleChecked: Bool = false
+	var endFrontAxleChecked: Bool = false
+	var endFuelWaterSeparatorChecked: Bool = false
+	var endAirSystemWaterBleedChecked: Bool = false
 	var vehicleTowed: Bool = false
 	var vehicleIdTowed: String = ""
 	var tripGroup: String = ""
@@ -163,12 +191,12 @@ class TripLog2	{
 		fuelAdded5: Float = 0.0,
 		fuelAdded6Log: String = "",
 		fuelAdded6: Float = 0.0,
-		fuelDateTime1: Date = Date(),
-		fuelDateTime2: Date = Date(),
-		fuelDateTime3: Date = Date(),
-		fuelDateTime4: Date = Date(),
-		fuelDateTime5: Date = Date(),
-		fuelDateTime6: Date = Date(),
+		fuelDateTime1: Date? = nil,
+		fuelDateTime2: Date? = nil,
+		fuelDateTime3: Date? = nil,
+		fuelDateTime4: Date? = nil,
+		fuelDateTime5: Date? = nil,
+		fuelDateTime6: Date? = nil,
 		locationStart: String = "",
 		locationEnd: String = "",
 		vehicleTowed: Bool = false,

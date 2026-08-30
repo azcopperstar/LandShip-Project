@@ -56,6 +56,11 @@
 
 import SwiftUI
 import SwiftData
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 /// A SwiftUI view for viewing and editing a single `TripLog2` record.
 ///
@@ -112,6 +117,8 @@ struct EditTripLog: View {
 	@State private var defLevelFraction: String = ""
 	@State private var defLevelEnd1: Float = 0.0
 	@State private var defLevelEndFraction: String = ""
+	@State private var defQuantityStart: Float = 0.0
+	@State private var defQuantityEnd: Float = 0.0
 	@State private var fuelAdded1Log: String = ""
 	@State private var fuelAdded1: Float = 0.0
 	@State private var fuelAdded2Log: String = ""
@@ -290,12 +297,105 @@ struct EditTripLog: View {
 	@State private var fuelStop6Image2: Data?
 	@State private var fuelStop6Image3: Data?
 
+	// Fuel-log levels and fuel type captured per enroute stop. These are stored on the
+	// linked FuelLog1 record rather than on TripLog2.
+	@State private var stopFuelLevelStart1: Float = 0.25
+	@State private var stopFuelLevelEnd1: Float = 1.0
+	@State private var stopDefLevel1: Float = 0.0
+	@State private var stopFuelType1: String = ""
+	@State private var stopFuelLevelStart2: Float = 0.25
+	@State private var stopFuelLevelEnd2: Float = 1.0
+	@State private var stopDefLevel2: Float = 0.0
+	@State private var stopFuelType2: String = ""
+	@State private var stopFuelLevelStart3: Float = 0.25
+	@State private var stopFuelLevelEnd3: Float = 1.0
+	@State private var stopDefLevel3: Float = 0.0
+	@State private var stopFuelType3: String = ""
+	@State private var stopFuelLevelStart4: Float = 0.25
+	@State private var stopFuelLevelEnd4: Float = 1.0
+	@State private var stopDefLevel4: Float = 0.0
+	@State private var stopFuelType4: String = ""
+	@State private var stopFuelLevelStart5: Float = 0.25
+	@State private var stopFuelLevelEnd5: Float = 1.0
+	@State private var stopDefLevel5: Float = 0.0
+	@State private var stopFuelType5: String = ""
+	@State private var stopFuelLevelStart6: Float = 0.25
+	@State private var stopFuelLevelEnd6: Float = 1.0
+	@State private var stopDefLevel6: Float = 0.0
+	@State private var stopFuelType6: String = ""
+	// Actual fuel/DEF quantities per stop, stored on the linked FuelLog1 alongside the fractions.
+	@State private var stopFuelQtyStart1: Float = 0.0
+	@State private var stopFuelQtyEnd1: Float = 0.0
+	@State private var stopDefQty1: Float = 0.0
+	@State private var stopFuelQtyStart2: Float = 0.0
+	@State private var stopFuelQtyEnd2: Float = 0.0
+	@State private var stopDefQty2: Float = 0.0
+	@State private var stopFuelQtyStart3: Float = 0.0
+	@State private var stopFuelQtyEnd3: Float = 0.0
+	@State private var stopDefQty3: Float = 0.0
+	@State private var stopFuelQtyStart4: Float = 0.0
+	@State private var stopFuelQtyEnd4: Float = 0.0
+	@State private var stopDefQty4: Float = 0.0
+	@State private var stopFuelQtyStart5: Float = 0.0
+	@State private var stopFuelQtyEnd5: Float = 0.0
+	@State private var stopDefQty5: Float = 0.0
+	@State private var stopFuelQtyStart6: Float = 0.0
+	@State private var stopFuelQtyEnd6: Float = 0.0
+	@State private var stopDefQty6: Float = 0.0
+	// DEF level before adding any, per stop. stopDefLevel/stopDefQty above are after adding.
+	@State private var stopDefLevelStart1: Float = 0.0
+	@State private var stopDefQtyStart1: Float = 0.0
+	@State private var stopDefLevelStart2: Float = 0.0
+	@State private var stopDefQtyStart2: Float = 0.0
+	@State private var stopDefLevelStart3: Float = 0.0
+	@State private var stopDefQtyStart3: Float = 0.0
+	@State private var stopDefLevelStart4: Float = 0.0
+	@State private var stopDefQtyStart4: Float = 0.0
+	@State private var stopDefLevelStart5: Float = 0.0
+	@State private var stopDefQtyStart5: Float = 0.0
+	@State private var stopDefLevelStart6: Float = 0.0
+	@State private var stopDefQtyStart6: Float = 0.0
+	// Price per unit of DEF added at each stop, stored on the linked FuelLog1.
+	@State private var stopDefPrice1: Float = 0.0
+	@State private var stopDefPrice2: Float = 0.0
+	@State private var stopDefPrice3: Float = 0.0
+	@State private var stopDefPrice4: Float = 0.0
+	@State private var stopDefPrice5: Float = 0.0
+	@State private var stopDefPrice6: Float = 0.0
+
+	// Fluid checks recorded at travel start and travel end
+	@State private var startOilChecked: Bool = false
+	@State private var startEngineCoolantChecked: Bool = false
+	@State private var startSecondaryCoolantChecked: Bool = false
+	@State private var startPowerSteeringChecked: Bool = false
+	@State private var startBrakeFluidChecked: Bool = false
+	@State private var startTransmissionFluidChecked: Bool = false
+	@State private var startRearAxleChecked: Bool = false
+	@State private var startFrontAxleChecked: Bool = false
+	@State private var startFuelWaterSeparatorChecked: Bool = false
+	@State private var startAirSystemWaterBleedChecked: Bool = false
+	@State private var endOilChecked: Bool = false
+	@State private var endEngineCoolantChecked: Bool = false
+	@State private var endSecondaryCoolantChecked: Bool = false
+	@State private var endPowerSteeringChecked: Bool = false
+	@State private var endBrakeFluidChecked: Bool = false
+	@State private var endTransmissionFluidChecked: Bool = false
+	@State private var endRearAxleChecked: Bool = false
+	@State private var endFrontAxleChecked: Bool = false
+	@State private var endFuelWaterSeparatorChecked: Bool = false
+	@State private var endAirSystemWaterBleedChecked: Bool = false
+	@State private var showStartFluidChecks: Bool = false
+	@State private var showEndFluidChecks: Bool = false
+
 	// New: ModelPicker selections
 	@State private var selectedVehicle: Vehicle8? = nil
 	@State private var selectedTowedVehicle: Vehicle8? = nil
-    @State private var tripInactive: Bool = false
 	@State private var tripGroup: String = ""
 	@State private var availableGroups: [String] = []
+	@State private var availableFuelLogs: [FuelLogChoice] = []
+	/// Stops the user explicitly set back to "New Log", so saving must not re-attach the
+	/// record they just unlinked by matching on odometer.
+	@State private var stopsForcedNew: Set<Int> = []
 	@State private var tripGroupSelection: String = "__none__"
 
 	/// Initializes the editor with an existing `TripLog2` record.
@@ -332,6 +432,8 @@ struct EditTripLog: View {
 		self._defLevelFraction = State.init(initialValue: dataSet.defLevelFraction)
 		self._defLevelEnd1 = State.init(initialValue: dataSet.defLevelEnd1)
 		self._defLevelEndFraction = State.init(initialValue: dataSet.defLevelEndFraction)
+		self._defQuantityStart = State.init(initialValue: dataSet.defQuantityStart)
+		self._defQuantityEnd = State.init(initialValue: dataSet.defQuantityEnd)
 		self._fuelAdded1Log = State.init(initialValue: dataSet.fuelAdded1Log)
 		self._fuelAdded1 = State.init(initialValue: dataSet.fuelAdded1)
 		self._fuelAdded2Log = State.init(initialValue: dataSet.fuelAdded2Log)
@@ -354,18 +456,27 @@ struct EditTripLog: View {
 		self._image1Description = State.init(initialValue: dataSet.image1Description)
 		self._image2Description = State.init(initialValue: dataSet.image2Description)
 		self._image3Description = State.init(initialValue: dataSet.image3Description)
-		self._fuelDateTime1 = State.init(initialValue: dataSet.fuelDateTime1)
-		self._fuelDateTime2 = State.init(initialValue: dataSet.fuelDateTime2)
-		self._fuelDateTime3 = State.init(initialValue: dataSet.fuelDateTime3)
-		self._fuelDateTime4 = State.init(initialValue: dataSet.fuelDateTime4)
-		self._fuelDateTime5 = State.init(initialValue: dataSet.fuelDateTime5)
-		self._fuelDateTime6 = State.init(initialValue: dataSet.fuelDateTime6)
-		self._fuelExitTime1 = State.init(initialValue: dataSet.fuelExitTime1)
-		self._fuelExitTime2 = State.init(initialValue: dataSet.fuelExitTime2)
-		self._fuelExitTime3 = State.init(initialValue: dataSet.fuelExitTime3)
-		self._fuelExitTime4 = State.init(initialValue: dataSet.fuelExitTime4)
-		self._fuelExitTime5 = State.init(initialValue: dataSet.fuelExitTime5)
-		self._fuelExitTime6 = State.init(initialValue: dataSet.fuelExitTime6)
+		// A stop with no recorded entry time is treated as starting now. An entry time with
+		// no exit time means no departure was logged, so exit starts out matching entry —
+		// for a new stop that makes both "now", and it never reads as a bogus stop duration.
+		let stopStart1 = dataSet.fuelDateTime1 ?? Date()
+		let stopStart2 = dataSet.fuelDateTime2 ?? Date()
+		let stopStart3 = dataSet.fuelDateTime3 ?? Date()
+		let stopStart4 = dataSet.fuelDateTime4 ?? Date()
+		let stopStart5 = dataSet.fuelDateTime5 ?? Date()
+		let stopStart6 = dataSet.fuelDateTime6 ?? Date()
+		self._fuelDateTime1 = State.init(initialValue: stopStart1)
+		self._fuelDateTime2 = State.init(initialValue: stopStart2)
+		self._fuelDateTime3 = State.init(initialValue: stopStart3)
+		self._fuelDateTime4 = State.init(initialValue: stopStart4)
+		self._fuelDateTime5 = State.init(initialValue: stopStart5)
+		self._fuelDateTime6 = State.init(initialValue: stopStart6)
+		self._fuelExitTime1 = State.init(initialValue: dataSet.fuelExitTime1 ?? stopStart1)
+		self._fuelExitTime2 = State.init(initialValue: dataSet.fuelExitTime2 ?? stopStart2)
+		self._fuelExitTime3 = State.init(initialValue: dataSet.fuelExitTime3 ?? stopStart3)
+		self._fuelExitTime4 = State.init(initialValue: dataSet.fuelExitTime4 ?? stopStart4)
+		self._fuelExitTime5 = State.init(initialValue: dataSet.fuelExitTime5 ?? stopStart5)
+		self._fuelExitTime6 = State.init(initialValue: dataSet.fuelExitTime6 ?? stopStart6)
 		self._stopReason1 = State.init(initialValue: dataSet.stopReason1)
 		self._stopReason2 = State.init(initialValue: dataSet.stopReason2)
 		self._stopReason3 = State.init(initialValue: dataSet.stopReason3)
@@ -402,7 +513,26 @@ struct EditTripLog: View {
 		self._fuelStop6Image1 = State.init(initialValue: dataSet.fuelStop6Image1)
 		self._fuelStop6Image2 = State.init(initialValue: dataSet.fuelStop6Image2)
 		self._fuelStop6Image3 = State.init(initialValue: dataSet.fuelStop6Image3)
-        self._tripInactive = State.init(initialValue: dataSet.inactive)
+		self._startOilChecked = State.init(initialValue: dataSet.startOilChecked)
+		self._startEngineCoolantChecked = State.init(initialValue: dataSet.startEngineCoolantChecked)
+		self._startSecondaryCoolantChecked = State.init(initialValue: dataSet.startSecondaryCoolantChecked)
+		self._startPowerSteeringChecked = State.init(initialValue: dataSet.startPowerSteeringChecked)
+		self._startBrakeFluidChecked = State.init(initialValue: dataSet.startBrakeFluidChecked)
+		self._startTransmissionFluidChecked = State.init(initialValue: dataSet.startTransmissionFluidChecked)
+		self._startRearAxleChecked = State.init(initialValue: dataSet.startRearAxleChecked)
+		self._startFrontAxleChecked = State.init(initialValue: dataSet.startFrontAxleChecked)
+		self._startFuelWaterSeparatorChecked = State.init(initialValue: dataSet.startFuelWaterSeparatorChecked)
+		self._startAirSystemWaterBleedChecked = State.init(initialValue: dataSet.startAirSystemWaterBleedChecked)
+		self._endOilChecked = State.init(initialValue: dataSet.endOilChecked)
+		self._endEngineCoolantChecked = State.init(initialValue: dataSet.endEngineCoolantChecked)
+		self._endSecondaryCoolantChecked = State.init(initialValue: dataSet.endSecondaryCoolantChecked)
+		self._endPowerSteeringChecked = State.init(initialValue: dataSet.endPowerSteeringChecked)
+		self._endBrakeFluidChecked = State.init(initialValue: dataSet.endBrakeFluidChecked)
+		self._endTransmissionFluidChecked = State.init(initialValue: dataSet.endTransmissionFluidChecked)
+		self._endRearAxleChecked = State.init(initialValue: dataSet.endRearAxleChecked)
+		self._endFrontAxleChecked = State.init(initialValue: dataSet.endFrontAxleChecked)
+		self._endFuelWaterSeparatorChecked = State.init(initialValue: dataSet.endFuelWaterSeparatorChecked)
+		self._endAirSystemWaterBleedChecked = State.init(initialValue: dataSet.endAirSystemWaterBleedChecked)
 		let group = dataSet.tripGroup
 		self._tripGroup = State(initialValue: group)
 		self._tripGroupSelection = State(initialValue: group.isEmpty ? "__none__" : group)
@@ -411,6 +541,25 @@ struct EditTripLog: View {
 		self._isEditing = State(initialValue: startEditing)
 	}
 	
+	// MARK: - Details section visibility
+	// Card sections in Details mode are only rendered when at least one of their
+	// fields holds data, so a section title never appears above an empty card.
+
+	/// True when at least one enroute stop was recorded (fuel added or a stop reason).
+	private var hasStopsEnroute: Bool {
+		dataSet.fuelAdded1 > 0 || !stopReason1.isEmpty
+			|| dataSet.fuelAdded2 > 0 || !stopReason2.isEmpty
+			|| dataSet.fuelAdded3 > 0 || !stopReason3.isEmpty
+			|| dataSet.fuelAdded4 > 0 || !stopReason4.isEmpty
+			|| dataSet.fuelAdded5 > 0 || !stopReason5.isEmpty
+			|| dataSet.fuelAdded6 > 0 || !stopReason6.isEmpty
+	}
+
+	/// True when at least one image is attached.
+	private var hasGraphics: Bool {
+		dataSet.image1 != nil || dataSet.image2 != nil || dataSet.image3 != nil
+	}
+
 	/// The main view body that switches between editing and details modes.
 	///
 	/// - Editing Mode: Presents interactive controls for all major trip fields, vehicle
@@ -435,12 +584,18 @@ struct EditTripLog: View {
 								sort: [SortDescriptor(\.displayName, order: .forward)],
 								labelProvider: { v in "\(v.year) \(v.displayName)"},
 							)
-							.onChange(of: selectedVehicle) { _, newVehicle in
+							.onChange(of: selectedVehicle) { oldVehicle, newVehicle in
 								let name = newVehicle?.name ?? ""
 								vehicleId = name
 								dataSet.vehicleId = name
 								refreshVehicleDetails()
-								recomputeFuelQuantities()
+								// Rescale the tanks only when the vehicle genuinely changed. Seeding this picker on
+								// appear also fires this handler, and rescaling then would replace exact typed
+								// quantities with their eighths equivalents.
+								if let previous = oldVehicle, previous.name != name {
+									recomputeFuelQuantities()
+								}
+								loadAvailableFuelLogs()
 							}
 							.fixedSize(horizontal: true, vertical: true)
 						} label: {
@@ -521,17 +676,48 @@ struct EditTripLog: View {
 						HStack{LabelDataTextview_Numberpad_Float(label: "Engine Hours:", data: $engHoursStart)}
 						HStack{LabelLocationTextview(label: "Location", data: $locationStart)}
 						HStack{
-							Picker_FuelLevel1(label: "Fuel Level", data: $fuelLevelStart1, data1: Float(vehicleDetails?.fuelCapacity ?? 0))
-								.onChange(of: fuelLevelStart1) { _, _ in
-									recomputeFuelQuantities()
-									fuelLevelStart = functions.getFuelLevel(unit: fuelLevelStart1)
+							Picker_FuelLevel1(label: "Fuel Level", data: $fuelLevelStart1, data1: Float(vehicleDetails?.fuelCapacity ?? 0), quantity: $fuelQuantityStart)
+								// Choosing an eighth fills in the quantity. Typing a quantity is left alone — it is
+								// reconciled back to the nearest eighth on save, so the two can't fight each other.
+								.onChange(of: fuelLevelStart1) { _, newFraction in
+									fuelQuantityStart = Float(vehicleDetails?.fuelCapacity ?? 0) * newFraction
+									fuelLevelStart = functions.getFuelLevel(unit: newFraction)
+									recomputeFuelConsumed()
+								}
+								.onChange(of: fuelQuantityStart) { _, _ in
+									recomputeFuelConsumed()
 								}
 						}
 						HStack{
-							Picker_FuelLevel1(label: "DEF Level", data: $defLevel1, data1: Float(vehicleDetails?.defCapacity ?? 0))
-								.onChange(of: defLevel1) { _, _ in
-									defLevelFraction = functions.getFuelLevel(unit: defLevel1)
+							Picker_FuelLevel1(label: "DEF Level", data: $defLevel1, data1: Float(vehicleDetails?.defCapacity ?? 0), quantity: $defQuantityStart)
+								.onChange(of: defLevel1) { _, newFraction in
+									defQuantityStart = Float(vehicleDetails?.defCapacity ?? 0) * newFraction
+									defLevelFraction = functions.getFuelLevel(unit: newFraction)
 								}
+						}
+						HStack {
+							Spacer()
+							Button {
+								showStartFluidChecks = true
+							} label: {
+								Label(fluidChecksTitle(startFluidChecks), systemImage: "drop.circle")
+							}
+							.buttonStyle(.bordered)
+							Spacer()
+						}
+						.sheet(isPresented: $showStartFluidChecks) {
+							FluidCheckSheet(
+								oilChecked: $startOilChecked,
+								engineCoolantChecked: $startEngineCoolantChecked,
+								secondaryCoolantChecked: $startSecondaryCoolantChecked,
+								powerSteeringChecked: $startPowerSteeringChecked,
+								brakeFluidChecked: $startBrakeFluidChecked,
+								transmissionFluidChecked: $startTransmissionFluidChecked,
+								rearAxleChecked: $startRearAxleChecked,
+								frontAxleChecked: $startFrontAxleChecked,
+								fuelWaterSeparatorChecked: $startFuelWaterSeparatorChecked,
+								airSystemWaterBleedChecked: $startAirSystemWaterBleedChecked
+							)
 						}
 					}
 				}
@@ -539,7 +725,7 @@ struct EditTripLog: View {
 				CardView {
 					VStack {
 						SectionText(label: "ENROUTE STOPS")
-						SectionText(label: "STOP 1")
+						SectionBanner(label: "STOP 1")
 						HStack{
 							LabelDataTextview_Numberpad_Fuel(
 								label: "(\(unit(UnitIndex.fuel)))",
@@ -571,12 +757,27 @@ struct EditTripLog: View {
 							fuelImage3: $fuelStop1Image3,
 							fuelExitTime: $fuelExitTime1,
 							stopReason: $stopReason1,
-							stopComment: $stopComment1
+							stopComment: $stopComment1,
+							fuelLevelStart: $stopFuelLevelStart1,
+							fuelLevelEnd: $stopFuelLevelEnd1,
+							defLevel: $stopDefLevel1,
+							fuelType: $stopFuelType1,
+							fuelQuantityStart: $stopFuelQtyStart1,
+							fuelQuantityEnd: $stopFuelQtyEnd1,
+							defQuantity: $stopDefQty1,
+							defLevelStart: $stopDefLevelStart1,
+							defQuantityStart: $stopDefQtyStart1,
+							defPrice: $stopDefPrice1,
+							fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
+							defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
+							linkedLogId: $fuelAdded1Log,
+							fuelLogChoices: fuelLogChoices(currentlyLinked: fuelAdded1Log),
+							onLinkFuelLog: { newId in linkStop(1, to: newId) }
 							)
 						}
 						if fuelAdded1 > 0 || !stopReason1.isEmpty {
 							Divider()
-						SectionText(label: "STOP 2")
+						SectionBanner(label: "STOP 2")
 							HStack{
 								LabelDataTextview_Numberpad_Fuel(
 									label: "(\(unit(UnitIndex.fuel)))",
@@ -608,13 +809,28 @@ struct EditTripLog: View {
 								fuelImage3: $fuelStop2Image3,
 								fuelExitTime: $fuelExitTime2,
 								stopReason: $stopReason2,
-								stopComment: $stopComment2
+								stopComment: $stopComment2,
+								fuelLevelStart: $stopFuelLevelStart2,
+								fuelLevelEnd: $stopFuelLevelEnd2,
+								defLevel: $stopDefLevel2,
+								fuelType: $stopFuelType2,
+								fuelQuantityStart: $stopFuelQtyStart2,
+								fuelQuantityEnd: $stopFuelQtyEnd2,
+								defQuantity: $stopDefQty2,
+								defLevelStart: $stopDefLevelStart2,
+								defQuantityStart: $stopDefQtyStart2,
+								defPrice: $stopDefPrice2,
+								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
+								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
+								linkedLogId: $fuelAdded2Log,
+								fuelLogChoices: fuelLogChoices(currentlyLinked: fuelAdded2Log),
+								onLinkFuelLog: { newId in linkStop(2, to: newId) }
 								)
 							}
 						}
 						if fuelAdded2 > 0 || !stopReason2.isEmpty {
 							Divider()
-						SectionText(label: "STOP 3")
+						SectionBanner(label: "STOP 3")
 							HStack{
 								LabelDataTextview_Numberpad_Fuel(
 									label: "(\(unit(UnitIndex.fuel)))",
@@ -646,13 +862,28 @@ struct EditTripLog: View {
 								fuelImage3: $fuelStop3Image3,
 								fuelExitTime: $fuelExitTime3,
 								stopReason: $stopReason3,
-								stopComment: $stopComment3
+								stopComment: $stopComment3,
+								fuelLevelStart: $stopFuelLevelStart3,
+								fuelLevelEnd: $stopFuelLevelEnd3,
+								defLevel: $stopDefLevel3,
+								fuelType: $stopFuelType3,
+								fuelQuantityStart: $stopFuelQtyStart3,
+								fuelQuantityEnd: $stopFuelQtyEnd3,
+								defQuantity: $stopDefQty3,
+								defLevelStart: $stopDefLevelStart3,
+								defQuantityStart: $stopDefQtyStart3,
+								defPrice: $stopDefPrice3,
+								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
+								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
+								linkedLogId: $fuelAdded3Log,
+								fuelLogChoices: fuelLogChoices(currentlyLinked: fuelAdded3Log),
+								onLinkFuelLog: { newId in linkStop(3, to: newId) }
 								)
 							}
 						}
 						if fuelAdded3 > 0 || !stopReason3.isEmpty {
 							Divider()
-						SectionText(label: "STOP 4")
+						SectionBanner(label: "STOP 4")
 							HStack{
 								LabelDataTextview_Numberpad_Fuel(
 									label: "(\(unit(UnitIndex.fuel)))",
@@ -684,13 +915,28 @@ struct EditTripLog: View {
 								fuelImage3: $fuelStop4Image3,
 								fuelExitTime: $fuelExitTime4,
 								stopReason: $stopReason4,
-								stopComment: $stopComment4
+								stopComment: $stopComment4,
+								fuelLevelStart: $stopFuelLevelStart4,
+								fuelLevelEnd: $stopFuelLevelEnd4,
+								defLevel: $stopDefLevel4,
+								fuelType: $stopFuelType4,
+								fuelQuantityStart: $stopFuelQtyStart4,
+								fuelQuantityEnd: $stopFuelQtyEnd4,
+								defQuantity: $stopDefQty4,
+								defLevelStart: $stopDefLevelStart4,
+								defQuantityStart: $stopDefQtyStart4,
+								defPrice: $stopDefPrice4,
+								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
+								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
+								linkedLogId: $fuelAdded4Log,
+								fuelLogChoices: fuelLogChoices(currentlyLinked: fuelAdded4Log),
+								onLinkFuelLog: { newId in linkStop(4, to: newId) }
 								)
 							}
 						}
 						if fuelAdded4 > 0 || !stopReason4.isEmpty {
 							Divider()
-						SectionText(label: "STOP 5")
+						SectionBanner(label: "STOP 5")
 							HStack{
 								LabelDataTextview_Numberpad_Fuel(
 									label: "(\(unit(UnitIndex.fuel)))",
@@ -722,13 +968,28 @@ struct EditTripLog: View {
 								fuelImage3: $fuelStop5Image3,
 								fuelExitTime: $fuelExitTime5,
 								stopReason: $stopReason5,
-								stopComment: $stopComment5
+								stopComment: $stopComment5,
+								fuelLevelStart: $stopFuelLevelStart5,
+								fuelLevelEnd: $stopFuelLevelEnd5,
+								defLevel: $stopDefLevel5,
+								fuelType: $stopFuelType5,
+								fuelQuantityStart: $stopFuelQtyStart5,
+								fuelQuantityEnd: $stopFuelQtyEnd5,
+								defQuantity: $stopDefQty5,
+								defLevelStart: $stopDefLevelStart5,
+								defQuantityStart: $stopDefQtyStart5,
+								defPrice: $stopDefPrice5,
+								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
+								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
+								linkedLogId: $fuelAdded5Log,
+								fuelLogChoices: fuelLogChoices(currentlyLinked: fuelAdded5Log),
+								onLinkFuelLog: { newId in linkStop(5, to: newId) }
 								)
 							}
 						}
 						if fuelAdded5 > 0 || !stopReason5.isEmpty {
 							Divider()
-						SectionText(label: "STOP 6")
+						SectionBanner(label: "STOP 6")
 							HStack{
 								LabelDataTextview_Numberpad_Fuel(
 									label: "(\(unit(UnitIndex.fuel)))",
@@ -760,7 +1021,22 @@ struct EditTripLog: View {
 								fuelImage3: $fuelStop6Image3,
 								fuelExitTime: $fuelExitTime6,
 								stopReason: $stopReason6,
-								stopComment: $stopComment6
+								stopComment: $stopComment6,
+								fuelLevelStart: $stopFuelLevelStart6,
+								fuelLevelEnd: $stopFuelLevelEnd6,
+								defLevel: $stopDefLevel6,
+								fuelType: $stopFuelType6,
+								fuelQuantityStart: $stopFuelQtyStart6,
+								fuelQuantityEnd: $stopFuelQtyEnd6,
+								defQuantity: $stopDefQty6,
+								defLevelStart: $stopDefLevelStart6,
+								defQuantityStart: $stopDefQtyStart6,
+								defPrice: $stopDefPrice6,
+								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
+								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
+								linkedLogId: $fuelAdded6Log,
+								fuelLogChoices: fuelLogChoices(currentlyLinked: fuelAdded6Log),
+								onLinkFuelLog: { newId in linkStop(6, to: newId) }
 								)
 							}
 						}
@@ -775,17 +1051,46 @@ struct EditTripLog: View {
 						HStack{LabelDataTextview_Numberpad_Float(label: "Engine Hours:", data: $engHoursEnd)}
 						HStack{LabelLocationTextview(label: "Location", data: $locationEnd)}
 						HStack{
-							Picker_FuelLevel1(label: "Fuel Level", data: $fuelLevelEnd1, data1: Float(vehicleDetails?.fuelCapacity ?? 0))
-								.onChange(of: fuelLevelEnd1) { _, _ in
-									recomputeFuelQuantities()
-									fuelLevelEnd = functions.getFuelLevel(unit: fuelLevelEnd1)
+							Picker_FuelLevel1(label: "Fuel Level", data: $fuelLevelEnd1, data1: Float(vehicleDetails?.fuelCapacity ?? 0), quantity: $fuelQuantityEnd)
+								.onChange(of: fuelLevelEnd1) { _, newFraction in
+									fuelQuantityEnd = Float(vehicleDetails?.fuelCapacity ?? 0) * newFraction
+									fuelLevelEnd = functions.getFuelLevel(unit: newFraction)
+									recomputeFuelConsumed()
+								}
+								.onChange(of: fuelQuantityEnd) { _, _ in
+									recomputeFuelConsumed()
 								}
 						}
 						HStack{
-							Picker_FuelLevel1(label: "DEF Level", data: $defLevelEnd1, data1: Float(vehicleDetails?.defCapacity ?? 0))
-								.onChange(of: defLevelEnd1) { _, _ in
-									defLevelEndFraction = functions.getFuelLevel(unit: defLevelEnd1)
+							Picker_FuelLevel1(label: "DEF Level", data: $defLevelEnd1, data1: Float(vehicleDetails?.defCapacity ?? 0), quantity: $defQuantityEnd)
+								.onChange(of: defLevelEnd1) { _, newFraction in
+									defQuantityEnd = Float(vehicleDetails?.defCapacity ?? 0) * newFraction
+									defLevelEndFraction = functions.getFuelLevel(unit: newFraction)
 								}
+						}
+						HStack {
+							Spacer()
+							Button {
+								showEndFluidChecks = true
+							} label: {
+								Label(fluidChecksTitle(endFluidChecks), systemImage: "drop.circle")
+							}
+							.buttonStyle(.bordered)
+							Spacer()
+						}
+						.sheet(isPresented: $showEndFluidChecks) {
+							FluidCheckSheet(
+								oilChecked: $endOilChecked,
+								engineCoolantChecked: $endEngineCoolantChecked,
+								secondaryCoolantChecked: $endSecondaryCoolantChecked,
+								powerSteeringChecked: $endPowerSteeringChecked,
+								brakeFluidChecked: $endBrakeFluidChecked,
+								transmissionFluidChecked: $endTransmissionFluidChecked,
+								rearAxleChecked: $endRearAxleChecked,
+								frontAxleChecked: $endFrontAxleChecked,
+								fuelWaterSeparatorChecked: $endFuelWaterSeparatorChecked,
+								airSystemWaterBleedChecked: $endAirSystemWaterBleedChecked
+							)
 						}
 					}
 				}
@@ -831,6 +1136,7 @@ struct EditTripLog: View {
 			.onAppear {
 				loadUnitsIfNeeded()
 				loadAvailableGroups()
+				loadAvailableFuelLogs()
 				// Seed vehicle picker from existing vehicleId
 				if selectedVehicle == nil, !vehicleId.isEmpty {
 					let name = vehicleId
@@ -850,7 +1156,10 @@ struct EditTripLog: View {
 					}
 				}
 				refreshVehicleDetails()
-				recomputeFuelQuantities()
+				backfillDefQuantities()
+				seedStopQuantities()
+				// Only the consumed estimate: the stored quantities may be typed exact figures.
+				recomputeFuelConsumed()
 				// Load fuel log data for enroute stops so fields are pre-populated in edit mode
 				if fuelAdded1Log != "" {
 					let d = getFuelLogData(saveLogId: fuelAdded1Log)
@@ -858,6 +1167,11 @@ struct EditTripLog: View {
 					fuelLocation1 = d.fuelLocation; oilAdded1 = d.oilAdded; defAdded1 = d.defAdded
 					fuelNotes1 = d.fuelNotes; oilChecked1 = d.oilChecked; engineCoolantChecked1 = d.engineCoolantChecked; secondaryCoolantChecked1 = d.secondaryCoolantChecked; powerSteeringChecked1 = d.powerSteeringChecked; brakeFluidChecked1 = d.brakeFluidChecked; transmissionFluidChecked1 = d.transmissionFluidChecked; rearAxleChecked1 = d.rearAxleChecked; frontAxleChecked1 = d.frontAxleChecked; fuelWaterSeparatorChecked1 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked1 = d.airSystemWaterBleedChecked; fuelDateTime1 = d.fuelDateTime
 					fuelStop1Image1 = d.image1; fuelStop1Image2 = d.image2; fuelStop1Image3 = d.image3
+					stopFuelLevelStart1 = d.fuelLevelStart; stopFuelLevelEnd1 = d.fuelLevelEnd; stopDefLevel1 = d.defLevel; stopFuelType1 = d.fuelType
+					stopFuelQtyStart1 = d.fuelQuantityStart; stopFuelQtyEnd1 = d.fuelQuantityEnd; stopDefQty1 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+					stopDefLevelStart1 = d.defLevelStart; stopDefQtyStart1 = d.defQuantityStart
+					stopDefPrice1 = d.defPrice
+					if let exit = d.fuelExitTime { fuelExitTime1 = max(exit, fuelDateTime1) }
 					createFuelLog1 = true
 				}
 				if fuelAdded2Log != "" {
@@ -866,6 +1180,11 @@ struct EditTripLog: View {
 					fuelLocation2 = d.fuelLocation; oilAdded2 = d.oilAdded; defAdded2 = d.defAdded
 					fuelNotes2 = d.fuelNotes; oilChecked2 = d.oilChecked; engineCoolantChecked2 = d.engineCoolantChecked; secondaryCoolantChecked2 = d.secondaryCoolantChecked; powerSteeringChecked2 = d.powerSteeringChecked; brakeFluidChecked2 = d.brakeFluidChecked; transmissionFluidChecked2 = d.transmissionFluidChecked; rearAxleChecked2 = d.rearAxleChecked; frontAxleChecked2 = d.frontAxleChecked; fuelWaterSeparatorChecked2 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked2 = d.airSystemWaterBleedChecked; fuelDateTime2 = d.fuelDateTime
 					fuelStop2Image1 = d.image1; fuelStop2Image2 = d.image2; fuelStop2Image3 = d.image3
+					stopFuelLevelStart2 = d.fuelLevelStart; stopFuelLevelEnd2 = d.fuelLevelEnd; stopDefLevel2 = d.defLevel; stopFuelType2 = d.fuelType
+					stopFuelQtyStart2 = d.fuelQuantityStart; stopFuelQtyEnd2 = d.fuelQuantityEnd; stopDefQty2 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+					stopDefLevelStart2 = d.defLevelStart; stopDefQtyStart2 = d.defQuantityStart
+					stopDefPrice2 = d.defPrice
+					if let exit = d.fuelExitTime { fuelExitTime2 = max(exit, fuelDateTime2) }
 					createFuelLog2 = true
 				}
 				if fuelAdded3Log != "" {
@@ -874,6 +1193,11 @@ struct EditTripLog: View {
 					fuelLocation3 = d.fuelLocation; oilAdded3 = d.oilAdded; defAdded3 = d.defAdded
 					fuelNotes3 = d.fuelNotes; oilChecked3 = d.oilChecked; engineCoolantChecked3 = d.engineCoolantChecked; secondaryCoolantChecked3 = d.secondaryCoolantChecked; powerSteeringChecked3 = d.powerSteeringChecked; brakeFluidChecked3 = d.brakeFluidChecked; transmissionFluidChecked3 = d.transmissionFluidChecked; rearAxleChecked3 = d.rearAxleChecked; frontAxleChecked3 = d.frontAxleChecked; fuelWaterSeparatorChecked3 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked3 = d.airSystemWaterBleedChecked; fuelDateTime3 = d.fuelDateTime
 					fuelStop3Image1 = d.image1; fuelStop3Image2 = d.image2; fuelStop3Image3 = d.image3
+					stopFuelLevelStart3 = d.fuelLevelStart; stopFuelLevelEnd3 = d.fuelLevelEnd; stopDefLevel3 = d.defLevel; stopFuelType3 = d.fuelType
+					stopFuelQtyStart3 = d.fuelQuantityStart; stopFuelQtyEnd3 = d.fuelQuantityEnd; stopDefQty3 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+					stopDefLevelStart3 = d.defLevelStart; stopDefQtyStart3 = d.defQuantityStart
+					stopDefPrice3 = d.defPrice
+					if let exit = d.fuelExitTime { fuelExitTime3 = max(exit, fuelDateTime3) }
 					createFuelLog3 = true
 				}
 				if fuelAdded4Log != "" {
@@ -882,6 +1206,11 @@ struct EditTripLog: View {
 					fuelLocation4 = d.fuelLocation; oilAdded4 = d.oilAdded; defAdded4 = d.defAdded
 					fuelNotes4 = d.fuelNotes; oilChecked4 = d.oilChecked; engineCoolantChecked4 = d.engineCoolantChecked; secondaryCoolantChecked4 = d.secondaryCoolantChecked; powerSteeringChecked4 = d.powerSteeringChecked; brakeFluidChecked4 = d.brakeFluidChecked; transmissionFluidChecked4 = d.transmissionFluidChecked; rearAxleChecked4 = d.rearAxleChecked; frontAxleChecked4 = d.frontAxleChecked; fuelWaterSeparatorChecked4 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked4 = d.airSystemWaterBleedChecked; fuelDateTime4 = d.fuelDateTime
 					fuelStop4Image1 = d.image1; fuelStop4Image2 = d.image2; fuelStop4Image3 = d.image3
+					stopFuelLevelStart4 = d.fuelLevelStart; stopFuelLevelEnd4 = d.fuelLevelEnd; stopDefLevel4 = d.defLevel; stopFuelType4 = d.fuelType
+					stopFuelQtyStart4 = d.fuelQuantityStart; stopFuelQtyEnd4 = d.fuelQuantityEnd; stopDefQty4 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+					stopDefLevelStart4 = d.defLevelStart; stopDefQtyStart4 = d.defQuantityStart
+					stopDefPrice4 = d.defPrice
+					if let exit = d.fuelExitTime { fuelExitTime4 = max(exit, fuelDateTime4) }
 					createFuelLog4 = true
 				}
 				if fuelAdded5Log != "" {
@@ -890,6 +1219,11 @@ struct EditTripLog: View {
 					fuelLocation5 = d.fuelLocation; oilAdded5 = d.oilAdded; defAdded5 = d.defAdded
 					fuelNotes5 = d.fuelNotes; oilChecked5 = d.oilChecked; engineCoolantChecked5 = d.engineCoolantChecked; secondaryCoolantChecked5 = d.secondaryCoolantChecked; powerSteeringChecked5 = d.powerSteeringChecked; brakeFluidChecked5 = d.brakeFluidChecked; transmissionFluidChecked5 = d.transmissionFluidChecked; rearAxleChecked5 = d.rearAxleChecked; frontAxleChecked5 = d.frontAxleChecked; fuelWaterSeparatorChecked5 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked5 = d.airSystemWaterBleedChecked; fuelDateTime5 = d.fuelDateTime
 					fuelStop5Image1 = d.image1; fuelStop5Image2 = d.image2; fuelStop5Image3 = d.image3
+					stopFuelLevelStart5 = d.fuelLevelStart; stopFuelLevelEnd5 = d.fuelLevelEnd; stopDefLevel5 = d.defLevel; stopFuelType5 = d.fuelType
+					stopFuelQtyStart5 = d.fuelQuantityStart; stopFuelQtyEnd5 = d.fuelQuantityEnd; stopDefQty5 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+					stopDefLevelStart5 = d.defLevelStart; stopDefQtyStart5 = d.defQuantityStart
+					stopDefPrice5 = d.defPrice
+					if let exit = d.fuelExitTime { fuelExitTime5 = max(exit, fuelDateTime5) }
 					createFuelLog5 = true
 				}
 				if fuelAdded6Log != "" {
@@ -898,6 +1232,11 @@ struct EditTripLog: View {
 					fuelLocation6 = d.fuelLocation; oilAdded6 = d.oilAdded; defAdded6 = d.defAdded
 					fuelNotes6 = d.fuelNotes; oilChecked6 = d.oilChecked; engineCoolantChecked6 = d.engineCoolantChecked; secondaryCoolantChecked6 = d.secondaryCoolantChecked; powerSteeringChecked6 = d.powerSteeringChecked; brakeFluidChecked6 = d.brakeFluidChecked; transmissionFluidChecked6 = d.transmissionFluidChecked; rearAxleChecked6 = d.rearAxleChecked; frontAxleChecked6 = d.frontAxleChecked; fuelWaterSeparatorChecked6 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked6 = d.airSystemWaterBleedChecked; fuelDateTime6 = d.fuelDateTime
 					fuelStop6Image1 = d.image1; fuelStop6Image2 = d.image2; fuelStop6Image3 = d.image3
+					stopFuelLevelStart6 = d.fuelLevelStart; stopFuelLevelEnd6 = d.fuelLevelEnd; stopDefLevel6 = d.defLevel; stopFuelType6 = d.fuelType
+					stopFuelQtyStart6 = d.fuelQuantityStart; stopFuelQtyEnd6 = d.fuelQuantityEnd; stopDefQty6 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+					stopDefLevelStart6 = d.defLevelStart; stopDefQtyStart6 = d.defQuantityStart
+					stopDefPrice6 = d.defPrice
+					if let exit = d.fuelExitTime { fuelExitTime6 = max(exit, fuelDateTime6) }
 					createFuelLog6 = true
 				}
 			}
@@ -908,8 +1247,15 @@ struct EditTripLog: View {
 				}
 				ToolbarItem(placement: .automatic) {
 					Button("Save") {
-						isEditing.toggle()
-						updateItem()
+						// End editing so any field the user was still typing in writes
+						// its value to the binding before it is read below.
+						commitPendingTextEdits()
+						// Give the field one run-loop turn to publish its committed
+						// value into @State, then persist and leave edit mode.
+						DispatchQueue.main.async {
+							updateItem()
+							isEditing = false
+						}
 					}
 					.buttonStyle(GrowingButton(buttonColor: Color.red))
 				}
@@ -941,6 +1287,17 @@ struct EditTripLog: View {
 									fuelStop1Image1 = fuelLogData.image1
 									fuelStop1Image2 = fuelLogData.image2
 									fuelStop1Image3 = fuelLogData.image3
+									stopFuelLevelStart1 = fuelLogData.fuelLevelStart
+									stopFuelLevelEnd1 = fuelLogData.fuelLevelEnd
+									stopDefLevel1 = fuelLogData.defLevel
+									stopFuelType1 = fuelLogData.fuelType
+									stopFuelQtyStart1 = fuelLogData.fuelQuantityStart
+									stopFuelQtyEnd1 = fuelLogData.fuelQuantityEnd
+									stopDefQty1 = defQuantityOrDerived(fuelLogData, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+									stopDefLevelStart1 = fuelLogData.defLevelStart
+									stopDefQtyStart1 = fuelLogData.defQuantityStart
+									stopDefPrice1 = fuelLogData.defPrice
+									if let exit = fuelLogData.fuelExitTime { fuelExitTime1 = max(exit, fuelDateTime1) }
 									createFuelLog1 = true
 								}
 								if fuelAdded2Log != "" {
@@ -957,6 +1314,17 @@ struct EditTripLog: View {
 									fuelStop2Image1 = fuelLogData.image1
 									fuelStop2Image2 = fuelLogData.image2
 									fuelStop2Image3 = fuelLogData.image3
+									stopFuelLevelStart2 = fuelLogData.fuelLevelStart
+									stopFuelLevelEnd2 = fuelLogData.fuelLevelEnd
+									stopDefLevel2 = fuelLogData.defLevel
+									stopFuelType2 = fuelLogData.fuelType
+									stopFuelQtyStart2 = fuelLogData.fuelQuantityStart
+									stopFuelQtyEnd2 = fuelLogData.fuelQuantityEnd
+									stopDefQty2 = defQuantityOrDerived(fuelLogData, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+									stopDefLevelStart2 = fuelLogData.defLevelStart
+									stopDefQtyStart2 = fuelLogData.defQuantityStart
+									stopDefPrice2 = fuelLogData.defPrice
+									if let exit = fuelLogData.fuelExitTime { fuelExitTime2 = max(exit, fuelDateTime2) }
 									createFuelLog2 = true
 								}
 								if fuelAdded3Log != "" {
@@ -973,6 +1341,17 @@ struct EditTripLog: View {
 									fuelStop3Image1 = fuelLogData.image1
 									fuelStop3Image2 = fuelLogData.image2
 									fuelStop3Image3 = fuelLogData.image3
+									stopFuelLevelStart3 = fuelLogData.fuelLevelStart
+									stopFuelLevelEnd3 = fuelLogData.fuelLevelEnd
+									stopDefLevel3 = fuelLogData.defLevel
+									stopFuelType3 = fuelLogData.fuelType
+									stopFuelQtyStart3 = fuelLogData.fuelQuantityStart
+									stopFuelQtyEnd3 = fuelLogData.fuelQuantityEnd
+									stopDefQty3 = defQuantityOrDerived(fuelLogData, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+									stopDefLevelStart3 = fuelLogData.defLevelStart
+									stopDefQtyStart3 = fuelLogData.defQuantityStart
+									stopDefPrice3 = fuelLogData.defPrice
+									if let exit = fuelLogData.fuelExitTime { fuelExitTime3 = max(exit, fuelDateTime3) }
 									createFuelLog3 = true
 								}
 								if fuelAdded4Log != "" {
@@ -989,6 +1368,17 @@ struct EditTripLog: View {
 									fuelStop4Image1 = fuelLogData.image1
 									fuelStop4Image2 = fuelLogData.image2
 									fuelStop4Image3 = fuelLogData.image3
+									stopFuelLevelStart4 = fuelLogData.fuelLevelStart
+									stopFuelLevelEnd4 = fuelLogData.fuelLevelEnd
+									stopDefLevel4 = fuelLogData.defLevel
+									stopFuelType4 = fuelLogData.fuelType
+									stopFuelQtyStart4 = fuelLogData.fuelQuantityStart
+									stopFuelQtyEnd4 = fuelLogData.fuelQuantityEnd
+									stopDefQty4 = defQuantityOrDerived(fuelLogData, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+									stopDefLevelStart4 = fuelLogData.defLevelStart
+									stopDefQtyStart4 = fuelLogData.defQuantityStart
+									stopDefPrice4 = fuelLogData.defPrice
+									if let exit = fuelLogData.fuelExitTime { fuelExitTime4 = max(exit, fuelDateTime4) }
 									createFuelLog4 = true
 								}
 								if fuelAdded5Log != "" {
@@ -1005,6 +1395,17 @@ struct EditTripLog: View {
 									fuelStop5Image1 = fuelLogData.image1
 									fuelStop5Image2 = fuelLogData.image2
 									fuelStop5Image3 = fuelLogData.image3
+									stopFuelLevelStart5 = fuelLogData.fuelLevelStart
+									stopFuelLevelEnd5 = fuelLogData.fuelLevelEnd
+									stopDefLevel5 = fuelLogData.defLevel
+									stopFuelType5 = fuelLogData.fuelType
+									stopFuelQtyStart5 = fuelLogData.fuelQuantityStart
+									stopFuelQtyEnd5 = fuelLogData.fuelQuantityEnd
+									stopDefQty5 = defQuantityOrDerived(fuelLogData, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+									stopDefLevelStart5 = fuelLogData.defLevelStart
+									stopDefQtyStart5 = fuelLogData.defQuantityStart
+									stopDefPrice5 = fuelLogData.defPrice
+									if let exit = fuelLogData.fuelExitTime { fuelExitTime5 = max(exit, fuelDateTime5) }
 									createFuelLog5 = true
 								}
 								if fuelAdded6Log != "" {
@@ -1021,6 +1422,17 @@ struct EditTripLog: View {
 									fuelStop6Image1 = fuelLogData.image1
 									fuelStop6Image2 = fuelLogData.image2
 									fuelStop6Image3 = fuelLogData.image3
+									stopFuelLevelStart6 = fuelLogData.fuelLevelStart
+									stopFuelLevelEnd6 = fuelLogData.fuelLevelEnd
+									stopDefLevel6 = fuelLogData.defLevel
+									stopFuelType6 = fuelLogData.fuelType
+									stopFuelQtyStart6 = fuelLogData.fuelQuantityStart
+									stopFuelQtyEnd6 = fuelLogData.fuelQuantityEnd
+									stopDefQty6 = defQuantityOrDerived(fuelLogData, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+									stopDefLevelStart6 = fuelLogData.defLevelStart
+									stopDefQtyStart6 = fuelLogData.defQuantityStart
+									stopDefPrice6 = fuelLogData.defPrice
+									if let exit = fuelLogData.fuelExitTime { fuelExitTime6 = max(exit, fuelDateTime6) }
 									createFuelLog6 = true
 								}
 							}
@@ -1048,17 +1460,36 @@ struct EditTripLog: View {
 							HStack{LabelDataText(label: "Fuel Level", data: "\(dataSet.fuelLevelStart) \(dataSet.fuelQuantityStart)\(unit(UnitIndex.fuel))")}
 						}
 						if dataSet.defLevelFraction != "" {
-							let defQtyStart = dataSet.defLevel1 * Float(vehicleDetails?.defCapacity ?? 0)
+							let defQtyStart = dataSet.defQuantityStart > 0
+							? dataSet.defQuantityStart
+							: dataSet.defLevel1 * Float(vehicleDetails?.defCapacity ?? 0)
 							let defQtyStartText = defQtyStart > 0 ? " \(defQtyStart.formatted(.number.precision(.fractionLength(1))))\(unit(UnitIndex.def))" : ""
 							HStack{LabelDataText(label: "DEF Level", data: "\(dataSet.defLevelFraction)\(defQtyStartText)")}
 						}
 						if dataSet.locationStart != "" {
 							HStack{LabelDataText(label: "Location", data: "\(dataSet.locationStart)")}
 						}
+						let startChecks = checkedFluidList([
+							("Engine Oil", dataSet.startOilChecked),
+							("Engine Coolant", dataSet.startEngineCoolantChecked),
+							("Secondary Coolant", dataSet.startSecondaryCoolantChecked),
+							("Power Steering", dataSet.startPowerSteeringChecked),
+							("Brake", dataSet.startBrakeFluidChecked),
+							("Transmission", dataSet.startTransmissionFluidChecked),
+							("Rear Axle", dataSet.startRearAxleChecked),
+							("Front Axle", dataSet.startFrontAxleChecked),
+							("Fuel/Water Separator", dataSet.startFuelWaterSeparatorChecked),
+							("Air System Water Bleed", dataSet.startAirSystemWaterBleedChecked)
+						])
+						if !startChecks.isEmpty {
+							HStack{LabelDataText(label: "Fluids Checked", data: startChecks)}
+						}
 					}
 				}
 				
-				CardView {
+				// Hidden when no enroute stops were recorded
+				if hasStopsEnroute {
+					CardView {
 					VStack {
 						SectionText(label: "STOPS ENROUTE")
 						if dataSet.fuelAdded1 > 0 || !stopReason1.isEmpty {
@@ -1066,6 +1497,24 @@ struct EditTripLog: View {
 							if !stopReason1.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason1)} }
 							if !stopComment1.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment1)} }
 							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded1, fractionalLength: 1)}
+							if !fuelAdded1Log.isEmpty {
+								if !stopFuelType1.isEmpty { HStack{LabelDataText(label: "  Fuel Type", data: stopFuelType1)} }
+								let fuelStartText1 = tankReading(fraction: stopFuelLevelStart1, quantity: stopFuelQtyStart1, unitLabel: unit(UnitIndex.fuel))
+								let fuelEndText1 = tankReading(fraction: stopFuelLevelEnd1, quantity: stopFuelQtyEnd1, unitLabel: unit(UnitIndex.fuel))
+								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText1) to \(fuelEndText1)")}
+								if stopDefLevelStart1 > 0 || stopDefQtyStart1 > 0 {
+									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart1, quantity: stopDefQtyStart1, unitLabel: unit(UnitIndex.def)))}
+								}
+								if stopDefPrice1 > 0 {
+									HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice1, unit: "/ \(unit(UnitIndex.def))")}
+									if defAdded1 > 0 {
+										HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice1 * defAdded1, unit: "")}
+									}
+								}
+								if stopDefLevel1 > 0 || stopDefQty1 > 0 {
+									HStack{LabelDataText(label: "  DEF Level End", data: tankReading(fraction: stopDefLevel1, quantity: stopDefQty1, unitLabel: unit(UnitIndex.def)))}
+								}
+							}
 							if fuelStop1Image1 != nil || fuelStop1Image2 != nil || fuelStop1Image3 != nil {
 								HStack(spacing: 8) {
 									FuelStop_ImageThumb(imageData: fuelStop1Image1)
@@ -1083,6 +1532,24 @@ struct EditTripLog: View {
 							if !stopReason2.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason2)} }
 							if !stopComment2.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment2)} }
 							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded2, fractionalLength: 1)}
+							if !fuelAdded2Log.isEmpty {
+								if !stopFuelType2.isEmpty { HStack{LabelDataText(label: "  Fuel Type", data: stopFuelType2)} }
+								let fuelStartText2 = tankReading(fraction: stopFuelLevelStart2, quantity: stopFuelQtyStart2, unitLabel: unit(UnitIndex.fuel))
+								let fuelEndText2 = tankReading(fraction: stopFuelLevelEnd2, quantity: stopFuelQtyEnd2, unitLabel: unit(UnitIndex.fuel))
+								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText2) to \(fuelEndText2)")}
+								if stopDefLevelStart2 > 0 || stopDefQtyStart2 > 0 {
+									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart2, quantity: stopDefQtyStart2, unitLabel: unit(UnitIndex.def)))}
+								}
+								if stopDefPrice2 > 0 {
+									HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice2, unit: "/ \(unit(UnitIndex.def))")}
+									if defAdded2 > 0 {
+										HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice2 * defAdded2, unit: "")}
+									}
+								}
+								if stopDefLevel2 > 0 || stopDefQty2 > 0 {
+									HStack{LabelDataText(label: "  DEF Level End", data: tankReading(fraction: stopDefLevel2, quantity: stopDefQty2, unitLabel: unit(UnitIndex.def)))}
+								}
+							}
 							if fuelStop2Image1 != nil || fuelStop2Image2 != nil || fuelStop2Image3 != nil {
 								HStack(spacing: 8) {
 									FuelStop_ImageThumb(imageData: fuelStop2Image1)
@@ -1100,6 +1567,24 @@ struct EditTripLog: View {
 							if !stopReason3.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason3)} }
 							if !stopComment3.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment3)} }
 							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded3, fractionalLength: 1)}
+							if !fuelAdded3Log.isEmpty {
+								if !stopFuelType3.isEmpty { HStack{LabelDataText(label: "  Fuel Type", data: stopFuelType3)} }
+								let fuelStartText3 = tankReading(fraction: stopFuelLevelStart3, quantity: stopFuelQtyStart3, unitLabel: unit(UnitIndex.fuel))
+								let fuelEndText3 = tankReading(fraction: stopFuelLevelEnd3, quantity: stopFuelQtyEnd3, unitLabel: unit(UnitIndex.fuel))
+								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText3) to \(fuelEndText3)")}
+								if stopDefLevelStart3 > 0 || stopDefQtyStart3 > 0 {
+									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart3, quantity: stopDefQtyStart3, unitLabel: unit(UnitIndex.def)))}
+								}
+								if stopDefPrice3 > 0 {
+									HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice3, unit: "/ \(unit(UnitIndex.def))")}
+									if defAdded3 > 0 {
+										HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice3 * defAdded3, unit: "")}
+									}
+								}
+								if stopDefLevel3 > 0 || stopDefQty3 > 0 {
+									HStack{LabelDataText(label: "  DEF Level End", data: tankReading(fraction: stopDefLevel3, quantity: stopDefQty3, unitLabel: unit(UnitIndex.def)))}
+								}
+							}
 							if fuelStop3Image1 != nil || fuelStop3Image2 != nil || fuelStop3Image3 != nil {
 								HStack(spacing: 8) {
 									FuelStop_ImageThumb(imageData: fuelStop3Image1)
@@ -1117,6 +1602,24 @@ struct EditTripLog: View {
 							if !stopReason4.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason4)} }
 							if !stopComment4.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment4)} }
 							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded4, fractionalLength: 1)}
+							if !fuelAdded4Log.isEmpty {
+								if !stopFuelType4.isEmpty { HStack{LabelDataText(label: "  Fuel Type", data: stopFuelType4)} }
+								let fuelStartText4 = tankReading(fraction: stopFuelLevelStart4, quantity: stopFuelQtyStart4, unitLabel: unit(UnitIndex.fuel))
+								let fuelEndText4 = tankReading(fraction: stopFuelLevelEnd4, quantity: stopFuelQtyEnd4, unitLabel: unit(UnitIndex.fuel))
+								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText4) to \(fuelEndText4)")}
+								if stopDefLevelStart4 > 0 || stopDefQtyStart4 > 0 {
+									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart4, quantity: stopDefQtyStart4, unitLabel: unit(UnitIndex.def)))}
+								}
+								if stopDefPrice4 > 0 {
+									HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice4, unit: "/ \(unit(UnitIndex.def))")}
+									if defAdded4 > 0 {
+										HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice4 * defAdded4, unit: "")}
+									}
+								}
+								if stopDefLevel4 > 0 || stopDefQty4 > 0 {
+									HStack{LabelDataText(label: "  DEF Level End", data: tankReading(fraction: stopDefLevel4, quantity: stopDefQty4, unitLabel: unit(UnitIndex.def)))}
+								}
+							}
 							if fuelStop4Image1 != nil || fuelStop4Image2 != nil || fuelStop4Image3 != nil {
 								HStack(spacing: 8) {
 									FuelStop_ImageThumb(imageData: fuelStop4Image1)
@@ -1134,6 +1637,24 @@ struct EditTripLog: View {
 							if !stopReason5.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason5)} }
 							if !stopComment5.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment5)} }
 							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded5, fractionalLength: 1)}
+							if !fuelAdded5Log.isEmpty {
+								if !stopFuelType5.isEmpty { HStack{LabelDataText(label: "  Fuel Type", data: stopFuelType5)} }
+								let fuelStartText5 = tankReading(fraction: stopFuelLevelStart5, quantity: stopFuelQtyStart5, unitLabel: unit(UnitIndex.fuel))
+								let fuelEndText5 = tankReading(fraction: stopFuelLevelEnd5, quantity: stopFuelQtyEnd5, unitLabel: unit(UnitIndex.fuel))
+								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText5) to \(fuelEndText5)")}
+								if stopDefLevelStart5 > 0 || stopDefQtyStart5 > 0 {
+									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart5, quantity: stopDefQtyStart5, unitLabel: unit(UnitIndex.def)))}
+								}
+								if stopDefPrice5 > 0 {
+									HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice5, unit: "/ \(unit(UnitIndex.def))")}
+									if defAdded5 > 0 {
+										HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice5 * defAdded5, unit: "")}
+									}
+								}
+								if stopDefLevel5 > 0 || stopDefQty5 > 0 {
+									HStack{LabelDataText(label: "  DEF Level End", data: tankReading(fraction: stopDefLevel5, quantity: stopDefQty5, unitLabel: unit(UnitIndex.def)))}
+								}
+							}
 							if fuelStop5Image1 != nil || fuelStop5Image2 != nil || fuelStop5Image3 != nil {
 								HStack(spacing: 8) {
 									FuelStop_ImageThumb(imageData: fuelStop5Image1)
@@ -1151,6 +1672,24 @@ struct EditTripLog: View {
 							if !stopReason6.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason6)} }
 							if !stopComment6.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment6)} }
 							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded6, fractionalLength: 1)}
+							if !fuelAdded6Log.isEmpty {
+								if !stopFuelType6.isEmpty { HStack{LabelDataText(label: "  Fuel Type", data: stopFuelType6)} }
+								let fuelStartText6 = tankReading(fraction: stopFuelLevelStart6, quantity: stopFuelQtyStart6, unitLabel: unit(UnitIndex.fuel))
+								let fuelEndText6 = tankReading(fraction: stopFuelLevelEnd6, quantity: stopFuelQtyEnd6, unitLabel: unit(UnitIndex.fuel))
+								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText6) to \(fuelEndText6)")}
+								if stopDefLevelStart6 > 0 || stopDefQtyStart6 > 0 {
+									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart6, quantity: stopDefQtyStart6, unitLabel: unit(UnitIndex.def)))}
+								}
+								if stopDefPrice6 > 0 {
+									HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice6, unit: "/ \(unit(UnitIndex.def))")}
+									if defAdded6 > 0 {
+										HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice6 * defAdded6, unit: "")}
+									}
+								}
+								if stopDefLevel6 > 0 || stopDefQty6 > 0 {
+									HStack{LabelDataText(label: "  DEF Level End", data: tankReading(fraction: stopDefLevel6, quantity: stopDefQty6, unitLabel: unit(UnitIndex.def)))}
+								}
+							}
 							if fuelStop6Image1 != nil || fuelStop6Image2 != nil || fuelStop6Image3 != nil {
 								HStack(spacing: 8) {
 									FuelStop_ImageThumb(imageData: fuelStop6Image1)
@@ -1182,6 +1721,7 @@ struct EditTripLog: View {
 							HStack{LabelDataText(label: "Time Moving", data: "\(mH)h \(String(format: "%02d", mM))m")}
 						}
 					}
+					}
 				}
 				
 				CardView {
@@ -1196,12 +1736,29 @@ struct EditTripLog: View {
 							HStack{LabelDataText(label: "Fuel Level", data: "\(dataSet.fuelLevelEnd) \(dataSet.fuelQuantityEnd)\(unit(UnitIndex.fuel))")}
 						}
 						if dataSet.defLevelEndFraction != "" {
-							let defQtyEnd = dataSet.defLevelEnd1 * Float(vehicleDetails?.defCapacity ?? 0)
+							let defQtyEnd = dataSet.defQuantityEnd > 0
+							? dataSet.defQuantityEnd
+							: dataSet.defLevelEnd1 * Float(vehicleDetails?.defCapacity ?? 0)
 							let defQtyEndText = defQtyEnd > 0 ? " \(defQtyEnd.formatted(.number.precision(.fractionLength(1))))\(unit(UnitIndex.def))" : ""
 							HStack{LabelDataText(label: "DEF Level", data: "\(dataSet.defLevelEndFraction)\(defQtyEndText)")}
 						}
 						if dataSet.locationEnd != "" {
 							HStack{LabelDataText(label: "Location", data: "\(dataSet.locationEnd)")}
+						}
+						let endChecks = checkedFluidList([
+							("Engine Oil", dataSet.endOilChecked),
+							("Engine Coolant", dataSet.endEngineCoolantChecked),
+							("Secondary Coolant", dataSet.endSecondaryCoolantChecked),
+							("Power Steering", dataSet.endPowerSteeringChecked),
+							("Brake", dataSet.endBrakeFluidChecked),
+							("Transmission", dataSet.endTransmissionFluidChecked),
+							("Rear Axle", dataSet.endRearAxleChecked),
+							("Front Axle", dataSet.endFrontAxleChecked),
+							("Fuel/Water Separator", dataSet.endFuelWaterSeparatorChecked),
+							("Air System Water Bleed", dataSet.endAirSystemWaterBleedChecked)
+						])
+						if !endChecks.isEmpty {
+							HStack{LabelDataText(label: "Fluids Checked", data: endChecks)}
 						}
 					}
 				}
@@ -1324,12 +1881,15 @@ struct EditTripLog: View {
 						}
 					}
 				}
-				CardView {
+				// Hidden when no images are attached
+				if hasGraphics {
+					CardView {
 					VStack {
 						SectionText(label: "TRAVEL GRAPHICS")
 						Image_View_Details(label:"1", imageData: dataSet.image1, imageDescription: dataSet.image1Description)
 						Image_View_Details(label:"2", imageData: dataSet.image2, imageDescription: dataSet.image2Description)
 						Image_View_Details(label:"3", imageData: dataSet.image3, imageDescription: dataSet.image3Description)
+					}
 					}
 				}
 
@@ -1411,24 +1971,84 @@ struct EditTripLog: View {
 	/// - Updates `Vehicle8` mileage/engine hours if the trip extends them.
 	/// - Credits towed vehicle virtual mileage when applicable.
 	private func updateItem() {
+		// The quantity fields are authoritative — a digital readout can be typed straight in.
+		// Bring the eighths dropdown and its fraction label back into line with whatever the
+		// quantities ended up as, so the record reopens self-consistent.
+		var levelStartFraction = fuelLevelStart1
+		var levelEndFraction = fuelLevelEnd1
+		var levelStartText = fuelLevelStart
+		var levelEndText = fuelLevelEnd
+		let tankCapacity = Float(vehicleDetails?.fuelCapacity ?? 0)
+		if tankCapacity > 0 {
+			levelStartFraction = nearestFuelEighth(fuelQuantityStart / tankCapacity)
+			levelEndFraction = nearestFuelEighth(fuelQuantityEnd / tankCapacity)
+			levelStartText = functions.getFuelLevel(unit: levelStartFraction)
+			levelEndText = functions.getFuelLevel(unit: levelEndFraction)
+		}
+		var defStartFraction = defLevel1
+		var defEndFraction = defLevelEnd1
+		var defStartText = defLevelFraction
+		var defEndText = defLevelEndFraction
+		let defTankCapacity = Float(vehicleDetails?.defCapacity ?? 0)
+		if defTankCapacity > 0 {
+			defStartFraction = nearestFuelEighth(defQuantityStart / defTankCapacity)
+			defEndFraction = nearestFuelEighth(defQuantityEnd / defTankCapacity)
+			defStartText = functions.getFuelLevel(unit: defStartFraction)
+			defEndText = functions.getFuelLevel(unit: defEndFraction)
+		}
+		// Each stop's quantities are authoritative too. Snap its dropdowns to match, and hand
+		// both the quantity and the reconciled fraction down to the linked fuel log.
+		let stopFuelCapacity = Float(vehicleDetails?.fuelCapacity ?? 0)
+		let stopDefCapacity = Float(vehicleDetails?.defCapacity ?? 0)
+		let stopLevelStart1 = stopFuelCapacity > 0 ? nearestFuelEighth(stopFuelQtyStart1 / stopFuelCapacity) : stopFuelLevelStart1
+		let stopLevelEnd1 = stopFuelCapacity > 0 ? nearestFuelEighth(stopFuelQtyEnd1 / stopFuelCapacity) : stopFuelLevelEnd1
+		let stopDefLevelFinal1 = stopDefCapacity > 0 ? nearestFuelEighth(stopDefQty1 / stopDefCapacity) : stopDefLevel1
+		let stopDefLevelStartFinal1 = stopDefCapacity > 0 ? nearestFuelEighth(stopDefQtyStart1 / stopDefCapacity) : stopDefLevelStart1
+		let stopLevelStart2 = stopFuelCapacity > 0 ? nearestFuelEighth(stopFuelQtyStart2 / stopFuelCapacity) : stopFuelLevelStart2
+		let stopLevelEnd2 = stopFuelCapacity > 0 ? nearestFuelEighth(stopFuelQtyEnd2 / stopFuelCapacity) : stopFuelLevelEnd2
+		let stopDefLevelFinal2 = stopDefCapacity > 0 ? nearestFuelEighth(stopDefQty2 / stopDefCapacity) : stopDefLevel2
+		let stopDefLevelStartFinal2 = stopDefCapacity > 0 ? nearestFuelEighth(stopDefQtyStart2 / stopDefCapacity) : stopDefLevelStart2
+		let stopLevelStart3 = stopFuelCapacity > 0 ? nearestFuelEighth(stopFuelQtyStart3 / stopFuelCapacity) : stopFuelLevelStart3
+		let stopLevelEnd3 = stopFuelCapacity > 0 ? nearestFuelEighth(stopFuelQtyEnd3 / stopFuelCapacity) : stopFuelLevelEnd3
+		let stopDefLevelFinal3 = stopDefCapacity > 0 ? nearestFuelEighth(stopDefQty3 / stopDefCapacity) : stopDefLevel3
+		let stopDefLevelStartFinal3 = stopDefCapacity > 0 ? nearestFuelEighth(stopDefQtyStart3 / stopDefCapacity) : stopDefLevelStart3
+		let stopLevelStart4 = stopFuelCapacity > 0 ? nearestFuelEighth(stopFuelQtyStart4 / stopFuelCapacity) : stopFuelLevelStart4
+		let stopLevelEnd4 = stopFuelCapacity > 0 ? nearestFuelEighth(stopFuelQtyEnd4 / stopFuelCapacity) : stopFuelLevelEnd4
+		let stopDefLevelFinal4 = stopDefCapacity > 0 ? nearestFuelEighth(stopDefQty4 / stopDefCapacity) : stopDefLevel4
+		let stopDefLevelStartFinal4 = stopDefCapacity > 0 ? nearestFuelEighth(stopDefQtyStart4 / stopDefCapacity) : stopDefLevelStart4
+		let stopLevelStart5 = stopFuelCapacity > 0 ? nearestFuelEighth(stopFuelQtyStart5 / stopFuelCapacity) : stopFuelLevelStart5
+		let stopLevelEnd5 = stopFuelCapacity > 0 ? nearestFuelEighth(stopFuelQtyEnd5 / stopFuelCapacity) : stopFuelLevelEnd5
+		let stopDefLevelFinal5 = stopDefCapacity > 0 ? nearestFuelEighth(stopDefQty5 / stopDefCapacity) : stopDefLevel5
+		let stopDefLevelStartFinal5 = stopDefCapacity > 0 ? nearestFuelEighth(stopDefQtyStart5 / stopDefCapacity) : stopDefLevelStart5
+		let stopLevelStart6 = stopFuelCapacity > 0 ? nearestFuelEighth(stopFuelQtyStart6 / stopFuelCapacity) : stopFuelLevelStart6
+		let stopLevelEnd6 = stopFuelCapacity > 0 ? nearestFuelEighth(stopFuelQtyEnd6 / stopFuelCapacity) : stopFuelLevelEnd6
+		let stopDefLevelFinal6 = stopDefCapacity > 0 ? nearestFuelEighth(stopDefQty6 / stopDefCapacity) : stopDefLevel6
+		let stopDefLevelStartFinal6 = stopDefCapacity > 0 ? nearestFuelEighth(stopDefQtyStart6 / stopDefCapacity) : stopDefLevelStart6
+		// A stop's exit time can never precede its entry time.
+		let stopExit1 = max(fuelExitTime1, fuelDateTime1)
+		let stopExit2 = max(fuelExitTime2, fuelDateTime2)
+		let stopExit3 = max(fuelExitTime3, fuelDateTime3)
+		let stopExit4 = max(fuelExitTime4, fuelDateTime4)
+		let stopExit5 = max(fuelExitTime5, fuelDateTime5)
+		let stopExit6 = max(fuelExitTime6, fuelDateTime6)
 		// save fuel log(s) first to return the fuel log id(s) for saving
 		if createFuelLog1 {
-			fuelAdded1Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer1), saveEngineHours: fuelEngHours1, saveQuantity: Int(fuelAdded1), savePrice: fuelPrice1, saveLocation: fuelLocation1, saveLogId: fuelAdded1Log, saveOil: oilAdded1, saveDEF: defAdded1, saveNotes: fuelNotes1, saveOilChecked: oilChecked1, saveEngineCoolantChecked: engineCoolantChecked1, saveSecondaryCoolantChecked: secondaryCoolantChecked1, savePowerSteeringChecked: powerSteeringChecked1, saveBrakeFluidChecked: brakeFluidChecked1, saveTransmissionFluidChecked: transmissionFluidChecked1, saveRearAxleChecked: rearAxleChecked1, saveFrontAxleChecked: frontAxleChecked1, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked1, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked1, saveDateTime: fuelDateTime1, saveImage1: fuelStop1Image1, saveImage2: fuelStop1Image2, saveImage3: fuelStop1Image3)
+			fuelAdded1Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer1), saveEngineHours: fuelEngHours1, saveQuantity: fuelAdded1, savePrice: fuelPrice1, saveLocation: fuelLocation1, saveLogId: fuelAdded1Log, saveOil: oilAdded1, saveDEF: defAdded1, saveNotes: fuelNotes1, saveOilChecked: oilChecked1, saveEngineCoolantChecked: engineCoolantChecked1, saveSecondaryCoolantChecked: secondaryCoolantChecked1, savePowerSteeringChecked: powerSteeringChecked1, saveBrakeFluidChecked: brakeFluidChecked1, saveTransmissionFluidChecked: transmissionFluidChecked1, saveRearAxleChecked: rearAxleChecked1, saveFrontAxleChecked: frontAxleChecked1, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked1, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked1, saveDateTime: fuelDateTime1, saveImage1: fuelStop1Image1, saveImage2: fuelStop1Image2, saveImage3: fuelStop1Image3, saveFuelLevelStart: stopLevelStart1, saveFuelLevelEnd: stopLevelEnd1, saveDefLevel: stopDefLevelFinal1, saveFuelType: stopFuelType1, saveMatchByOdometer: !stopsForcedNew.contains(1), saveExitTime: stopExit1, saveFuelQuantityStart: stopFuelQtyStart1, saveFuelQuantityEnd: stopFuelQtyEnd1, saveDefQuantity: stopDefQty1, saveDefLevelStart: stopDefLevelStartFinal1, saveDefQuantityStart: stopDefQtyStart1, saveDefPrice: stopDefPrice1)
 		}
 		if createFuelLog2 {
-			fuelAdded2Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer2), saveEngineHours: fuelEngHours2, saveQuantity: Int(fuelAdded2), savePrice: fuelPrice2, saveLocation: fuelLocation2, saveLogId: fuelAdded2Log, saveOil: oilAdded2, saveDEF: defAdded2, saveNotes: fuelNotes2, saveOilChecked: oilChecked2, saveEngineCoolantChecked: engineCoolantChecked2, saveSecondaryCoolantChecked: secondaryCoolantChecked2, savePowerSteeringChecked: powerSteeringChecked2, saveBrakeFluidChecked: brakeFluidChecked2, saveTransmissionFluidChecked: transmissionFluidChecked2, saveRearAxleChecked: rearAxleChecked2, saveFrontAxleChecked: frontAxleChecked2, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked2, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked2, saveDateTime: fuelDateTime2, saveImage1: fuelStop2Image1, saveImage2: fuelStop2Image2, saveImage3: fuelStop2Image3)
+			fuelAdded2Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer2), saveEngineHours: fuelEngHours2, saveQuantity: fuelAdded2, savePrice: fuelPrice2, saveLocation: fuelLocation2, saveLogId: fuelAdded2Log, saveOil: oilAdded2, saveDEF: defAdded2, saveNotes: fuelNotes2, saveOilChecked: oilChecked2, saveEngineCoolantChecked: engineCoolantChecked2, saveSecondaryCoolantChecked: secondaryCoolantChecked2, savePowerSteeringChecked: powerSteeringChecked2, saveBrakeFluidChecked: brakeFluidChecked2, saveTransmissionFluidChecked: transmissionFluidChecked2, saveRearAxleChecked: rearAxleChecked2, saveFrontAxleChecked: frontAxleChecked2, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked2, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked2, saveDateTime: fuelDateTime2, saveImage1: fuelStop2Image1, saveImage2: fuelStop2Image2, saveImage3: fuelStop2Image3, saveFuelLevelStart: stopLevelStart2, saveFuelLevelEnd: stopLevelEnd2, saveDefLevel: stopDefLevelFinal2, saveFuelType: stopFuelType2, saveMatchByOdometer: !stopsForcedNew.contains(2), saveExitTime: stopExit2, saveFuelQuantityStart: stopFuelQtyStart2, saveFuelQuantityEnd: stopFuelQtyEnd2, saveDefQuantity: stopDefQty2, saveDefLevelStart: stopDefLevelStartFinal2, saveDefQuantityStart: stopDefQtyStart2, saveDefPrice: stopDefPrice2)
 		}
 		if createFuelLog3 {
-			fuelAdded3Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer3), saveEngineHours: fuelEngHours3, saveQuantity: Int(fuelAdded3), savePrice: fuelPrice3, saveLocation: fuelLocation3, saveLogId: fuelAdded3Log, saveOil: oilAdded3, saveDEF: defAdded3, saveNotes: fuelNotes3, saveOilChecked: oilChecked3, saveEngineCoolantChecked: engineCoolantChecked3, saveSecondaryCoolantChecked: secondaryCoolantChecked3, savePowerSteeringChecked: powerSteeringChecked3, saveBrakeFluidChecked: brakeFluidChecked3, saveTransmissionFluidChecked: transmissionFluidChecked3, saveRearAxleChecked: rearAxleChecked3, saveFrontAxleChecked: frontAxleChecked3, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked3, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked3, saveDateTime: fuelDateTime3, saveImage1: fuelStop3Image1, saveImage2: fuelStop3Image2, saveImage3: fuelStop3Image3)
+			fuelAdded3Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer3), saveEngineHours: fuelEngHours3, saveQuantity: fuelAdded3, savePrice: fuelPrice3, saveLocation: fuelLocation3, saveLogId: fuelAdded3Log, saveOil: oilAdded3, saveDEF: defAdded3, saveNotes: fuelNotes3, saveOilChecked: oilChecked3, saveEngineCoolantChecked: engineCoolantChecked3, saveSecondaryCoolantChecked: secondaryCoolantChecked3, savePowerSteeringChecked: powerSteeringChecked3, saveBrakeFluidChecked: brakeFluidChecked3, saveTransmissionFluidChecked: transmissionFluidChecked3, saveRearAxleChecked: rearAxleChecked3, saveFrontAxleChecked: frontAxleChecked3, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked3, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked3, saveDateTime: fuelDateTime3, saveImage1: fuelStop3Image1, saveImage2: fuelStop3Image2, saveImage3: fuelStop3Image3, saveFuelLevelStart: stopLevelStart3, saveFuelLevelEnd: stopLevelEnd3, saveDefLevel: stopDefLevelFinal3, saveFuelType: stopFuelType3, saveMatchByOdometer: !stopsForcedNew.contains(3), saveExitTime: stopExit3, saveFuelQuantityStart: stopFuelQtyStart3, saveFuelQuantityEnd: stopFuelQtyEnd3, saveDefQuantity: stopDefQty3, saveDefLevelStart: stopDefLevelStartFinal3, saveDefQuantityStart: stopDefQtyStart3, saveDefPrice: stopDefPrice3)
 		}
 		if createFuelLog4 {
-			fuelAdded4Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer4), saveEngineHours: fuelEngHours4, saveQuantity: Int(fuelAdded4), savePrice: fuelPrice4, saveLocation: fuelLocation4, saveLogId: fuelAdded4Log, saveOil: oilAdded4, saveDEF: defAdded4, saveNotes: fuelNotes4, saveOilChecked: oilChecked4, saveEngineCoolantChecked: engineCoolantChecked4, saveSecondaryCoolantChecked: secondaryCoolantChecked4, savePowerSteeringChecked: powerSteeringChecked4, saveBrakeFluidChecked: brakeFluidChecked4, saveTransmissionFluidChecked: transmissionFluidChecked4, saveRearAxleChecked: rearAxleChecked4, saveFrontAxleChecked: frontAxleChecked4, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked4, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked4, saveDateTime: fuelDateTime4, saveImage1: fuelStop4Image1, saveImage2: fuelStop4Image2, saveImage3: fuelStop4Image3)
+			fuelAdded4Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer4), saveEngineHours: fuelEngHours4, saveQuantity: fuelAdded4, savePrice: fuelPrice4, saveLocation: fuelLocation4, saveLogId: fuelAdded4Log, saveOil: oilAdded4, saveDEF: defAdded4, saveNotes: fuelNotes4, saveOilChecked: oilChecked4, saveEngineCoolantChecked: engineCoolantChecked4, saveSecondaryCoolantChecked: secondaryCoolantChecked4, savePowerSteeringChecked: powerSteeringChecked4, saveBrakeFluidChecked: brakeFluidChecked4, saveTransmissionFluidChecked: transmissionFluidChecked4, saveRearAxleChecked: rearAxleChecked4, saveFrontAxleChecked: frontAxleChecked4, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked4, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked4, saveDateTime: fuelDateTime4, saveImage1: fuelStop4Image1, saveImage2: fuelStop4Image2, saveImage3: fuelStop4Image3, saveFuelLevelStart: stopLevelStart4, saveFuelLevelEnd: stopLevelEnd4, saveDefLevel: stopDefLevelFinal4, saveFuelType: stopFuelType4, saveMatchByOdometer: !stopsForcedNew.contains(4), saveExitTime: stopExit4, saveFuelQuantityStart: stopFuelQtyStart4, saveFuelQuantityEnd: stopFuelQtyEnd4, saveDefQuantity: stopDefQty4, saveDefLevelStart: stopDefLevelStartFinal4, saveDefQuantityStart: stopDefQtyStart4, saveDefPrice: stopDefPrice4)
 		}
 		if createFuelLog5 {
-			fuelAdded5Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer5), saveEngineHours: fuelEngHours5, saveQuantity: Int(fuelAdded5), savePrice: fuelPrice5, saveLocation: fuelLocation5, saveLogId: fuelAdded5Log, saveOil: oilAdded5, saveDEF: defAdded5, saveNotes: fuelNotes5, saveOilChecked: oilChecked5, saveEngineCoolantChecked: engineCoolantChecked5, saveSecondaryCoolantChecked: secondaryCoolantChecked5, savePowerSteeringChecked: powerSteeringChecked5, saveBrakeFluidChecked: brakeFluidChecked5, saveTransmissionFluidChecked: transmissionFluidChecked5, saveRearAxleChecked: rearAxleChecked5, saveFrontAxleChecked: frontAxleChecked5, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked5, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked5, saveDateTime: fuelDateTime5, saveImage1: fuelStop5Image1, saveImage2: fuelStop5Image2, saveImage3: fuelStop5Image3)
+			fuelAdded5Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer5), saveEngineHours: fuelEngHours5, saveQuantity: fuelAdded5, savePrice: fuelPrice5, saveLocation: fuelLocation5, saveLogId: fuelAdded5Log, saveOil: oilAdded5, saveDEF: defAdded5, saveNotes: fuelNotes5, saveOilChecked: oilChecked5, saveEngineCoolantChecked: engineCoolantChecked5, saveSecondaryCoolantChecked: secondaryCoolantChecked5, savePowerSteeringChecked: powerSteeringChecked5, saveBrakeFluidChecked: brakeFluidChecked5, saveTransmissionFluidChecked: transmissionFluidChecked5, saveRearAxleChecked: rearAxleChecked5, saveFrontAxleChecked: frontAxleChecked5, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked5, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked5, saveDateTime: fuelDateTime5, saveImage1: fuelStop5Image1, saveImage2: fuelStop5Image2, saveImage3: fuelStop5Image3, saveFuelLevelStart: stopLevelStart5, saveFuelLevelEnd: stopLevelEnd5, saveDefLevel: stopDefLevelFinal5, saveFuelType: stopFuelType5, saveMatchByOdometer: !stopsForcedNew.contains(5), saveExitTime: stopExit5, saveFuelQuantityStart: stopFuelQtyStart5, saveFuelQuantityEnd: stopFuelQtyEnd5, saveDefQuantity: stopDefQty5, saveDefLevelStart: stopDefLevelStartFinal5, saveDefQuantityStart: stopDefQtyStart5, saveDefPrice: stopDefPrice5)
 		}
 		if createFuelLog6 {
-			fuelAdded6Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer6), saveEngineHours: fuelEngHours6, saveQuantity: Int(fuelAdded6), savePrice: fuelPrice6, saveLocation: fuelLocation6, saveLogId: fuelAdded6Log, saveOil: oilAdded6, saveDEF: defAdded6, saveNotes: fuelNotes6, saveOilChecked: oilChecked6, saveEngineCoolantChecked: engineCoolantChecked6, saveSecondaryCoolantChecked: secondaryCoolantChecked6, savePowerSteeringChecked: powerSteeringChecked6, saveBrakeFluidChecked: brakeFluidChecked6, saveTransmissionFluidChecked: transmissionFluidChecked6, saveRearAxleChecked: rearAxleChecked6, saveFrontAxleChecked: frontAxleChecked6, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked6, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked6, saveDateTime: fuelDateTime6, saveImage1: fuelStop6Image1, saveImage2: fuelStop6Image2, saveImage3: fuelStop6Image3)
+			fuelAdded6Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer6), saveEngineHours: fuelEngHours6, saveQuantity: fuelAdded6, savePrice: fuelPrice6, saveLocation: fuelLocation6, saveLogId: fuelAdded6Log, saveOil: oilAdded6, saveDEF: defAdded6, saveNotes: fuelNotes6, saveOilChecked: oilChecked6, saveEngineCoolantChecked: engineCoolantChecked6, saveSecondaryCoolantChecked: secondaryCoolantChecked6, savePowerSteeringChecked: powerSteeringChecked6, saveBrakeFluidChecked: brakeFluidChecked6, saveTransmissionFluidChecked: transmissionFluidChecked6, saveRearAxleChecked: rearAxleChecked6, saveFrontAxleChecked: frontAxleChecked6, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked6, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked6, saveDateTime: fuelDateTime6, saveImage1: fuelStop6Image1, saveImage2: fuelStop6Image2, saveImage3: fuelStop6Image3, saveFuelLevelStart: stopLevelStart6, saveFuelLevelEnd: stopLevelEnd6, saveDefLevel: stopDefLevelFinal6, saveFuelType: stopFuelType6, saveMatchByOdometer: !stopsForcedNew.contains(6), saveExitTime: stopExit6, saveFuelQuantityStart: stopFuelQtyStart6, saveFuelQuantityEnd: stopFuelQtyEnd6, saveDefQuantity: stopDefQty6, saveDefLevelStart: stopDefLevelStartFinal6, saveDefQuantityStart: stopDefQtyStart6, saveDefPrice: stopDefPrice6)
 		}
 
 		dataSet.inactive = inactive
@@ -1447,14 +2067,16 @@ struct EditTripLog: View {
 		dataSet.fuelQuantityStart = fuelQuantityStart
 		dataSet.fuelQuantityEnd = fuelQuantityEnd
 		dataSet.fuelConsumed = fuelConsumed
-		dataSet.fuelLevelStart1 = fuelLevelStart1
-		dataSet.fuelLevelEnd1 = fuelLevelEnd1
-		dataSet.fuelLevelStart = fuelLevelStart
-		dataSet.fuelLevelEnd = fuelLevelEnd
-		dataSet.defLevel1 = defLevel1
-		dataSet.defLevelFraction = defLevelFraction
-		dataSet.defLevelEnd1 = defLevelEnd1
-		dataSet.defLevelEndFraction = defLevelEndFraction
+		dataSet.fuelLevelStart1 = levelStartFraction
+		dataSet.fuelLevelEnd1 = levelEndFraction
+		dataSet.fuelLevelStart = levelStartText
+		dataSet.fuelLevelEnd = levelEndText
+		dataSet.defLevel1 = defStartFraction
+		dataSet.defLevelFraction = defStartText
+		dataSet.defLevelEnd1 = defEndFraction
+		dataSet.defLevelEndFraction = defEndText
+		dataSet.defQuantityStart = defQuantityStart
+		dataSet.defQuantityEnd = defQuantityEnd
 		dataSet.fuelAdded1Log = fuelAdded1Log
 		dataSet.fuelAdded1 = fuelAdded1
 		dataSet.fuelAdded2Log = fuelAdded2Log
@@ -1473,12 +2095,12 @@ struct EditTripLog: View {
 		dataSet.fuelDateTime4 = fuelDateTime4
 		dataSet.fuelDateTime5 = fuelDateTime5
 		dataSet.fuelDateTime6 = fuelDateTime6
-		dataSet.fuelExitTime1 = fuelExitTime1
-		dataSet.fuelExitTime2 = fuelExitTime2
-		dataSet.fuelExitTime3 = fuelExitTime3
-		dataSet.fuelExitTime4 = fuelExitTime4
-		dataSet.fuelExitTime5 = fuelExitTime5
-		dataSet.fuelExitTime6 = fuelExitTime6
+		dataSet.fuelExitTime1 = stopExit1
+		dataSet.fuelExitTime2 = stopExit2
+		dataSet.fuelExitTime3 = stopExit3
+		dataSet.fuelExitTime4 = stopExit4
+		dataSet.fuelExitTime5 = stopExit5
+		dataSet.fuelExitTime6 = stopExit6
 		dataSet.stopReason1 = stopReason1
 		dataSet.stopReason2 = stopReason2
 		dataSet.stopReason3 = stopReason3
@@ -1517,6 +2139,26 @@ struct EditTripLog: View {
 		dataSet.fuelStop6Image3 = fuelStop6Image3
 		dataSet.locationStart = locationStart
 		dataSet.locationEnd = locationEnd
+		dataSet.startOilChecked = startOilChecked
+		dataSet.startEngineCoolantChecked = startEngineCoolantChecked
+		dataSet.startSecondaryCoolantChecked = startSecondaryCoolantChecked
+		dataSet.startPowerSteeringChecked = startPowerSteeringChecked
+		dataSet.startBrakeFluidChecked = startBrakeFluidChecked
+		dataSet.startTransmissionFluidChecked = startTransmissionFluidChecked
+		dataSet.startRearAxleChecked = startRearAxleChecked
+		dataSet.startFrontAxleChecked = startFrontAxleChecked
+		dataSet.startFuelWaterSeparatorChecked = startFuelWaterSeparatorChecked
+		dataSet.startAirSystemWaterBleedChecked = startAirSystemWaterBleedChecked
+		dataSet.endOilChecked = endOilChecked
+		dataSet.endEngineCoolantChecked = endEngineCoolantChecked
+		dataSet.endSecondaryCoolantChecked = endSecondaryCoolantChecked
+		dataSet.endPowerSteeringChecked = endPowerSteeringChecked
+		dataSet.endBrakeFluidChecked = endBrakeFluidChecked
+		dataSet.endTransmissionFluidChecked = endTransmissionFluidChecked
+		dataSet.endRearAxleChecked = endRearAxleChecked
+		dataSet.endFrontAxleChecked = endFrontAxleChecked
+		dataSet.endFuelWaterSeparatorChecked = endFuelWaterSeparatorChecked
+		dataSet.endAirSystemWaterBleedChecked = endAirSystemWaterBleedChecked
 		dataSet.vehicleTowed = vehicleTowed
 		dataSet.image1 = image1
 		dataSet.image2 = image2
@@ -1524,7 +2166,6 @@ struct EditTripLog: View {
 		dataSet.image1Description = image1Description
 		dataSet.image2Description = image2Description
 		dataSet.image3Description = image3Description
-        dataSet.inactive = tripInactive
 
 		if vehicleTowed {
 			dataSet.vehicleIdTowed = vehicleIdTowed
@@ -1532,6 +2173,39 @@ struct EditTripLog: View {
 			dataSet.vehicleIdTowed = ""
 		}
 		
+		fuelLevelStart1 = levelStartFraction
+		fuelLevelEnd1 = levelEndFraction
+		fuelLevelStart = levelStartText
+		fuelLevelEnd = levelEndText
+		defLevel1 = defStartFraction
+		defLevelEnd1 = defEndFraction
+		defLevelFraction = defStartText
+		defLevelEndFraction = defEndText
+		stopFuelLevelStart1 = stopLevelStart1
+		stopFuelLevelStart2 = stopLevelStart2
+		stopFuelLevelStart3 = stopLevelStart3
+		stopFuelLevelStart4 = stopLevelStart4
+		stopFuelLevelStart5 = stopLevelStart5
+		stopFuelLevelStart6 = stopLevelStart6
+		stopFuelLevelEnd1 = stopLevelEnd1
+		stopFuelLevelEnd2 = stopLevelEnd2
+		stopFuelLevelEnd3 = stopLevelEnd3
+		stopFuelLevelEnd4 = stopLevelEnd4
+		stopFuelLevelEnd5 = stopLevelEnd5
+		stopFuelLevelEnd6 = stopLevelEnd6
+		stopDefLevel1 = stopDefLevelFinal1
+		stopDefLevel2 = stopDefLevelFinal2
+		stopDefLevel3 = stopDefLevelFinal3
+		stopDefLevel4 = stopDefLevelFinal4
+		stopDefLevel5 = stopDefLevelFinal5
+		stopDefLevel6 = stopDefLevelFinal6
+		stopDefLevelStart1 = stopDefLevelStartFinal1
+		stopDefLevelStart2 = stopDefLevelStartFinal2
+		stopDefLevelStart3 = stopDefLevelStartFinal3
+		stopDefLevelStart4 = stopDefLevelStartFinal4
+		stopDefLevelStart5 = stopDefLevelStartFinal5
+		stopDefLevelStart6 = stopDefLevelStartFinal6
+
 		// update the record
 		do {
 			try modelContext.save()
@@ -1580,10 +2254,11 @@ struct EditTripLog: View {
 	///
 	/// Search order:
 	/// 1. By explicit `logId` if provided.
-	/// 2. By `(odometer, vehicleId)` pair, assigning a new `logId` if found.
+	/// 2. By `(odometer, vehicleId)` pair, assigning a new `logId` if found. Skipped when
+	///    `matchByOdometer` is `false`, which the caller uses to force a brand new record.
 	///
 	/// - Returns: The resolved `logId` if a record is found, or an empty string if not.
-	private func searchFuelRecord(saveOdometer: Int, saveLogId: String) -> String {
+	private func searchFuelRecord(saveOdometer: Int, saveLogId: String, matchByOdometer: Bool = true) -> String {
 		// Prefer explicit logId if provided
 		if !saveLogId.isEmpty {
 			do {
@@ -1594,7 +2269,8 @@ struct EditTripLog: View {
 				}
 			} catch {}
 		}
-		// Try by odometer + vehicle
+		// Try by odometer + vehicle, unless the caller unlinked this stop on purpose
+		guard matchByOdometer else { return "" }
 		do {
 			var fd = FetchDescriptor<FuelLog1>(predicate: #Predicate { $0.odometer == saveOdometer && $0.vehicleId == vehicleId })
 			fd.fetchLimit = 1
@@ -1616,23 +2292,25 @@ struct EditTripLog: View {
 	/// - If an existing record is found (via `searchFuelRecord`), it is updated; otherwise,
 	///   a new record is created and inserted.
 	/// - Returns: The `logId` of the created/updated record.
-	private func add_editFuelRecord(saveOdometer: Int, saveEngineHours: Float, saveQuantity: Int, savePrice: Float, saveLocation: String, saveLogId: String, saveOil: Float, saveDEF: Float, saveNotes: String, saveOilChecked: Bool, saveEngineCoolantChecked: Bool = false, saveSecondaryCoolantChecked: Bool = false, savePowerSteeringChecked: Bool = false, saveBrakeFluidChecked: Bool = false, saveTransmissionFluidChecked: Bool = false, saveRearAxleChecked: Bool = false, saveFrontAxleChecked: Bool = false, saveFuelWaterSeparatorChecked: Bool = false, saveAirSystemWaterBleedChecked: Bool = false, saveDateTime: Date = Date(), saveImage1: Data? = nil, saveImage2: Data? = nil, saveImage3: Data? = nil) -> String {
+	private func add_editFuelRecord(saveOdometer: Int, saveEngineHours: Float, saveQuantity: Float, savePrice: Float, saveLocation: String, saveLogId: String, saveOil: Float, saveDEF: Float, saveNotes: String, saveOilChecked: Bool, saveEngineCoolantChecked: Bool = false, saveSecondaryCoolantChecked: Bool = false, savePowerSteeringChecked: Bool = false, saveBrakeFluidChecked: Bool = false, saveTransmissionFluidChecked: Bool = false, saveRearAxleChecked: Bool = false, saveFrontAxleChecked: Bool = false, saveFuelWaterSeparatorChecked: Bool = false, saveAirSystemWaterBleedChecked: Bool = false, saveDateTime: Date = Date(), saveImage1: Data? = nil, saveImage2: Data? = nil, saveImage3: Data? = nil, saveFuelLevelStart: Float = 0.25, saveFuelLevelEnd: Float = 1.0, saveDefLevel: Float = 0.0, saveFuelType: String = "", saveMatchByOdometer: Bool = true, saveExitTime: Date? = nil, saveFuelQuantityStart: Float = 0, saveFuelQuantityEnd: Float = 0, saveDefQuantity: Float = 0, saveDefLevelStart: Float = 0, saveDefQuantityStart: Float = 0, saveDefPrice: Float = 0) -> String {
 		var logId: String = ""
 		
 		// get vehicle details (via Vehicle8)
 		var fuelCapacityVehicle: Int = 0
+		var defCapacityVehicle: Int = 0
 		var fuelTypeVehicle: String = ""
 		do {
 			var fd = FetchDescriptor<Vehicle8>(predicate: #Predicate { $0.name == vehicleId })
 			fd.fetchLimit = 1
 			if let v = try modelContext.fetch(fd).first {
 				fuelCapacityVehicle = v.fuelCapacity
+				defCapacityVehicle = v.defCapacity
 				fuelTypeVehicle = v.fuelType
 			}
 		} catch {}
 		
 		// see if there is already a fuel log for this travel log
-		logId = searchFuelRecord(saveOdometer: saveOdometer, saveLogId: saveLogId)
+		logId = searchFuelRecord(saveOdometer: saveOdometer, saveLogId: saveLogId, matchByOdometer: saveMatchByOdometer)
 		if !logId.isEmpty {
 			// update existing record (by logId if possible, else fallback to odometer+vehicle)
 			do {
@@ -1640,9 +2318,9 @@ struct EditTripLog: View {
 				fdById.fetchLimit = 1
 				if let existing = try modelContext.fetch(fdById).first {
 					existing.logId = logId
-					existing.fuelAdded = Float(saveQuantity)
+					existing.fuelAdded = saveQuantity
 					existing.fuelPrice = savePrice
-					existing.fuelCost = savePrice * Float(saveQuantity)
+					existing.fuelCost = savePrice * saveQuantity
 					existing.location = saveLocation
 					existing.odometer = saveOdometer
 					existing.engHours = saveEngineHours
@@ -1659,7 +2337,22 @@ struct EditTripLog: View {
 					existing.frontAxleChecked = saveFrontAxleChecked
 					existing.fuelWaterSeparatorChecked = saveFuelWaterSeparatorChecked
 					existing.airSystemWaterBleedChecked = saveAirSystemWaterBleedChecked
+					existing.fuelLevelStart1 = saveFuelLevelStart
+					existing.fuelLevelEnd1 = saveFuelLevelEnd
+					existing.fuelLevelStartFraction = functions.getFuelLevel(unit: saveFuelLevelStart)
+					existing.fuelLevelEndFraction = functions.getFuelLevel(unit: saveFuelLevelEnd)
+					existing.fuelQuantityStart = saveFuelQuantityStart
+					existing.fuelQuantityEnd = saveFuelQuantityEnd
+					existing.defLevel1 = saveDefLevel
+					existing.defQuantity = saveDefQuantity
+					existing.defLevelStart1 = saveDefLevelStart
+					existing.defLevelStartFraction = functions.getFuelLevel(unit: saveDefLevelStart)
+					existing.defQuantityStart = saveDefQuantityStart
+					existing.defPrice = saveDefPrice
+					existing.defLevelFraction = functions.getFuelLevel(unit: saveDefLevel)
+					existing.fuelType = saveFuelType.isEmpty ? fuelTypeVehicle : saveFuelType
 					existing.fuelDateTime = saveDateTime
+					existing.fuelExitTime = saveExitTime
 					existing.image1 = saveImage1
 					existing.image2 = saveImage2
 					existing.image3 = saveImage3
@@ -1672,9 +2365,9 @@ struct EditTripLog: View {
 				fd.fetchLimit = 1
 				if let existing = try modelContext.fetch(fd).first {
 					existing.logId = logId
-					existing.fuelAdded = Float(saveQuantity)
+					existing.fuelAdded = saveQuantity
 					existing.fuelPrice = savePrice
-					existing.fuelCost = savePrice * Float(saveQuantity)
+					existing.fuelCost = savePrice * saveQuantity
 					existing.location = saveLocation
 					existing.odometer = saveOdometer
 					existing.engHours = saveEngineHours
@@ -1691,7 +2384,22 @@ struct EditTripLog: View {
 					existing.frontAxleChecked = saveFrontAxleChecked
 					existing.fuelWaterSeparatorChecked = saveFuelWaterSeparatorChecked
 					existing.airSystemWaterBleedChecked = saveAirSystemWaterBleedChecked
+					existing.fuelLevelStart1 = saveFuelLevelStart
+					existing.fuelLevelEnd1 = saveFuelLevelEnd
+					existing.fuelLevelStartFraction = functions.getFuelLevel(unit: saveFuelLevelStart)
+					existing.fuelLevelEndFraction = functions.getFuelLevel(unit: saveFuelLevelEnd)
+					existing.fuelQuantityStart = saveFuelQuantityStart
+					existing.fuelQuantityEnd = saveFuelQuantityEnd
+					existing.defLevel1 = saveDefLevel
+					existing.defQuantity = saveDefQuantity
+					existing.defLevelStart1 = saveDefLevelStart
+					existing.defLevelStartFraction = functions.getFuelLevel(unit: saveDefLevelStart)
+					existing.defQuantityStart = saveDefQuantityStart
+					existing.defPrice = saveDefPrice
+					existing.defLevelFraction = functions.getFuelLevel(unit: saveDefLevel)
+					existing.fuelType = saveFuelType.isEmpty ? fuelTypeVehicle : saveFuelType
 					existing.fuelDateTime = saveDateTime
+					existing.fuelExitTime = saveExitTime
 					existing.image1 = saveImage1
 					existing.image2 = saveImage2
 					existing.image3 = saveImage3
@@ -1704,21 +2412,39 @@ struct EditTripLog: View {
 		
 		// not found, create new fuel record
 		logId = functions.formatDate_DDMMMyy_HHmmss(date: Date())
+		let newFuelQuantityStart: Float = saveFuelQuantityStart
+		let newFuelQuantityEnd: Float = saveFuelQuantityEnd
+		let newDefQuantity: Float = saveDefQuantity
+		let newDefStartText: String = functions.getFuelLevel(unit: saveDefLevelStart)
+		let newDefFractionText: String = functions.getFuelLevel(unit: saveDefLevel)
+		let newFuelStartText: String = functions.getFuelLevel(unit: saveFuelLevelStart)
+		let newFuelEndText: String = functions.getFuelLevel(unit: saveFuelLevelEnd)
+		let newFuelCost: Float = savePrice * saveQuantity
+		let newFuelType: String = saveFuelType.isEmpty ? fuelTypeVehicle : saveFuelType
+		let newFuelNotes: String = "Travel log: \(logName)"
 		let newRecord = FuelLog1(
 			logId: logId,
 			vehicleId: vehicleId,
 			logName: logName,
-			fuelNotes: "Travel log: \(logName)",
+			fuelNotes: newFuelNotes,
 			createdAt: Date(),
 			updatedAt: Date(),
 			fuelDateTime: saveDateTime,
+			fuelExitTime: saveExitTime,
 			odometer: saveOdometer,
 			location: saveLocation,
 			engHours: saveEngineHours,
-			fuelQuantityStart: max(0, Float(fuelCapacityVehicle) - Float(saveQuantity)),
-			fuelQuantityEnd: Float(fuelCapacityVehicle),
-			fuelAdded: Float(saveQuantity),
+			fuelQuantityStart: newFuelQuantityStart,
+			fuelQuantityEnd: newFuelQuantityEnd,
+			fuelAdded: saveQuantity,
 			defAdded: saveDEF,
+			defPrice: saveDefPrice,
+			defLevelStart1: saveDefLevelStart,
+			defLevelStartFraction: newDefStartText,
+			defQuantityStart: saveDefQuantityStart,
+			defLevel1: saveDefLevel,
+			defLevelFraction: newDefFractionText,
+			defQuantity: newDefQuantity,
 			oilAdded: saveOil,
 			oilChecked: saveOilChecked,
 			engineCoolantChecked: saveEngineCoolantChecked,
@@ -1730,13 +2456,13 @@ struct EditTripLog: View {
 			frontAxleChecked: saveFrontAxleChecked,
 			fuelWaterSeparatorChecked: saveFuelWaterSeparatorChecked,
 			airSystemWaterBleedChecked: saveAirSystemWaterBleedChecked,
-			fuelLevelStart1: 0.25,
-			fuelLevelEnd1: 1.0,
-			fuelLevelStart: "1/4",
-			fuelLevelEnd: "Full",
+			fuelLevelStart1: saveFuelLevelStart,
+			fuelLevelEnd1: saveFuelLevelEnd,
+			fuelLevelStart: newFuelStartText,
+			fuelLevelEnd: newFuelEndText,
 			fuelPrice: savePrice,
-			fuelCost: savePrice * Float(saveQuantity),
-			fuelType: fuelTypeVehicle,
+			fuelCost: newFuelCost,
+			fuelType: newFuelType,
 			image1: saveImage1,
 			image2: saveImage2,
 			image3: saveImage3
@@ -1746,11 +2472,11 @@ struct EditTripLog: View {
 		return logId
 	}
 	
-	/// Loads persisted fuel stop attributes for a linked `FuelLog1`.
-	/// - Parameter saveLogId: The `logId` of the `FuelLog1` to fetch.
-	/// - Returns: Tuple containing quantity, price, cost, odometer, engine hours, location,
-	///   oil added, DEF added, and oil checked status. Missing logs return zeros/empty strings/false.
-	func getFuelLogData(saveLogId: String) -> (fuelAdded: Float, fuelPrice: Float, fuelCost: Float, fuelOdometer: Float, fuelEngHours: Float, fuelLocation: String, oilAdded: Float, defAdded: Float, fuelNotes: String, oilChecked: Bool, engineCoolantChecked: Bool, secondaryCoolantChecked: Bool, powerSteeringChecked: Bool, brakeFluidChecked: Bool, transmissionFluidChecked: Bool, rearAxleChecked: Bool, frontAxleChecked: Bool, fuelWaterSeparatorChecked: Bool, airSystemWaterBleedChecked: Bool, fuelDateTime: Date, image1: Data?, image2: Data?, image3: Data?) {
+	/// Values loaded from a linked `FuelLog1` when populating an enroute stop.
+	///
+	/// Fuel levels, DEF level and fuel type live on the fuel log rather than on
+	/// `TripLog2`, so they are read back through here whenever a stop is displayed.
+	struct FuelStopData {
 		var fuelAdded: Float = 0
 		var fuelPrice: Float = 0
 		var fuelCost: Float = 0
@@ -1771,41 +2497,270 @@ struct EditTripLog: View {
 		var fuelWaterSeparatorChecked: Bool = false
 		var airSystemWaterBleedChecked: Bool = false
 		var fuelDateTime: Date = Date()
+		var fuelExitTime: Date? = nil
 		var image1: Data? = nil
 		var image2: Data? = nil
 		var image3: Data? = nil
+		var fuelLevelStart: Float = 0.25
+		var fuelLevelEnd: Float = 1.0
+		var defLevel: Float = 0
+		var fuelQuantityStart: Float = 0
+		var fuelQuantityEnd: Float = 0
+		var defQuantity: Float = 0
+		var defLevelStart: Float = 0
+		var defQuantityStart: Float = 0
+		var defPrice: Float = 0
+		var fuelType: String = ""
+	}
+	
+	/// Loads persisted fuel stop attributes for a linked `FuelLog1`.
+	/// - Parameter saveLogId: The `logId` of the `FuelLog1` to fetch.
+	/// - Returns: The stop's stored values, or defaults when no matching log exists.
+	func getFuelLogData(saveLogId: String) -> FuelStopData {
+		var data = FuelStopData()
 		do {
 			var fd = FetchDescriptor<FuelLog1>(predicate: #Predicate { $0.logId == saveLogId })
 			fd.fetchLimit = 1
 			if let fetchModel = try modelContext.fetch(fd).first {
-				fuelAdded = fetchModel.fuelAdded
-				fuelPrice = fetchModel.fuelPrice
-				fuelCost = fetchModel.fuelCost
-				fuelOdometer = Float(fetchModel.odometer)
-				fuelEngHours = fetchModel.engHours
-				fuelLocation = fetchModel.location
-				oilAdded = fetchModel.oilAdded
-				defAdded = fetchModel.defAdded
-				fuelNotes = fetchModel.fuelNotes
-				oilChecked = fetchModel.oilChecked
-				engineCoolantChecked = fetchModel.engineCoolantChecked
-				secondaryCoolantChecked = fetchModel.secondaryCoolantChecked
-				powerSteeringChecked = fetchModel.powerSteeringChecked
-				brakeFluidChecked = fetchModel.brakeFluidChecked
-				transmissionFluidChecked = fetchModel.transmissionFluidChecked
-				rearAxleChecked = fetchModel.rearAxleChecked
-				frontAxleChecked = fetchModel.frontAxleChecked
-				fuelWaterSeparatorChecked = fetchModel.fuelWaterSeparatorChecked
-				airSystemWaterBleedChecked = fetchModel.airSystemWaterBleedChecked
-				fuelDateTime = fetchModel.fuelDateTime
-				image1 = fetchModel.image1
-				image2 = fetchModel.image2
-				image3 = fetchModel.image3
+				data.fuelAdded = fetchModel.fuelAdded
+				data.fuelPrice = fetchModel.fuelPrice
+				data.fuelCost = fetchModel.fuelCost
+				data.fuelOdometer = Float(fetchModel.odometer)
+				data.fuelEngHours = fetchModel.engHours
+				data.fuelLocation = fetchModel.location
+				data.oilAdded = fetchModel.oilAdded
+				data.defAdded = fetchModel.defAdded
+				data.fuelNotes = fetchModel.fuelNotes
+				data.oilChecked = fetchModel.oilChecked
+				data.engineCoolantChecked = fetchModel.engineCoolantChecked
+				data.secondaryCoolantChecked = fetchModel.secondaryCoolantChecked
+				data.powerSteeringChecked = fetchModel.powerSteeringChecked
+				data.brakeFluidChecked = fetchModel.brakeFluidChecked
+				data.transmissionFluidChecked = fetchModel.transmissionFluidChecked
+				data.rearAxleChecked = fetchModel.rearAxleChecked
+				data.frontAxleChecked = fetchModel.frontAxleChecked
+				data.fuelWaterSeparatorChecked = fetchModel.fuelWaterSeparatorChecked
+				data.airSystemWaterBleedChecked = fetchModel.airSystemWaterBleedChecked
+				data.fuelDateTime = fetchModel.fuelDateTime
+				data.fuelExitTime = fetchModel.fuelExitTime
+				data.image1 = fetchModel.image1
+				data.image2 = fetchModel.image2
+				data.image3 = fetchModel.image3
+				data.fuelLevelStart = fetchModel.fuelLevelStart1
+				data.fuelLevelEnd = fetchModel.fuelLevelEnd1
+				data.defLevel = fetchModel.defLevel1
+				data.fuelQuantityStart = fetchModel.fuelQuantityStart
+				data.fuelQuantityEnd = fetchModel.fuelQuantityEnd
+				data.defQuantity = fetchModel.defQuantity
+				data.defLevelStart = fetchModel.defLevelStart1
+				data.defQuantityStart = fetchModel.defQuantityStart
+				data.defPrice = fetchModel.defPrice
+				data.fuelType = fetchModel.fuelType
 			}
 		} catch {}
-		return (fuelAdded, fuelPrice, fuelCost, fuelOdometer, fuelEngHours, fuelLocation, oilAdded, defAdded, fuelNotes, oilChecked, engineCoolantChecked, secondaryCoolantChecked, powerSteeringChecked, brakeFluidChecked, transmissionFluidChecked, rearAxleChecked, frontAxleChecked, fuelWaterSeparatorChecked, airSystemWaterBleedChecked, fuelDateTime, image1, image2, image3)
+		return data
 	}
 	
+	/// Fluid check flags recorded at travel start, in the sheet's display order.
+	private var startFluidChecks: [Bool] {
+		[startOilChecked, startEngineCoolantChecked, startSecondaryCoolantChecked,
+		 startPowerSteeringChecked, startBrakeFluidChecked, startTransmissionFluidChecked,
+		 startRearAxleChecked, startFrontAxleChecked,
+		 startFuelWaterSeparatorChecked, startAirSystemWaterBleedChecked]
+	}
+	
+	/// Fluid check flags recorded at travel end, in the sheet's display order.
+	private var endFluidChecks: [Bool] {
+		[endOilChecked, endEngineCoolantChecked, endSecondaryCoolantChecked,
+		 endPowerSteeringChecked, endBrakeFluidChecked, endTransmissionFluidChecked,
+		 endRearAxleChecked, endFrontAxleChecked,
+		 endFuelWaterSeparatorChecked, endAirSystemWaterBleedChecked]
+	}
+	
+	/// "Fluid Checks" with a running count, so the button says how many were done
+	/// without having to open the sheet.
+	private func fluidChecksTitle(_ flags: [Bool]) -> String {
+		"Fluid Checks (\(flags.filter { $0 }.count) completed)"
+	}
+	
+	/// Seconds spent at an enroute stop.
+	/// - Returns: 0 when the stop is unused, or when either time was never recorded.
+	private func stopDuration(active: Bool, enter: Date?, exit: Date?) -> TimeInterval {
+		guard active, let enter, let exit, exit > enter else { return 0 }
+		return exit.timeIntervalSince(enter)
+	}
+	
+	/// Comma-separated list of the fluids marked checked, for the details view.
+	/// - Parameter flags: Fluid name / checked pairs, in display order.
+	/// - Returns: The checked names joined with commas, or an empty string when none were checked.
+	private func checkedFluidList(_ flags: [(String, Bool)]) -> String {
+		flags.filter { $0.1 }.map { $0.0 }.joined(separator: ", ")
+	}
+	
+	/// Loads the vehicle's fuel logs so an enroute stop can be linked to a record that
+	/// already exists instead of always creating a new one.
+	private func loadAvailableFuelLogs() {
+		let vid = vehicleId
+		guard !vid.isEmpty else {
+			availableFuelLogs = []
+			return
+		}
+		do {
+			var fd = FetchDescriptor<FuelLog1>(
+				predicate: #Predicate { $0.vehicleId == vid && $0.inactive == false },
+				sortBy: [SortDescriptor(\.fuelDateTime, order: .reverse)]
+			)
+			fd.fetchLimit = 200
+			availableFuelLogs = try modelContext.fetch(fd)
+				.filter { !$0.logId.isEmpty }
+				.map { log in
+					let qty = log.fuelAdded.formatted(.number.precision(.fractionLength(1)))
+					// Day and month only, no year or time — the fetch above already orders by the
+					// full timestamp. The station name goes ahead of the quantity: the menu label
+					// truncates at the tail, and the station identifies a log better than the volume.
+					let parts = [
+						functions.formatDate_DDMMM(date: log.fuelDateTime),
+						log.location.trimmingCharacters(in: .whitespacesAndNewlines),
+						"\(qty)\(unit(UnitIndex.fuel))"
+					]
+					return FuelLogChoice(
+						id: log.logId,
+						label: parts.filter { !$0.isEmpty }.joined(separator: " • ")
+					)
+				}
+		} catch {
+			availableFuelLogs = []
+		}
+	}
+	
+	/// Fuel logs a stop may pick from: the vehicle's logs, less any already linked to another
+	/// stop on this trip, plus this stop's own link so the picker always has a valid selection.
+	/// - Parameter currentlyLinked: The `logId` this stop is linked to, or an empty string.
+	private func fuelLogChoices(currentlyLinked: String) -> [FuelLogChoice] {
+		let taken = Set([fuelAdded1Log, fuelAdded2Log, fuelAdded3Log, fuelAdded4Log, fuelAdded5Log, fuelAdded6Log]
+			.filter { !$0.isEmpty && $0 != currentlyLinked })
+		var choices = availableFuelLogs.filter { !taken.contains($0.id) }
+		if !currentlyLinked.isEmpty, !choices.contains(where: { $0.id == currentlyLinked }) {
+			choices.insert(FuelLogChoice(id: currentlyLinked, label: "Linked log \(currentlyLinked)"), at: 0)
+		}
+		return choices
+	}
+	
+	/// Populates an enroute stop from the fuel log the user picked for it.
+	///
+	/// Choosing "New Log" clears the link and leaves the typed values alone, so a fresh
+	/// record is created on save. Choosing an existing log overwrites the stop's fields with
+	/// that record's values; saving afterwards writes any further edits back to it.
+	/// - Parameters:
+	///   - index: Stop number, 1 through 6.
+	///   - logId: The chosen `FuelLog1.logId`, or an empty string for a new log.
+	private func linkStop(_ index: Int, to logId: String) {
+		guard !logId.isEmpty else {
+			stopsForcedNew.insert(index)
+			return
+		}
+		stopsForcedNew.remove(index)
+		let d = getFuelLogData(saveLogId: logId)
+		switch index {
+		case 1:
+			fuelAdded1 = d.fuelAdded; fuelPrice1 = d.fuelPrice; fuelOdometer1 = d.fuelOdometer; fuelEngHours1 = d.fuelEngHours
+			fuelLocation1 = d.fuelLocation; oilAdded1 = d.oilAdded; defAdded1 = d.defAdded; fuelNotes1 = d.fuelNotes
+			oilChecked1 = d.oilChecked; engineCoolantChecked1 = d.engineCoolantChecked; secondaryCoolantChecked1 = d.secondaryCoolantChecked; powerSteeringChecked1 = d.powerSteeringChecked; brakeFluidChecked1 = d.brakeFluidChecked; transmissionFluidChecked1 = d.transmissionFluidChecked; rearAxleChecked1 = d.rearAxleChecked; frontAxleChecked1 = d.frontAxleChecked; fuelWaterSeparatorChecked1 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked1 = d.airSystemWaterBleedChecked
+			fuelDateTime1 = d.fuelDateTime
+			fuelStop1Image1 = d.image1; fuelStop1Image2 = d.image2; fuelStop1Image3 = d.image3
+			stopFuelLevelStart1 = d.fuelLevelStart; stopFuelLevelEnd1 = d.fuelLevelEnd; stopDefLevel1 = d.defLevel; stopFuelType1 = d.fuelType
+			stopFuelQtyStart1 = d.fuelQuantityStart; stopFuelQtyEnd1 = d.fuelQuantityEnd; stopDefQty1 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+			stopDefLevelStart1 = d.defLevelStart; stopDefQtyStart1 = d.defQuantityStart
+			stopDefPrice1 = d.defPrice
+			if let exit = d.fuelExitTime { fuelExitTime1 = max(exit, fuelDateTime1) }
+			createFuelLog1 = true
+			if stopReason1.isEmpty { stopReason1 = "Fuel" }
+		case 2:
+			fuelAdded2 = d.fuelAdded; fuelPrice2 = d.fuelPrice; fuelOdometer2 = d.fuelOdometer; fuelEngHours2 = d.fuelEngHours
+			fuelLocation2 = d.fuelLocation; oilAdded2 = d.oilAdded; defAdded2 = d.defAdded; fuelNotes2 = d.fuelNotes
+			oilChecked2 = d.oilChecked; engineCoolantChecked2 = d.engineCoolantChecked; secondaryCoolantChecked2 = d.secondaryCoolantChecked; powerSteeringChecked2 = d.powerSteeringChecked; brakeFluidChecked2 = d.brakeFluidChecked; transmissionFluidChecked2 = d.transmissionFluidChecked; rearAxleChecked2 = d.rearAxleChecked; frontAxleChecked2 = d.frontAxleChecked; fuelWaterSeparatorChecked2 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked2 = d.airSystemWaterBleedChecked
+			fuelDateTime2 = d.fuelDateTime
+			fuelStop2Image1 = d.image1; fuelStop2Image2 = d.image2; fuelStop2Image3 = d.image3
+			stopFuelLevelStart2 = d.fuelLevelStart; stopFuelLevelEnd2 = d.fuelLevelEnd; stopDefLevel2 = d.defLevel; stopFuelType2 = d.fuelType
+			stopFuelQtyStart2 = d.fuelQuantityStart; stopFuelQtyEnd2 = d.fuelQuantityEnd; stopDefQty2 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+			stopDefLevelStart2 = d.defLevelStart; stopDefQtyStart2 = d.defQuantityStart
+			stopDefPrice2 = d.defPrice
+			if let exit = d.fuelExitTime { fuelExitTime2 = max(exit, fuelDateTime2) }
+			createFuelLog2 = true
+			if stopReason2.isEmpty { stopReason2 = "Fuel" }
+		case 3:
+			fuelAdded3 = d.fuelAdded; fuelPrice3 = d.fuelPrice; fuelOdometer3 = d.fuelOdometer; fuelEngHours3 = d.fuelEngHours
+			fuelLocation3 = d.fuelLocation; oilAdded3 = d.oilAdded; defAdded3 = d.defAdded; fuelNotes3 = d.fuelNotes
+			oilChecked3 = d.oilChecked; engineCoolantChecked3 = d.engineCoolantChecked; secondaryCoolantChecked3 = d.secondaryCoolantChecked; powerSteeringChecked3 = d.powerSteeringChecked; brakeFluidChecked3 = d.brakeFluidChecked; transmissionFluidChecked3 = d.transmissionFluidChecked; rearAxleChecked3 = d.rearAxleChecked; frontAxleChecked3 = d.frontAxleChecked; fuelWaterSeparatorChecked3 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked3 = d.airSystemWaterBleedChecked
+			fuelDateTime3 = d.fuelDateTime
+			fuelStop3Image1 = d.image1; fuelStop3Image2 = d.image2; fuelStop3Image3 = d.image3
+			stopFuelLevelStart3 = d.fuelLevelStart; stopFuelLevelEnd3 = d.fuelLevelEnd; stopDefLevel3 = d.defLevel; stopFuelType3 = d.fuelType
+			stopFuelQtyStart3 = d.fuelQuantityStart; stopFuelQtyEnd3 = d.fuelQuantityEnd; stopDefQty3 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+			stopDefLevelStart3 = d.defLevelStart; stopDefQtyStart3 = d.defQuantityStart
+			stopDefPrice3 = d.defPrice
+			if let exit = d.fuelExitTime { fuelExitTime3 = max(exit, fuelDateTime3) }
+			createFuelLog3 = true
+			if stopReason3.isEmpty { stopReason3 = "Fuel" }
+		case 4:
+			fuelAdded4 = d.fuelAdded; fuelPrice4 = d.fuelPrice; fuelOdometer4 = d.fuelOdometer; fuelEngHours4 = d.fuelEngHours
+			fuelLocation4 = d.fuelLocation; oilAdded4 = d.oilAdded; defAdded4 = d.defAdded; fuelNotes4 = d.fuelNotes
+			oilChecked4 = d.oilChecked; engineCoolantChecked4 = d.engineCoolantChecked; secondaryCoolantChecked4 = d.secondaryCoolantChecked; powerSteeringChecked4 = d.powerSteeringChecked; brakeFluidChecked4 = d.brakeFluidChecked; transmissionFluidChecked4 = d.transmissionFluidChecked; rearAxleChecked4 = d.rearAxleChecked; frontAxleChecked4 = d.frontAxleChecked; fuelWaterSeparatorChecked4 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked4 = d.airSystemWaterBleedChecked
+			fuelDateTime4 = d.fuelDateTime
+			fuelStop4Image1 = d.image1; fuelStop4Image2 = d.image2; fuelStop4Image3 = d.image3
+			stopFuelLevelStart4 = d.fuelLevelStart; stopFuelLevelEnd4 = d.fuelLevelEnd; stopDefLevel4 = d.defLevel; stopFuelType4 = d.fuelType
+			stopFuelQtyStart4 = d.fuelQuantityStart; stopFuelQtyEnd4 = d.fuelQuantityEnd; stopDefQty4 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+			stopDefLevelStart4 = d.defLevelStart; stopDefQtyStart4 = d.defQuantityStart
+			stopDefPrice4 = d.defPrice
+			if let exit = d.fuelExitTime { fuelExitTime4 = max(exit, fuelDateTime4) }
+			createFuelLog4 = true
+			if stopReason4.isEmpty { stopReason4 = "Fuel" }
+		case 5:
+			fuelAdded5 = d.fuelAdded; fuelPrice5 = d.fuelPrice; fuelOdometer5 = d.fuelOdometer; fuelEngHours5 = d.fuelEngHours
+			fuelLocation5 = d.fuelLocation; oilAdded5 = d.oilAdded; defAdded5 = d.defAdded; fuelNotes5 = d.fuelNotes
+			oilChecked5 = d.oilChecked; engineCoolantChecked5 = d.engineCoolantChecked; secondaryCoolantChecked5 = d.secondaryCoolantChecked; powerSteeringChecked5 = d.powerSteeringChecked; brakeFluidChecked5 = d.brakeFluidChecked; transmissionFluidChecked5 = d.transmissionFluidChecked; rearAxleChecked5 = d.rearAxleChecked; frontAxleChecked5 = d.frontAxleChecked; fuelWaterSeparatorChecked5 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked5 = d.airSystemWaterBleedChecked
+			fuelDateTime5 = d.fuelDateTime
+			fuelStop5Image1 = d.image1; fuelStop5Image2 = d.image2; fuelStop5Image3 = d.image3
+			stopFuelLevelStart5 = d.fuelLevelStart; stopFuelLevelEnd5 = d.fuelLevelEnd; stopDefLevel5 = d.defLevel; stopFuelType5 = d.fuelType
+			stopFuelQtyStart5 = d.fuelQuantityStart; stopFuelQtyEnd5 = d.fuelQuantityEnd; stopDefQty5 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+			stopDefLevelStart5 = d.defLevelStart; stopDefQtyStart5 = d.defQuantityStart
+			stopDefPrice5 = d.defPrice
+			if let exit = d.fuelExitTime { fuelExitTime5 = max(exit, fuelDateTime5) }
+			createFuelLog5 = true
+			if stopReason5.isEmpty { stopReason5 = "Fuel" }
+		case 6:
+			fuelAdded6 = d.fuelAdded; fuelPrice6 = d.fuelPrice; fuelOdometer6 = d.fuelOdometer; fuelEngHours6 = d.fuelEngHours
+			fuelLocation6 = d.fuelLocation; oilAdded6 = d.oilAdded; defAdded6 = d.defAdded; fuelNotes6 = d.fuelNotes
+			oilChecked6 = d.oilChecked; engineCoolantChecked6 = d.engineCoolantChecked; secondaryCoolantChecked6 = d.secondaryCoolantChecked; powerSteeringChecked6 = d.powerSteeringChecked; brakeFluidChecked6 = d.brakeFluidChecked; transmissionFluidChecked6 = d.transmissionFluidChecked; rearAxleChecked6 = d.rearAxleChecked; frontAxleChecked6 = d.frontAxleChecked; fuelWaterSeparatorChecked6 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked6 = d.airSystemWaterBleedChecked
+			fuelDateTime6 = d.fuelDateTime
+			fuelStop6Image1 = d.image1; fuelStop6Image2 = d.image2; fuelStop6Image3 = d.image3
+			stopFuelLevelStart6 = d.fuelLevelStart; stopFuelLevelEnd6 = d.fuelLevelEnd; stopDefLevel6 = d.defLevel; stopFuelType6 = d.fuelType
+			stopFuelQtyStart6 = d.fuelQuantityStart; stopFuelQtyEnd6 = d.fuelQuantityEnd; stopDefQty6 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
+			stopDefLevelStart6 = d.defLevelStart; stopDefQtyStart6 = d.defQuantityStart
+			stopDefPrice6 = d.defPrice
+			if let exit = d.fuelExitTime { fuelExitTime6 = max(exit, fuelDateTime6) }
+			createFuelLog6 = true
+			if stopReason6.isEmpty { stopReason6 = "Fuel" }
+		default:
+			break
+		}
+		// Linking changes the fuel added at the stop, not what's in the tank at either end.
+		recomputeFuelConsumed()
+	}
+	
+	/// Ends text editing so an in-flight field commits its value to its binding.
+	///
+	/// `TextField(value:formatter:)` — used by the fuel-stop quantity, price, odometer,
+	/// engine-hours, oil and DEF fields — only writes to its binding when it loses focus.
+	/// Tapping Save while such a field is still focused would otherwise read the previous
+	/// value and appear to discard the edit.
+	private func commitPendingTextEdits() {
+#if os(iOS)
+		UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+#elseif os(macOS)
+		NSApp.keyWindow?.makeFirstResponder(nil)
+#endif
+	}
+
 	/// Loads and caches user unit preferences if not already loaded.
 	///
 	/// Preferences are fetched via `PrefsFunctions` and cached locally for fast, safe access.
@@ -1819,17 +2774,101 @@ struct EditTripLog: View {
 	/// Used to derive fuel quantities and other vehicle-specific computations.
 	private func refreshVehicleDetails() {
 		self.vehicleDetails = functions.loadVehicleDetails(context: modelContext, vehicleId: vehicleId)
+		// Start each stop's fuel type off at the vehicle's own fuel type. A stop that already
+		// carries a value (typed here or read back from its fuel log) is left alone.
+		let type = vehicleDetails?.fuelType ?? ""
+		guard !type.isEmpty else { return }
+		if stopFuelType1.isEmpty { stopFuelType1 = type }
+		if stopFuelType2.isEmpty { stopFuelType2 = type }
+		if stopFuelType3.isEmpty { stopFuelType3 = type }
+		if stopFuelType4.isEmpty { stopFuelType4 = type }
+		if stopFuelType5.isEmpty { stopFuelType5 = type }
+		if stopFuelType6.isEmpty { stopFuelType6 = type }
 	}
-	/// Recomputes start/end fuel quantities and a running consumed estimate.
+	
+	/// Seeds a stop's fuel/DEF quantities from its eighths dropdown when it hasn't got one
+	/// yet — a brand new stop, or a linked log saved before the quantity fields existed —
+	/// so the figure and the dropdown never disagree on screen.
+	private func seedStopQuantities() {
+		let fuelCap = Float(vehicleDetails?.fuelCapacity ?? 0)
+		let defCap = Float(vehicleDetails?.defCapacity ?? 0)
+		if fuelCap > 0, stopFuelQtyStart1 == 0 { stopFuelQtyStart1 = fuelCap * stopFuelLevelStart1 }
+		if fuelCap > 0, stopFuelQtyEnd1 == 0 { stopFuelQtyEnd1 = fuelCap * stopFuelLevelEnd1 }
+		if defCap > 0, stopDefQty1 == 0 { stopDefQty1 = defCap * stopDefLevel1 }
+		if defCap > 0, stopDefQtyStart1 == 0 { stopDefQtyStart1 = defCap * stopDefLevelStart1 }
+		if fuelCap > 0, stopFuelQtyStart2 == 0 { stopFuelQtyStart2 = fuelCap * stopFuelLevelStart2 }
+		if fuelCap > 0, stopFuelQtyEnd2 == 0 { stopFuelQtyEnd2 = fuelCap * stopFuelLevelEnd2 }
+		if defCap > 0, stopDefQty2 == 0 { stopDefQty2 = defCap * stopDefLevel2 }
+		if defCap > 0, stopDefQtyStart2 == 0 { stopDefQtyStart2 = defCap * stopDefLevelStart2 }
+		if fuelCap > 0, stopFuelQtyStart3 == 0 { stopFuelQtyStart3 = fuelCap * stopFuelLevelStart3 }
+		if fuelCap > 0, stopFuelQtyEnd3 == 0 { stopFuelQtyEnd3 = fuelCap * stopFuelLevelEnd3 }
+		if defCap > 0, stopDefQty3 == 0 { stopDefQty3 = defCap * stopDefLevel3 }
+		if defCap > 0, stopDefQtyStart3 == 0 { stopDefQtyStart3 = defCap * stopDefLevelStart3 }
+		if fuelCap > 0, stopFuelQtyStart4 == 0 { stopFuelQtyStart4 = fuelCap * stopFuelLevelStart4 }
+		if fuelCap > 0, stopFuelQtyEnd4 == 0 { stopFuelQtyEnd4 = fuelCap * stopFuelLevelEnd4 }
+		if defCap > 0, stopDefQty4 == 0 { stopDefQty4 = defCap * stopDefLevel4 }
+		if defCap > 0, stopDefQtyStart4 == 0 { stopDefQtyStart4 = defCap * stopDefLevelStart4 }
+		if fuelCap > 0, stopFuelQtyStart5 == 0 { stopFuelQtyStart5 = fuelCap * stopFuelLevelStart5 }
+		if fuelCap > 0, stopFuelQtyEnd5 == 0 { stopFuelQtyEnd5 = fuelCap * stopFuelLevelEnd5 }
+		if defCap > 0, stopDefQty5 == 0 { stopDefQty5 = defCap * stopDefLevel5 }
+		if defCap > 0, stopDefQtyStart5 == 0 { stopDefQtyStart5 = defCap * stopDefLevelStart5 }
+		if fuelCap > 0, stopFuelQtyStart6 == 0 { stopFuelQtyStart6 = fuelCap * stopFuelLevelStart6 }
+		if fuelCap > 0, stopFuelQtyEnd6 == 0 { stopFuelQtyEnd6 = fuelCap * stopFuelLevelEnd6 }
+		if defCap > 0, stopDefQty6 == 0 { stopDefQty6 = defCap * stopDefLevel6 }
+		if defCap > 0, stopDefQtyStart6 == 0 { stopDefQtyStart6 = defCap * stopDefLevelStart6 }
+	}
+	/// Recomputes the running consumed estimate from the current start/end quantities.
 	///
-	/// The calculation uses the selected vehicle's fuel capacity and the fractional
-	/// fuel levels chosen in the editing UI.
+	/// Kept separate from `recomputeFuelQuantities()` so a quantity the user typed by hand
+	/// is never overwritten just because the estimate needed refreshing.
+	private func recomputeFuelConsumed() {
+		fuelConsumed = max(0, (fuelQuantityStart - fuelQuantityEnd) + fuelAdded1 + fuelAdded2 + fuelAdded3 + fuelAdded4 + fuelAdded5 + fuelAdded6)
+	}
+	
+	/// Recomputes start/end fuel quantities from the eighths pickers, then the consumed estimate.
+	///
+	/// Used when the vehicle changes, since the tank capacity the quantities derive from
+	/// changes with it. Not called on appear, where a typed exact quantity must survive.
 	private func recomputeFuelQuantities() {
 		let capacity = Float(vehicleDetails?.fuelCapacity ?? 0)
 		fuelQuantityStart = capacity * fuelLevelStart1
 		fuelQuantityEnd = capacity * fuelLevelEnd1
-		// keep a running consumed value if helpful in edit state
-		fuelConsumed = max(0, (fuelQuantityStart - fuelQuantityEnd) + fuelAdded1 + fuelAdded2 + fuelAdded3 + fuelAdded4 + fuelAdded5 + fuelAdded6)
+		let defCapacity = Float(vehicleDetails?.defCapacity ?? 0)
+		defQuantityStart = defCapacity * defLevel1
+		defQuantityEnd = defCapacity * defLevelEnd1
+		recomputeFuelConsumed()
+	}
+	
+	/// Derives a DEF quantity for a record saved before the field existed, so the editable
+	/// field doesn't read zero next to a dropdown saying "1/2 Tank".
+	private func backfillDefQuantities() {
+		let capacity = Float(vehicleDetails?.defCapacity ?? 0)
+		guard capacity > 0 else { return }
+		if defQuantityStart == 0, defLevel1 > 0 { defQuantityStart = capacity * defLevel1 }
+		if defQuantityEnd == 0, defLevelEnd1 > 0 { defQuantityEnd = capacity * defLevelEnd1 }
+	}
+	
+	/// A tank reading as "1/4 Tank (25.0gal)", pairing the eighths label with the exact
+	/// quantity so a typed figure shows rather than just the eighth it snapped to.
+	/// - Returns: The quantity alone when the fraction has no label (a non-eighth value).
+	private func tankReading(fraction: Float, quantity: Float, unitLabel: String) -> String {
+		let label = functions.getFuelLevel(unit: fraction)
+		let amount = quantity.formatted(.number.precision(.fractionLength(1)))
+		return label.isEmpty ? "\(amount)\(unitLabel)" : "\(label) (\(amount)\(unitLabel))"
+	}
+	
+	/// A stop's DEF quantity, derived from its fraction when the linked log predates the
+	/// quantity field, so a stop never opens showing zero next to "1/2 Tank".
+	private func defQuantityOrDerived(_ data: FuelStopData, capacity: Float) -> Float {
+		data.defQuantity > 0 ? data.defQuantity : capacity * data.defLevel
+	}
+	
+	/// Snaps a 0...1 tank ratio to the nearest eighth, matching the dropdown's choices.
+	/// - Note: `Functions.getFuelLevel(unit:)` only labels exact eighths, so a raw ratio
+	///   has to be snapped before it can be turned into a fraction label.
+	private func nearestFuelEighth(_ ratio: Float) -> Float {
+		let clamped = min(1, max(0, ratio))
+		return (clamped * 8).rounded() / 8
 	}
 }
 
@@ -2004,12 +3043,12 @@ private extension EditTripLog {
 			let rawInterval = t.tripDateTimeEnd.timeIntervalSince(t.tripDateTimeStart)
 			totalElapsedHours += max(0, rawInterval) / 3600.0
 			var stopSecs: TimeInterval = 0
-			if (t.fuelAdded1 > 0 || !t.stopReason1.isEmpty) && t.fuelExitTime1 > t.fuelDateTime1 { stopSecs += t.fuelExitTime1.timeIntervalSince(t.fuelDateTime1) }
-			if (t.fuelAdded2 > 0 || !t.stopReason2.isEmpty) && t.fuelExitTime2 > t.fuelDateTime2 { stopSecs += t.fuelExitTime2.timeIntervalSince(t.fuelDateTime2) }
-			if (t.fuelAdded3 > 0 || !t.stopReason3.isEmpty) && t.fuelExitTime3 > t.fuelDateTime3 { stopSecs += t.fuelExitTime3.timeIntervalSince(t.fuelDateTime3) }
-			if (t.fuelAdded4 > 0 || !t.stopReason4.isEmpty) && t.fuelExitTime4 > t.fuelDateTime4 { stopSecs += t.fuelExitTime4.timeIntervalSince(t.fuelDateTime4) }
-			if (t.fuelAdded5 > 0 || !t.stopReason5.isEmpty) && t.fuelExitTime5 > t.fuelDateTime5 { stopSecs += t.fuelExitTime5.timeIntervalSince(t.fuelDateTime5) }
-			if (t.fuelAdded6 > 0 || !t.stopReason6.isEmpty) && t.fuelExitTime6 > t.fuelDateTime6 { stopSecs += t.fuelExitTime6.timeIntervalSince(t.fuelDateTime6) }
+			stopSecs += stopDuration(active: t.fuelAdded1 > 0 || !t.stopReason1.isEmpty, enter: t.fuelDateTime1, exit: t.fuelExitTime1)
+			stopSecs += stopDuration(active: t.fuelAdded2 > 0 || !t.stopReason2.isEmpty, enter: t.fuelDateTime2, exit: t.fuelExitTime2)
+			stopSecs += stopDuration(active: t.fuelAdded3 > 0 || !t.stopReason3.isEmpty, enter: t.fuelDateTime3, exit: t.fuelExitTime3)
+			stopSecs += stopDuration(active: t.fuelAdded4 > 0 || !t.stopReason4.isEmpty, enter: t.fuelDateTime4, exit: t.fuelExitTime4)
+			stopSecs += stopDuration(active: t.fuelAdded5 > 0 || !t.stopReason5.isEmpty, enter: t.fuelDateTime5, exit: t.fuelExitTime5)
+			stopSecs += stopDuration(active: t.fuelAdded6 > 0 || !t.stopReason6.isEmpty, enter: t.fuelDateTime6, exit: t.fuelExitTime6)
 			totalHours += max(0, rawInterval - stopSecs) / 3600.0
 			totalEngineTime += max(0, t.engHoursEnd - t.engHoursStart)
 			let burned = (t.fuelQuantityStart + t.fuelAdded1 + t.fuelAdded2 + t.fuelAdded3 + t.fuelAdded4 + t.fuelAdded5 + t.fuelAdded6) - t.fuelQuantityEnd

@@ -18,6 +18,8 @@ class FuelLog1 {
 	var createdAt: Date = Date()
 	var updatedAt: Date = Date()
 	var fuelDateTime: Date = Date()
+	/// When the vehicle left this stop. `nil` on records made before exit time was tracked.
+	var fuelExitTime: Date?
 	var odometer: Int = 0
 	var location: String = ""
 	var engHours: Float = 0.0
@@ -26,8 +28,16 @@ class FuelLog1 {
 	var fuelAdded: Float = 0.0
 	var defAdded: Float = 0.0
 	var defPrice: Float = 0.0
+	// DEF in the tank before adding any. `defLevel1`/`defLevelFraction`/`defQuantity` below
+	// are the level *after* adding — kept under their original names to avoid a rename
+	// migration, but labelled "DEF Level End" in the UI.
+	var defLevelStart1: Float = 0.0
+	var defLevelStartFraction: String = ""
+	var defQuantityStart: Float = 0.0
 	var defLevel1: Float = 0.0
 	var defLevelFraction: String = ""
+	/// Actual DEF in the tank after adding, alongside the eighths estimate in `defLevel1`.
+	var defQuantity: Float = 0.0
 	var oilAdded: Float = 0.0
 	var oilChecked: Bool = false
 	var engineCoolantChecked: Bool = false
@@ -65,6 +75,7 @@ class FuelLog1 {
 		createdAt: Date = Date(),
 		updatedAt: Date = Date(),
 		fuelDateTime: Date = Date(),
+		fuelExitTime: Date? = nil,
 		odometer: Int = 0,
 		location: String = "",
 		engHours: Float = 0.0,
@@ -73,8 +84,12 @@ class FuelLog1 {
 		fuelAdded: Float = 0.0,
 		defAdded: Float = 0.0,
 		defPrice: Float = 0.0,
+		defLevelStart1: Float = 0.0,
+		defLevelStartFraction: String = "",
+		defQuantityStart: Float = 0.0,
 		defLevel1: Float = 0.0,
 		defLevelFraction: String = "",
+		defQuantity: Float = 0.0,
 		oilAdded: Float = 0.0,
 		oilChecked: Bool = false,
 		engineCoolantChecked: Bool = false,
@@ -108,6 +123,7 @@ class FuelLog1 {
 		self.createdAt = createdAt
 		self.updatedAt = updatedAt
 		self.fuelDateTime = fuelDateTime
+		self.fuelExitTime = fuelExitTime
 		self.odometer = odometer
 		self.location = location
 		self.engHours = engHours
@@ -116,8 +132,12 @@ class FuelLog1 {
 		self.fuelAdded = fuelAdded
 		self.defAdded = defAdded
 		self.defPrice = defPrice
+		self.defLevelStart1 = defLevelStart1
+		self.defLevelStartFraction = defLevelStartFraction
+		self.defQuantityStart = defQuantityStart
 		self.defLevel1 = defLevel1
 		self.defLevelFraction = defLevelFraction
+		self.defQuantity = defQuantity
 		self.oilAdded = oilAdded
 		self.oilChecked = oilChecked
 		self.engineCoolantChecked = engineCoolantChecked

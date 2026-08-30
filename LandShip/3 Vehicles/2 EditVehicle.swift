@@ -309,7 +309,99 @@ struct EditVehicle: View {
 		// Start in edit mode if requested
 		self._isEditing = State(initialValue: startEditing)
 	}
-	
+
+	// MARK: - Details section visibility
+	// Card sections in Details mode are only rendered when at least one of their
+	// fields holds data, so a section title never appears above an empty card.
+	// Sections that show an explicit "none recorded" message (Next Service Due,
+	// Warranties, Scale Tickets) always remain visible.
+
+	/// True when any mechanical field has data.
+	private var hasMechanicalDetails: Bool {
+		!(dataSet.fuelType.isEmpty
+		  && dataSet.engine.isEmpty
+		  && dataSet.transmission.isEmpty
+		  && dataSet.engineSerialNumber.isEmpty
+		  && dataSet.transmissionSerialNumber.isEmpty)
+	}
+
+	/// True when any usage/occupancy figure was entered.
+	private var hasVehicleDetails: Bool {
+		dataSet.mileage > 0
+			|| dataSet.mileageVirtual > 0
+			|| dataSet.engHours > 0
+			|| dataSet.doors > 0
+			|| dataSet.seats > 0
+	}
+
+	/// True when any tire or wheel field has data.
+	private var hasTireInformation: Bool {
+		!dataSet.tireSize.isEmpty
+			|| dataSet.tirePressureFront > 0
+			|| dataSet.tirePressureRear > 0
+			|| !dataSet.wheelStudSize.isEmpty
+			|| !dataSet.wheelNutSocket.isEmpty
+			|| !dataSet.wheelNutTorque.isEmpty
+	}
+
+	/// True when any dimension was entered.
+	private var hasDimensions: Bool {
+		dataSet.wheelbase > 0
+			|| dataSet.length > 0
+			|| dataSet.width > 0
+			|| dataSet.height > 0
+			|| dataSet.cargoSpace > 0
+	}
+
+	/// True when any weight rating or scale reading was entered.
+	private var hasWeightData: Bool {
+		dataSet.weight > 0
+			|| dataSet.gvwr > 0
+			|| dataSet.gcwr > 0
+			|| dataSet.gawrFront > 0
+			|| dataSet.gawrRear > 0
+			|| dataSet.towingCapcity > 0
+			|| dataSet.uvw > 0
+			|| dataSet.ccc > 0
+			|| dataSet.availablePayload > 0
+			|| dataSet.scaleWeightFrontAxle > 0
+			|| dataSet.scaleWeightRearAxle > 0
+			|| dataSet.scaleWeightPusherAxle > 0
+			|| dataSet.scaleWeightTagAxle > 0
+			|| dataSet.scaleWeightTrailerAxle > 0
+	}
+
+	/// True when any tank capacity was entered.
+	private var hasCapacities: Bool {
+		dataSet.fuelCapacity > 0
+			|| dataSet.defCapacity > 0
+			|| dataSet.waterCapacity > 0
+			|| dataSet.grayCapacity > 0
+			|| dataSet.blackCapacity > 0
+	}
+
+	/// True when any insurance field has data.
+	private var hasInsuranceInformation: Bool {
+		!(dataSet.insuranceCompany.isEmpty
+		  && dataSet.insurancePolicyNumber.isEmpty
+		  && dataSet.insurancePolicyHolder.isEmpty)
+	}
+
+	/// True when any online service field has data.
+	private var hasOnlineService: Bool {
+		!(dataSet.onlineServiceProvider.isEmpty
+		  && dataSet.onlineServiceNumber.isEmpty
+		  && dataSet.onlineServiceURL.isEmpty
+		  && dataSet.onlineServiceLogin.isEmpty
+		  && dataSet.onlineServiceBillingAccount.isEmpty
+		  && dataSet.vehicleMobileNumber.isEmpty)
+	}
+
+	/// True when at least one image is attached.
+	private var hasGraphics: Bool {
+		dataSet.image1 != nil || dataSet.image2 != nil || dataSet.image3 != nil
+	}
+
 	var body: some View {
 		if isEditing {
 			ScrollView {
@@ -912,18 +1004,21 @@ struct EditVehicle: View {
 					}
 				}
 
-				CardView {
+				// Hidden when no component serial numbers were recorded
+				if !serialItems.isEmpty {
+					CardView {
 					VStack {
 						SectionText(label: "COMPONENT SERIAL NUMBERS")
-						if !serialItems.isEmpty {
-							ForEach(serialItems) { item in
-								HStack{LabelDataText(label: item.itemName, data: item.serialNumber)}
-							}
+						ForEach(serialItems) { item in
+							HStack{LabelDataText(label: item.itemName, data: item.serialNumber)}
 						}
+					}
 					}
 				}
 
-				CardView {
+				// Hidden when no mechanical fields have data
+				if hasMechanicalDetails {
+					CardView {
 					VStack {
 						SectionText(label: "MECHANICAL DETAILS")
 						if dataSet.fuelType != "" {
@@ -942,9 +1037,12 @@ struct EditVehicle: View {
 							HStack{LabelDataText(label: "Trans. Serial #", data: dataSet.transmissionSerialNumber)}
 						}
 					}
+					}
 				}
 				
-				CardView {
+				// Hidden when no vehicle detail fields have data
+				if hasVehicleDetails {
+					CardView {
 					VStack {
 						SectionText(label: "VEHICLE DETAILS")
 						if dataSet.mileage > 0 {
@@ -962,6 +1060,7 @@ struct EditVehicle: View {
 						if dataSet.seats > 0 {
 							HStack{LabelDataText(label: "Seats", data: "\(dataSet.seats)")}
 						}
+					}
 					}
 				}
 
@@ -1031,7 +1130,9 @@ struct EditVehicle: View {
 					}
 				}
 				
-				CardView {
+				// Hidden when no tire fields have data
+				if hasTireInformation {
+					CardView {
 					VStack {
 						SectionText(label: "TIRE INFORMATION")
 						if dataSet.tireSize != "" {
@@ -1053,9 +1154,12 @@ struct EditVehicle: View {
 							HStack{LabelDataText(label: "Wheel Nut Torque", data: dataSet.wheelNutTorque)}
 						}
 					}
+					}
 				}
 				
-				CardView {
+				// Hidden when no dimension fields have data
+				if hasDimensions {
+					CardView {
 					VStack {
 						SectionText(label: "DIMENSIONS")
 						if dataSet.wheelbase > 0 {
@@ -1074,11 +1178,15 @@ struct EditVehicle: View {
 							HStack{LabelDataText(label: "Cargo Space", data: "\(dataSet.cargoSpace) \(unit(UnitIndex.area))")}
 						}
 					}
+					}
 				}
 				
 				CardView {
 					VStack {
-						SectionText(label: "WEIGHT DATA")
+						// Title only appears when weight figures were entered
+						if hasWeightData {
+							SectionText(label: "WEIGHT DATA")
+						}
 						if dataSet.weight > 0 {
 							HStack{LabelDataText(label: "Vehicle Weight", data: "\(dataSet.weight) \(unit(UnitIndex.mass))")}
 							HStack{LabelDataText(label: "Date Weighed", data: "\(functions.formatDate_DDMMMyy(date:dataSet.dateWeighed))")}
@@ -1150,7 +1258,9 @@ struct EditVehicle: View {
 					}
 				}
 				
-				CardView {
+				// Hidden when no capacities were entered
+				if hasCapacities {
+					CardView {
 					VStack {
 						SectionText(label: "CAPACITIES")
 						if dataSet.fuelCapacity > 0 {
@@ -1168,6 +1278,7 @@ struct EditVehicle: View {
 						if dataSet.blackCapacity > 0 {
 							HStack{LabelDataText(label: "Black Water", data: "\(dataSet.blackCapacity) \(unit(UnitIndex.fuel))")}
 						}
+					}
 					}
 				}
 				
@@ -1195,7 +1306,9 @@ struct EditVehicle: View {
 					TextNoteDisplay_FullWidth(sectionText: "VEHICLE NOTES", data: dataSet.notes)}
 				}
 
-				CardView {
+				// Hidden when no insurance fields have data
+				if hasInsuranceInformation {
+					CardView {
 					VStack {
 						SectionText(label: "INSURANCE INFORMATION")
 						if dataSet.insuranceCompany != "" {
@@ -1210,6 +1323,7 @@ struct EditVehicle: View {
 						if dataSet.insuranceCompany != "" {
 							HStack{LabelDataText(label: "Expiration", data: "\(functions.formatDate_DDMMMyy(date:dataSet.insuranceExpiration))")}
 						}
+					}
 					}
 				}
 				
@@ -1267,7 +1381,9 @@ struct EditVehicle: View {
 				}
 
 
-				CardView {
+				// Hidden when no online service fields have data
+				if hasOnlineService {
+					CardView {
 					VStack {
 						SectionText(label: "ONLINE SERVICE (OnStar...)")
 						if dataSet.onlineServiceProvider != "" {
@@ -1289,14 +1405,18 @@ struct EditVehicle: View {
 							HStack{LabelDataText(label: "Vehicle Mobile #", data: "\(dataSet.vehicleMobileNumber)")}
 						}
 					}
+					}
 				}
 
-				CardView {
+				// Hidden when no images are attached
+				if hasGraphics {
+					CardView {
 					VStack {
 						SectionText(label: "VEHICLE GRAPHICS")
 						Image_View_Details(label:"1", imageData: dataSet.image1, imageDescription: dataSet.image1Description)
 						Image_View_Details(label:"2", imageData: dataSet.image2, imageDescription: dataSet.image2Description)
 						Image_View_Details(label:"3", imageData: dataSet.image3, imageDescription: dataSet.image3Description)
+					}
 					}
 				}
 

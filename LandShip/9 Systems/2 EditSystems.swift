@@ -288,7 +288,9 @@ struct EditSystems: View {
 				}
 			}
 			
-			CardView {
+			// Hidden when no detail fields have data
+			if hasSystemDetails {
+				CardView {
 				VStack{
 					SectionText(label: "DETAILS")
 					if dataSet.systemType != "" {
@@ -313,18 +315,22 @@ struct EditSystems: View {
 						HStack{LabelDataText(label: "Status", data: "\(dataSet.systemStatus)")}
 					}
 				}
+				}
 			}
 			
 			if dataSet.systemNotes != "" {CardView {
 				TextNoteDisplay_FullWidth(sectionText: "SYSTEM NOTES", data: dataSet.systemNotes)}
 			}
 			
-			CardView {
+			// Hidden when no images are attached
+			if hasGraphics {
+				CardView {
 				VStack {
 					SectionText(label: "VEHICLE SYSTEMS GRAPHICS")
 					Image_View_Details(label:"1", imageData: dataSet.image1, imageDescription: dataSet.image1Description)
 					Image_View_Details(label:"2", imageData: dataSet.image2, imageDescription: dataSet.image2Description)
 					Image_View_Details(label:"3", imageData: dataSet.image3, imageDescription: dataSet.image3Description)
+				}
 				}
 			}
 		}
@@ -336,6 +342,26 @@ struct EditSystems: View {
 				action: "details",
 				dbRecord: "system")
 		}
+	}
+
+	// MARK: - Details section visibility
+	// Card sections in Details mode are only rendered when at least one of their
+	// fields holds data, so a section title never appears above an empty card.
+
+	/// True when any system detail field has data.
+	private var hasSystemDetails: Bool {
+		!(dataSet.systemType.isEmpty
+		  && dataSet.systemManufacturer.isEmpty
+		  && dataSet.systemModel.isEmpty
+		  && dataSet.systemSerialNumber.isEmpty
+		  && dataSet.systemPartNumber.isEmpty
+		  && dataSet.systemLocation.isEmpty
+		  && dataSet.systemStatus.isEmpty)
+	}
+
+	/// True when at least one image is attached.
+	private var hasGraphics: Bool {
+		dataSet.image1 != nil || dataSet.image2 != nil || dataSet.image3 != nil
 	}
 
 	/// Alternate content shown when the system is inactive and the global filter hides inactive items.

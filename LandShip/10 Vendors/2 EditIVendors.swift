@@ -302,8 +302,9 @@ struct EditIVendors: View {
 					TextNoteDisplay_FullWidth(sectionText: "VENDOR/SHOP NOTES", data: dataSet.vendorNotes)}
 				}
 
-				// Contacts and physical address (read-only)
-				CardView {
+				// Contacts and physical address (read-only) — hidden when no fields have data
+				if hasContactDetails {
+					CardView {
 					VStack{
 						SectionText(label: "CONTACTS & ADDRESSES")
 						if dataSet.vendorContact1 != "" {
@@ -328,10 +329,12 @@ struct EditIVendors: View {
 							HStack{LabelDataText(label: "Zip Code", data: "\(dataSet.vendorZip)")}
 						}
 					}
+					}
 				}
 				
-				// Communication channels (read-only)
-				CardView {
+				// Communication channels (read-only) — hidden when no fields have data
+				if hasCommunications {
+					CardView {
 					VStack{
 						SectionText(label: "COMMUNICATIONS")
 						if dataSet.vendorPhone != "" {
@@ -344,15 +347,18 @@ struct EditIVendors: View {
 							HStack{LabelDataText(label: "Website", data: "\(dataSet.vendorWebsite)")}
 						}
 					}
+					}
 				}
 				
-				// Vendor images (read-only)
-				CardView {
+				// Vendor images (read-only) — hidden when no images are attached
+				if hasGraphics {
+					CardView {
 					VStack {
 						SectionText(label: "VENDORS GRAPHICS")
 						Image_View_Details(label:"1", imageData: dataSet.image1, imageDescription: dataSet.image1Description)
 						Image_View_Details(label:"2", imageData: dataSet.image2, imageDescription: dataSet.image2Description)
 						Image_View_Details(label:"3", imageData: dataSet.image3, imageDescription: dataSet.image3Description)
+					}
 					}
 				}
 
@@ -401,6 +407,33 @@ struct EditIVendors: View {
 				}
 			}
 		}
+	}
+
+	// MARK: - Details section visibility
+	// Each card section in Details mode is only rendered when at least one of its
+	// fields holds data, so a section title never appears above an empty card.
+
+	/// True when any contact or address field has data.
+	private var hasContactDetails: Bool {
+		!(dataSet.vendorContact1.isEmpty
+		  && dataSet.vendorContact2.isEmpty
+		  && dataSet.vendorContact3.isEmpty
+		  && dataSet.vendorAddress.isEmpty
+		  && dataSet.vendorCity.isEmpty
+		  && dataSet.vendorState.isEmpty
+		  && dataSet.vendorZip.isEmpty)
+	}
+
+	/// True when any communication channel has data.
+	private var hasCommunications: Bool {
+		!(dataSet.vendorPhone.isEmpty
+		  && dataSet.vendorEmail.isEmpty
+		  && dataSet.vendorWebsite.isEmpty)
+	}
+
+	/// True when at least one image is attached.
+	private var hasGraphics: Bool {
+		dataSet.image1 != nil || dataSet.image2 != nil || dataSet.image3 != nil
 	}
 
 	// MARK: - Actions

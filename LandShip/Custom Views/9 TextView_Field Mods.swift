@@ -242,6 +242,14 @@ struct LabelDataTextview_Numberpad_Float: View {
 	}
 }
 
+/// An existing fuel log offered when linking an enroute stop to a record that already exists.
+struct FuelLogChoice: Identifiable, Hashable {
+	/// The `FuelLog1.logId` of the record.
+	let id: String
+	/// Row text shown in the picker (date, quantity and location).
+	let label: String
+}
+
 // MARK: label + textfield for fuel added
 struct LabelDataTextview_Numberpad_Fuel: View {
 	let label: String
@@ -274,6 +282,32 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 	var fuelExitTime: Binding<Date>? = nil
 	var stopReason: Binding<String>? = nil
 	var stopComment: Binding<String>? = nil
+	/// Fuel-log attributes for this stop. Supplied only when the stop should write a
+	/// linked FuelLog1 record, so they are shown alongside the other fuel log fields.
+	var fuelLevelStart: Binding<Float>? = nil
+	var fuelLevelEnd: Binding<Float>? = nil
+	var defLevel: Binding<Float>? = nil
+	var fuelType: Binding<String>? = nil
+	/// Actual quantities behind each level. Supply these to make the figures editable,
+	/// for a digital readout where an exact amount beats an eighths estimate.
+	var fuelQuantityStart: Binding<Float>? = nil
+	var fuelQuantityEnd: Binding<Float>? = nil
+	var defQuantity: Binding<Float>? = nil
+	/// DEF level before adding any. The `defLevel`/`defQuantity` pair above is the level
+	/// after adding, shown as "DEF Level End".
+	var defLevelStart: Binding<Float>? = nil
+	var defQuantityStart: Binding<Float>? = nil
+	/// Price per unit of DEF added at this stop.
+	var defPrice: Binding<Float>? = nil
+	/// Tank capacities used by the level pickers to show the resulting quantity.
+	var fuelCapacity: Float = 0
+	var defCapacity: Float = 0
+	/// `logId` of the fuel log this stop writes to. Empty means a new log is created on save.
+	var linkedLogId: Binding<String>? = nil
+	/// Existing fuel logs the stop may be linked to instead of creating a new one.
+	var fuelLogChoices: [FuelLogChoice] = []
+	/// Called with the newly chosen `logId` so the owner can load that record's values.
+	var onLinkFuelLog: ((String) -> Void)? = nil
 	let functions: Functions = Functions()
 	
 	/// Optional callback invoked when any of the fuel fields (notably notes) change or commit
@@ -289,8 +323,73 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 	private var isDEFValid: Bool { !dataFuelLog || defAdded >= 0 }
 	/// Stop details stay hidden until a stop reason is chosen, so a freshly-added stop doesn't show a wall of empty fields.
 	private var fieldsVisible: Bool { stopReason.map { !$0.wrappedValue.isEmpty } ?? true }
+	/// DEF only applies to a diesel vehicle, so its fields stay hidden for anything else.
+	private var isDieselStop: Bool { fuelType?.wrappedValue == "Diesel" }
 	/// Quantity only applies to fuel stops; other stop reasons (rest, food, etc.) don't add fuel.
 	private var isFuelStop: Bool { stopReason.map { $0.wrappedValue == "Fuel" } ?? true }
+
+	/// "Fluid Checks" with a running count, so the button says how many were done
+	/// without having to open the sheet.
+	private var fluidChecksTitle: String {
+		let done = [oilChecked, engineCoolantChecked, secondaryCoolantChecked, powerSteeringChecked,
+			 brakeFluidChecked, transmissionFluidChecked, rearAxleChecked, frontAxleChecked,
+			 fuelWaterSeparatorChecked, airSystemWaterBleedChecked].filter { $0 }.count
+		return "Fluid Checks (\(done) completed)"
+	}
+
+	/// Fills the end-of-stop fuel quantity in from the level before fuelling plus the amount
+	/// added, so a stop only needs those two figures entered.
+	///
+	/// Only the quantity is set, not the eighths dropdown: writing the fraction here would
+	/// trip its own `onChange` and overwrite the computed amount with the nearest eighth.
+	/// The dropdown is reconciled from the quantity when the trip is saved.
+	private func recalcEndLevelFromQuantity() {
+		guard fuelCapacity > 0, let fuelQuantityEnd else { return }
+		let startQuantity: Float
+		if let stored = fuelQuantityStart?.wrappedValue {
+			startQuantity = stored
+		} else if let fraction = fuelLevelStart?.wrappedValue {
+			startQuantity = fuelCapacity * fraction
+		} else {
+			return
+		}
+		// A tank can't hold more than its capacity, however much was keyed in.
+		fuelQuantityEnd.wrappedValue = min(fuelCapacity, max(0, startQuantity + dataQuantity))
+	}
+	
+	/// Fills the end DEF quantity in from the level before adding plus the amount added,
+	/// mirroring how the end fuel level is derived.
+	///
+	/// Sets only the quantity, not the eighths dropdown — writing the fraction would trip its
+	/// own `onChange` and overwrite the computed amount with the nearest eighth.
+	private func recalcEndDefLevelFromAdded() {
+		guard defCapacity > 0, let defQuantity else { return }
+		let startQuantity: Float
+		if let stored = defQuantityStart?.wrappedValue {
+			startQuantity = stored
+		} else if let fraction = defLevelStart?.wrappedValue {
+			startQuantity = defCapacity * fraction
+		} else {
+			return
+		}
+		defQuantity.wrappedValue = min(defCapacity, max(0, startQuantity + defAdded))
+	}
+	
+	/// Menu entry (and closed-state label) for "no linked log — create one on save".
+	private var newFuelLogLabel: String { "— New Log —" }
+
+	/// Closed-state label for the linked fuel log menu.
+	/// - Parameter id: The `logId` currently linked, or an empty string for a new log.
+	private func linkedFuelLogLabel(_ id: String) -> String {
+		guard !id.isEmpty else { return newFuelLogLabel }
+		return fuelLogChoices.first(where: { $0.id == id })?.label ?? newFuelLogLabel
+	}
+
+	/// Links this stop to `id` and lets the owner load that record's values.
+	private func selectFuelLog(_ id: String, _ linkedLogId: Binding<String>) {
+		linkedLogId.wrappedValue = id
+		onLinkFuelLog?(id)
+	}
 
 	@ViewBuilder private func validatedField<Content: View>(_ valid: Bool, @ViewBuilder content: () -> Content) -> some View {
 		content()
@@ -313,7 +412,10 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 							set: { val in
 								if val == "Other" { stopReason.wrappedValue = "Other" }
 								else { stopReason.wrappedValue = val }
-								if val == "Fuel" { dataFuelLog = true }
+								// The toggle is only shown for a fuel stop, so keep the flag in step with the
+								// reason — otherwise a stop switched away from Fuel would keep its fuel log
+								// fields on screen with no control left to turn them off.
+								dataFuelLog = (val == "Fuel")
 							}
 						)) {
 							Text("Not Set").tag("")
@@ -350,9 +452,9 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 							.textFieldStyle(.roundedBorder)
 					}
 				}
-				if fuelEntryValue == 0 {
-				// only display fuel log option if new entry
-				// edited entry would be > 0 so log already created
+				if fuelEntryValue == 0, isFuelStop {
+				// only display fuel log option if new entry, and only for a fuel stop —
+				// an edited entry would be > 0 so its log already exists
 				Toggle(isOn: $dataFuelLog){
 					Text("Create Fuel Log")
 						.textLabelModified()
@@ -363,11 +465,98 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 					if newValue { stopReason?.wrappedValue = "Fuel" }
 				}
 			}
-				LabelDataPicker_DateTime(label: "Date/Time                    ", data: $fuelDateTime)
+				// Link this stop to a fuel log that already exists rather than making a new one.
+				if dataFuelLog, let linkedLogId, !fuelLogChoices.isEmpty {
+					HStack {
+						Text("Linked Fuel Log")
+							.textLabelModified()
+						// A Menu rather than a Picker: a fuel log's label is long, and a menu Picker
+						// wraps its closed-state label over several lines, spilling into the row below.
+						Menu {
+							Button(newFuelLogLabel) { selectFuelLog("", linkedLogId) }
+							ForEach(fuelLogChoices) { choice in
+								Button(choice.label) { selectFuelLog(choice.id, linkedLogId) }
+							}
+						} label: {
+							Text(linkedFuelLogLabel(linkedLogId.wrappedValue))
+								.lineLimit(1)
+								.truncationMode(.tail)
+								.frame(maxWidth: .infinity, alignment: .trailing)
+						}
+						.accessibilityLabel("Linked Fuel Log")
+						.accessibilityHint("Choose an existing fuel log to attach to this stop, or create a new one")
+					}
+				}
+				LabelDataPicker_DateTime(label: "Start Stop                   ", data: $fuelDateTime)
 				if let fuelExitTime {
-					LabelDataPicker_DateTime(label: "Exit Time                    ", data: fuelExitTime)
+					LabelDataPicker_DateTime(label: "End Stop                     ", data: fuelExitTime, notEarlierThan: fuelDateTime)
 				}
 				LabelLocationTextview(label: "Location", data: $fuelLocation, autoFillOnAppear: false)
+				// Odometer, hours and fuel type describe the stop itself, so they come before the
+				// tank readings and the amount put in.
+				if dataFuelLog {
+					HStack {
+						Text("Odometer")
+							.textLabelModified()
+						validatedField(isOdometerValid) {
+							TextField("", value: $fuelOdometer, formatter: functions.FloatFormatter)
+								.textViewModified_Medium()
+#if !os(macOS)
+								.selectAllTextOnBeginEditing()
+								.keyboardType(.numberPad)
+#endif
+								.accessibilityLabel("Fuel Odometer")
+						}
+						if !isOdometerValid {
+							Text("Odometer cannot be negative")
+								.font(.caption2)
+								.foregroundStyle(.red)
+						}
+						Text("Eng Hours")
+							.textLabelModified()
+						validatedField(isEngHoursValid) {
+							TextField("", value: $fuelEngHours, formatter: functions.FloatFormatter)
+								.textViewModified_Medium()
+#if !os(macOS)
+								.selectAllTextOnBeginEditing()
+								.keyboardType(.numberPad)
+#endif
+								.accessibilityLabel("Fuel Engine Hours")
+						}
+						if !isEngHoursValid {
+							Text("Engine hours cannot be negative")
+								.font(.caption2)
+								.foregroundStyle(.red)
+						}
+					}
+				}
+				if dataFuelLog, let fuelType {
+					HStack {
+						Text("Fuel Type")
+							.textLabelModified()
+						Picker("", selection: fuelType) {
+							Text("Gasoline").tag("Gasoline")
+							Text("Diesel").tag("Diesel")
+							Text("EV").tag("EV")
+							Text("Hybrid").tag("Hybrid")
+						}
+						.pickerStyle(.automatic)
+						.frame(maxWidth: .infinity, alignment: .trailing)
+					}
+				}
+				// Level before fuelling comes before the amount put in, so the stop reads in the
+				// order it happens: how full it was, then how much went in, then how full it ended.
+				if dataFuelLog, let fuelLevelStart {
+					HStack {
+						// Choosing an eighth fills the quantity in; a typed quantity is left alone and
+						// reconciled back to the nearest eighth when the trip is saved.
+						Picker_FuelLevel1(label: "Fuel Level Start", data: fuelLevelStart, data1: fuelCapacity, quantity: fuelQuantityStart)
+							.onChange(of: fuelLevelStart.wrappedValue) { _, newFraction in
+								fuelQuantityStart?.wrappedValue = fuelCapacity * newFraction
+								recalcEndLevelFromQuantity()
+							}
+					}
+				}
 			HStack {
 				if isFuelStop {
 					Text("Qty\(label)")
@@ -380,6 +569,9 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 							.keyboardType(.decimalPad)
 #endif
 							.accessibilityLabel("Fuel Quantity \(label)")
+							.onChange(of: dataQuantity) { _, _ in
+								recalcEndLevelFromQuantity()
+							}
 					}
 					if !isQuantityValid {
 						Text("Quantity cannot be negative")
@@ -406,46 +598,21 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 					}
 				}
 			}
-					
-			if dataFuelLog {
+			if dataFuelLog, let fuelLevelEnd {
 				HStack {
-					Text("Odometer")
-						.textLabelModified()
-					validatedField(isOdometerValid) {
-						TextField("", value: $fuelOdometer, formatter: functions.FloatFormatter)
-							.textViewModified_Medium()
-#if !os(macOS)
-							.selectAllTextOnBeginEditing()
-							.keyboardType(.numberPad)
-#endif
-							.accessibilityLabel("Fuel Odometer")
-					}
-					if !isOdometerValid {
-						Text("Odometer cannot be negative")
-							.font(.caption2)
-							.foregroundStyle(.red)
-					}
-					Text("Eng Hours")
-						.textLabelModified()
-					validatedField(isEngHoursValid) {
-						TextField("", value: $fuelEngHours, formatter: functions.FloatFormatter)
-							.textViewModified_Medium()
-#if !os(macOS)
-							.selectAllTextOnBeginEditing()
-							.keyboardType(.numberPad)
-#endif
-							.accessibilityLabel("Fuel Engine Hours")
-					}
-					if !isEngHoursValid {
-						Text("Engine hours cannot be negative")
-							.font(.caption2)
-							.foregroundStyle(.red)
-					}
+					Picker_FuelLevel1(label: "Fuel Level End", data: fuelLevelEnd, data1: fuelCapacity, quantity: fuelQuantityEnd)
+						.onChange(of: fuelLevelEnd.wrappedValue) { _, newFraction in
+							fuelQuantityEnd?.wrappedValue = fuelCapacity * newFraction
+						}
 				}
+			}
+			if dataFuelLog {
 				VStack {
 					HStack(alignment: .center) {
 						Text("--------- Fluids Added ---------")
 					}
+					// Oil stands on its own row; DEF gets its own amount and price so a stop records DEF
+					// cost the same way the fuel log does.
 					HStack {
 						Text("Oil \(labelOil)")
 							.textLabelModified()
@@ -463,28 +630,66 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 								.font(.caption2)
 								.foregroundStyle(.red)
 						}
-						Text("DEF \(labelDEF)")
-							.textLabelModified()
-						validatedField(isDEFValid) {
-							TextField("", value: $defAdded, formatter: functions.FloatFormatter)
-								.textViewModified_Medium()
-#if !os(macOS)
-								.selectAllTextOnBeginEditing()
-								.keyboardType(.decimalPad)
-#endif
-								.accessibilityLabel("DEF Added \(labelDEF)")
+					}
+					if isDieselStop, let defLevelStart {
+						HStack {
+							Picker_FuelLevel1(label: "DEF Level Start", data: defLevelStart, data1: defCapacity, quantity: defQuantityStart)
+								.onChange(of: defLevelStart.wrappedValue) { _, newFraction in
+									defQuantityStart?.wrappedValue = defCapacity * newFraction
+									recalcEndDefLevelFromAdded()
+								}
 						}
-						if !isDEFValid {
-							Text("DEF cannot be negative")
-								.font(.caption2)
-								.foregroundStyle(.red)
+					}
+					// DEF amount and price sit side by side and use the same labels as the fuel row above.
+					if isDieselStop {
+						HStack {
+								Text("Qty\(labelDEF)")
+								.textLabelModified()
+							validatedField(isDEFValid) {
+								TextField("", value: $defAdded, formatter: functions.FloatFormatter)
+									.textViewModified_Medium()
+#if !os(macOS)
+									.selectAllTextOnBeginEditing()
+									.keyboardType(.decimalPad)
+#endif
+									.accessibilityLabel("DEF Added \(labelDEF)")
+									.onChange(of: defAdded) { _, _ in
+										recalcEndDefLevelFromAdded()
+									}
+							}
+							if !isDEFValid {
+								Text("DEF cannot be negative")
+									.font(.caption2)
+									.foregroundStyle(.red)
+							}
+							if let defPrice {
+								Text("Price/\(labelDEF)")
+									.textLabelModified()
+								validatedField(defPrice.wrappedValue >= 0) {
+									TextField("", value: defPrice, format: .currency(code: Locale.current.currency?.identifier ?? "USD"))
+										.textViewModified_Medium()
+#if !os(macOS)
+										.selectAllTextOnBeginEditing()
+										.keyboardType(.decimalPad)
+#endif
+										.accessibilityLabel("DEF Price per \(labelDEF)")
+								}
+							}
+						}
+					}
+					if isDieselStop, let defLevel {
+						HStack {
+							Picker_FuelLevel1(label: "DEF Level End", data: defLevel, data1: defCapacity, quantity: defQuantity)
+								.onChange(of: defLevel.wrappedValue) { _, newFraction in
+									defQuantity?.wrappedValue = defCapacity * newFraction
+								}
 						}
 					}
 					HStack {
 						Button {
 							showFluidChecks = true
 						} label: {
-							Label("Fluid Checks", systemImage: "drop.circle")
+							Label(fluidChecksTitle, systemImage: "drop.circle")
 						}
 						.buttonStyle(.bordered)
 						Spacer()

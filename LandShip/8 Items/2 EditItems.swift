@@ -154,6 +154,32 @@ struct EditItems: View {
 	@State private var daysRemainingToDue: Int = 0
 	@State private var nextDueDate: Date? = nil
 
+	// MARK: - Details section visibility
+	// Card sections in View mode are only rendered when at least one of their
+	// fields holds data, so a section title never appears above an empty card.
+
+	/// True when any service interval was specified.
+	private var hasServiceIntervals: Bool {
+		dataSet.intervalMiles > 0
+			|| dataSet.intervalHours > 0
+			|| dataSet.intervalMonths > 0
+			|| !dataSet.customMeasureLabel.isEmpty
+	}
+
+	/// True when at least one part line was entered.
+	private var hasPartsUsed: Bool {
+		!(dataSet.part1.isEmpty
+		  && dataSet.part2.isEmpty
+		  && dataSet.part3.isEmpty
+		  && dataSet.part4.isEmpty
+		  && dataSet.part5.isEmpty)
+	}
+
+	/// True when at least one image is attached.
+	private var hasGraphics: Bool {
+		dataSet.image1 != nil || dataSet.image2 != nil || dataSet.image3 != nil
+	}
+
 	// MARK: - Computed totals & aggregates
 	// These values are derived live from the editable fields to keep the UI reactive.
 	// - partsLinesCount: counts non-empty part lines with positive quantity
@@ -778,7 +804,9 @@ struct EditItems: View {
 				}
 
 				// Service intervals controlling due calculations (months/miles/hours).
-				CardView {
+				// Hidden when no interval was specified.
+				if hasServiceIntervals {
+					CardView {
 					VStack{
 						SectionText(label: "SERVICE INTERVALS")
 						if dataSet.intervalMiles > 0 {
@@ -794,10 +822,12 @@ struct EditItems: View {
 							HStack{LabelDataText(label: dataSet.customMeasureLabel, data: "\(dataSet.customMeasureValue.formatted(.number.precision(.fractionLength(1)))) \(dataSet.customMeasureUnit)")}
 						}
 					}
+					}
 				}
 
-				// Part 1..5 parts used details
-				CardView {
+				// Part 1..5 parts used details — hidden when no parts were entered
+				if hasPartsUsed {
+					CardView {
 					VStack{
 						SectionText(label: "PARTS USED")
 						if dataSet.part1 != "" {
@@ -835,6 +865,7 @@ struct EditItems: View {
 							HStack{LabelDataText(label: "Cost/Unit:", data: "\(functions.formatCurrency(dollars: dataSet.part5cost)) / \(dataSet.part5Unit)")}
 							HStack{LabelDataText(label: "Part Total:", data: "\(functions.formatCurrency(dollars: Float(part5Total)))")}
 						}
+					}
 					}
 				}
 				
@@ -917,13 +948,15 @@ struct EditItems: View {
 					}
 				}
 				
-				// Reference images displayed in read-only mode.
-				CardView {
+				// Reference images displayed in read-only mode — hidden when none attached.
+				if hasGraphics {
+					CardView {
 					VStack {
 						SectionText(label: "SERVICE ITEM GRAPHICS")
 						Image_View_Details(label:"1", imageData: dataSet.image1, imageDescription: dataSet.image1Description)
 						Image_View_Details(label:"2", imageData: dataSet.image2, imageDescription: dataSet.image2Description)
 						Image_View_Details(label:"3", imageData: dataSet.image3, imageDescription: dataSet.image3Description)
+					}
 					}
 				}
 

@@ -44,6 +44,11 @@
 
 import SwiftUI
 import SwiftData
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 /// A view that displays and edits a FuelLog1 entry, including computed statistics
 /// derived from other logs of the same vehicle. The view toggles between a read-only
@@ -81,6 +86,9 @@ struct EditFuelLog: View {
 	@State private var createdAt: Date = Date()
 	@State private var updatedAt: Date = Date()
 	@State private var fuelDateTime: Date = Date()
+	@State private var fuelExitTime: Date = Date()
+	/// "trip name — Stop n" when a travel log links to this record; empty when nothing does.
+	@State private var linkedTravelLog: String = ""
 	@State private var odometer: Int = 0
 	@State private var location: String = ""
 	@State private var engHours: Float = 0.0
@@ -91,6 +99,10 @@ struct EditFuelLog: View {
 	@State private var defPrice: Float = 0.0
 	@State private var defLevel1: Float = 0.0
 	@State private var defLevelFraction: String = ""
+	@State private var defQuantity: Float = 0.0
+	@State private var defLevelStart1: Float = 0.0
+	@State private var defLevelStartFraction: String = ""
+	@State private var defQuantityStart: Float = 0.0
 	@State private var oilAdded: Float = 0.0
 	@State private var oilChecked: Bool = false
 	@State private var engineCoolantChecked: Bool = false
@@ -122,6 +134,14 @@ struct EditFuelLog: View {
 	// shared vehicle details accessible anywhere in this file
 	@State private var vehicleDetails: VehicleDetails? = nil
 	@State private var selectedVehicle: Vehicle8? = nil
+
+	// MARK: - Details section visibility
+
+	/// True when at least one image is attached; the graphics card is hidden otherwise
+	/// so its section title never appears above an empty card.
+	private var hasGraphics: Bool {
+		dataSet.image1 != nil || dataSet.image2 != nil || dataSet.image3 != nil
+	}
 
 	// MARK: - Computed Statistics
 
@@ -162,6 +182,7 @@ struct EditFuelLog: View {
 		self._createdAt = State.init(initialValue: dataSet.createdAt)
 		self._updatedAt = State.init(initialValue: dataSet.updatedAt)
 		self._fuelDateTime = State.init(initialValue: dataSet.fuelDateTime)
+		self._fuelExitTime = State.init(initialValue: dataSet.fuelExitTime ?? dataSet.fuelDateTime)
 		self._odometer = State.init(initialValue: dataSet.odometer)
 		self._location = State.init(initialValue: dataSet.location)
 		self._engHours = State.init(initialValue: dataSet.engHours)
@@ -172,6 +193,10 @@ struct EditFuelLog: View {
 		self._defPrice = State.init(initialValue: dataSet.defPrice)
 		self._defLevel1 = State.init(initialValue: dataSet.defLevel1)
 		self._defLevelFraction = State.init(initialValue: dataSet.defLevelFraction)
+		self._defQuantity = State.init(initialValue: dataSet.defQuantity)
+		self._defLevelStart1 = State.init(initialValue: dataSet.defLevelStart1)
+		self._defLevelStartFraction = State.init(initialValue: dataSet.defLevelStartFraction)
+		self._defQuantityStart = State.init(initialValue: dataSet.defQuantityStart)
 		self._oilAdded = State.init(initialValue: dataSet.oilAdded)
 		self._oilChecked = State.init(initialValue: dataSet.oilChecked)
 		self._engineCoolantChecked = State.init(initialValue: dataSet.engineCoolantChecked)
@@ -222,13 +247,18 @@ struct EditFuelLog: View {
 								sort: [SortDescriptor(\.displayName, order: .forward)],
 								labelProvider: { v in "\(v.year) \(v.displayName)"},
 							)
-							.onChange(of: selectedVehicle) { _, newVehicle in
+							.onChange(of: selectedVehicle) { oldVehicle, newVehicle in
 								let name = newVehicle?.name ?? ""
 								vehicleId = name
 								// keep dataSet in sync while editing so detail calculations reflect the change
 								dataSet.vehicleId = name
 								refreshVehicleDetails()
-								recomputeFuelQuantities()
+								// Rescale the tanks only when the vehicle genuinely changed. Seeding this picker on
+								// appear also fires this handler, and rescaling then would replace exact typed
+								// quantities with their eighths equivalents.
+								if let previous = oldVehicle, previous.name != name {
+									recomputeFuelQuantities()
+								}
 								computeFuelStats()
 							}
 							.fixedSize(horizontal: true, vertical: true)
@@ -243,7 +273,9 @@ struct EditFuelLog: View {
 								.onAppear {
 									loadUnitsIfNeeded()
 									refreshVehicleDetails()
-									recomputeFuelQuantities()
+									syncFieldsFromRecord()
+									backfillDefQuantity()
+									// The stored quantities may be typed exact figures, so they are left as loaded.
 									fuelLevelStartFraction = functions.getFuelLevel(unit: fuelLevelStart1)
 									computeFuelStats()
 								}
@@ -253,6 +285,8 @@ struct EditFuelLog: View {
 								}
 						}
 						
+						HStack{LabelDataPicker_DateTime(label: "Exit Time                    ", data: $fuelExitTime, notEarlierThan: fuelDateTime)}
+
 						HStack{LabelDataTextview(label: "Log Name", data: $logName)}
 						
 						HStack{LabelLocationTextview(label: "Location", data: $location)}
@@ -277,34 +311,28 @@ struct EditFuelLog: View {
 						}
 						
 						HStack{
-							Picker_FuelLevel1(label: "Fuel Level Start", data: $fuelLevelStart1, data1: Float(vehicleDetails?.fuelCapacity ?? 0))
+							Picker_FuelLevel1(label: "Fuel Level Start", data: $fuelLevelStart1, data1: Float(vehicleDetails?.fuelCapacity ?? 0), quantity: $fuelQuantityStart)
 						}
-						// Update fractional label and derived quantities when start level changes.
-						.onChange(of: fuelLevelStart1) {_, _ in
-							fuelLevelStartFraction = functions.getFuelLevel(unit: fuelLevelStart1)
-							recomputeFuelQuantities()
+						// Choosing an eighth fills in the quantity; a typed quantity is left alone and
+						// reconciled back to the nearest eighth on save.
+						.onChange(of: fuelLevelStart1) {_, newFraction in
+							fuelLevelStartFraction = functions.getFuelLevel(unit: newFraction)
+							fuelQuantityStart = Float(vehicleDetails?.fuelCapacity ?? 0) * newFraction
+							recalcFuelEndFromAdded()
 						}
 						HStack{
-							Picker_FuelLevel1(label: "Fuel Level End", data: $fuelLevelEnd1, data1: Float(vehicleDetails?.fuelCapacity ?? 0))
-						}
-						// Update fractional label and derived quantities when end level changes.
-						.onChange(of: fuelLevelEnd1) {_, _ in
-							fuelLevelEndFraction = functions.getFuelLevel(unit: fuelLevelEnd1)
-							recomputeFuelQuantities()
-						}
-						
-						HStack{
-							LabelDataTextview_Numberpad_Currency(label: "Price/\(unit(UnitIndex.fuel))", data: $fuelPrice)
-							// Maintain total cost and dependent stats as price changes.
-								.onChange(of: fuelPrice) {_, _ in
+							LabelDataTextview_Numberpad_Float(label: "Fuel Added (\(unit(UnitIndex.fuel)))", data: $fuelAdded)
+							// Maintain total cost, the end level, and dependent stats as the amount added changes.
+								.onChange(of: fuelAdded) {_, _ in
 									fuelCost = fuelPrice * fuelAdded
+									recalcFuelEndFromAdded()
 									computeFuelStats()
 								}
 						}
 						HStack{
-							LabelDataTextview_Numberpad_Float(label: "Fuel Added (\(unit(UnitIndex.fuel)))", data: $fuelAdded)
-							// Maintain total cost and dependent stats as quantity added changes.
-								.onChange(of: fuelAdded) {_, _ in
+							LabelDataTextview_Numberpad_Currency(label: "Price/\(unit(UnitIndex.fuel))", data: $fuelPrice)
+							// Maintain total cost and dependent stats as price changes.
+								.onChange(of: fuelPrice) {_, _ in
 									fuelCost = fuelPrice * fuelAdded
 									computeFuelStats()
 								}
@@ -316,31 +344,50 @@ struct EditFuelLog: View {
 									computeFuelStats()
 								}
 						}
+						HStack{
+							Picker_FuelLevel1(label: "Fuel Level End", data: $fuelLevelEnd1, data1: Float(vehicleDetails?.fuelCapacity ?? 0), quantity: $fuelQuantityEnd)
+						}
+						.onChange(of: fuelLevelEnd1) {_, newFraction in
+							fuelLevelEndFraction = functions.getFuelLevel(unit: newFraction)
+							fuelQuantityEnd = Float(vehicleDetails?.fuelCapacity ?? 0) * newFraction
+						}
+						HStack(alignment: .center) {
+							Text("--------- Fluids Added ---------")
+						}
 						HStack{LabelDataTextview_Numberpad_Float(label: "Oil Added (\(unit(UnitIndex.oil)))", data: $oilAdded)}
+						// DEF only applies to a diesel vehicle, so its fields stay hidden for anything else.
 						if fuelType == "Diesel" {
-							HStack{LabelDataTextview_Numberpad_Float(label: "DEF Added (\(unit(UnitIndex.def)))", data: $defAdded)}
+							HStack{
+								Picker_FuelLevel1(label: "DEF Level Start", data: $defLevelStart1, data1: Float(vehicleDetails?.defCapacity ?? 0), quantity: $defQuantityStart)
+									.onChange(of: defLevelStart1) { _, newFraction in
+										defQuantityStart = Float(vehicleDetails?.defCapacity ?? 0) * newFraction
+										defLevelStartFraction = functions.getFuelLevel(unit: newFraction)
+										recalcDefEndFromAdded()
+									}
+							}
+							HStack{
+								LabelDataTextview_Numberpad_Float(label: "DEF Added (\(unit(UnitIndex.def)))", data: $defAdded)
+									.onChange(of: defAdded) { _, _ in
+										recalcDefEndFromAdded()
+									}
+							}
 							HStack{LabelDataTextview_Numberpad_Currency(label: "DEF Price/\(unit(UnitIndex.def))", data: $defPrice)}
 							HStack{
-								Picker_FuelLevel1(label: "DEF Level", data: $defLevel1, data1: Float(vehicleDetails?.defCapacity ?? 0))
-									.onChange(of: defLevel1) { _, _ in
-										defLevelFraction = functions.getFuelLevel(unit: defLevel1)
+								Picker_FuelLevel1(label: "DEF Level End", data: $defLevel1, data1: Float(vehicleDetails?.defCapacity ?? 0), quantity: $defQuantity)
+									.onChange(of: defLevel1) { _, newFraction in
+										defQuantity = Float(vehicleDetails?.defCapacity ?? 0) * newFraction
+										defLevelFraction = functions.getFuelLevel(unit: newFraction)
 									}
 							}
 						}
-						CardView {
-							VStack {
-								SectionText(label: "FLUID CHECKS")
-								HStack {
-									Spacer()
-									Button {
-										showFluidChecks = true
-									} label: {
-										Label("Fluid Checks", systemImage: "drop.circle")
-									}
-									.buttonStyle(.bordered)
-									Spacer()
-								}
+						HStack {
+							Button {
+								showFluidChecks = true
+							} label: {
+								Label(fluidChecksTitle, systemImage: "drop.circle")
 							}
+							.buttonStyle(.bordered)
+							Spacer()
 						}
 						.sheet(isPresented: $showFluidChecks) {
 							FluidCheckSheet(
@@ -408,18 +455,28 @@ struct EditFuelLog: View {
 					}
 				}
 				refreshVehicleDetails()
-				recomputeFuelQuantities()
 				computeFuelStats()
 			}
 			.toolbar {
 				ToolbarItem(placement: .automatic) {
-					Button(isEditing ? "Cancel" : "Edit") {isEditing.toggle()}
+					Button(isEditing ? "Cancel" : "Edit") {
+						// Cancelling drops any in-progress edits, so reload from the record.
+						if isEditing { syncFieldsFromRecord() }
+						isEditing.toggle()
+					}
 						.buttonStyle(GrowingButton(buttonColor: Color.green))
 				}
 				ToolbarItem(placement: .automatic) {
 					Button("Save") {
-						isEditing.toggle()
-						updateItem()
+						// End editing so any field the user was still typing in writes its value to the
+						// binding before it is read below.
+						commitPendingTextEdits()
+						// Give the field one run-loop turn to publish its committed value into @State,
+						// then persist and leave edit mode.
+						DispatchQueue.main.async {
+							updateItem()
+							isEditing = false
+						}
 					}
 					.buttonStyle(GrowingButton(buttonColor: Color.red))
 				}
@@ -436,10 +493,17 @@ struct EditFuelLog: View {
 								loadUnitsIfNeeded()
 								refreshVehicleDetails()
 								computeFuelStats()
+								linkedTravelLog = linkedTravelLogSummary()
 							}
 						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						HStack{LabelDataText(label: "Date/Time", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.fuelDateTime))")}
+						if let exit = dataSet.fuelExitTime, exit > dataSet.fuelDateTime {
+							HStack{LabelDataText(label: "Exit Time", data: "\(functions.formatDate_DDMMMyy_HHmm(date: exit))")}
+						}
 						HStack{LabelDataText(label: "Log Name", data: "\(dataSet.logName)")}
+						if !linkedTravelLog.isEmpty {
+							HStack{LabelDataText(label: "Travel Log", data: linkedTravelLog)}
+						}
 						if dataSet.location != "" {
 							HStack{LabelDataText(label: "Location", data: "\(dataSet.location)")}
 						}
@@ -455,10 +519,10 @@ struct EditFuelLog: View {
 						SectionText(label: "FUELING DETAILS")
 						HStack{LabelDataText(label: "Fuel Type", data: "\(dataSet.fuelType)")}
 						if dataSet.fuelLevelStartFraction != "" {
-							HStack{LabelDataText(label: "Fuel Level Start", data: "\((Float(vehicleDetails?.fuelCapacity ?? 0) * dataSet.fuelLevelStart1)) \(unit(UnitIndex.fuel)) \(dataSet.fuelLevelStartFraction)")}
+							HStack{LabelDataText(label: "Fuel Level Start", data: "\(fuelQuantityStartForDisplay.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.fuel)) \(dataSet.fuelLevelStartFraction)")}
 						}
 						if dataSet.fuelLevelEndFraction != "" {
-							HStack{LabelDataText(label: "Fuel Level End", data: "\(Float(vehicleDetails?.fuelCapacity ?? 0) * dataSet.fuelLevelEnd1) \(unit(UnitIndex.fuel)) \(dataSet.fuelLevelEndFraction)")}
+							HStack{LabelDataText(label: "Fuel Level End", data: "\(fuelQuantityEndForDisplay.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.fuel)) \(dataSet.fuelLevelEndFraction)")}
 						}
 						HStack{LabelDataCurrency(label: "Price/\(unit(UnitIndex.fuel))", data: dataSet.fuelPrice, unit: "/ \(unit(UnitIndex.fuel))")}
 						HStack{LabelDataNumber(label: "Fuel Added (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded, fractionalLength: 1)}
@@ -470,10 +534,15 @@ struct EditFuelLog: View {
 							HStack{LabelDataNumber(label: "DEF Added (\(unit(UnitIndex.def)))", data: dataSet.defAdded, fractionalLength: 1)}
 							if dataSet.defPrice > 0.0 {
 								HStack{LabelDataCurrency(label: "DEF Price/\(unit(UnitIndex.def))", data: dataSet.defPrice, unit: "")}
+								// DEF cost isn't stored — it's the amount added times its price, as fuel Cost is.
+								HStack{LabelDataCurrency(label: "DEF Cost", data: dataSet.defAdded * dataSet.defPrice, unit: "")}
 							}
 						}
+						if dataSet.defLevelStartFraction != "" {
+							HStack{LabelDataText(label: "DEF Level Start", data: "\(defQuantityStartForDisplay.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.def)) \(dataSet.defLevelStartFraction)")}
+						}
 						if dataSet.defLevelFraction != "" {
-							HStack{LabelDataText(label: "DEF Level", data: "\(Float(vehicleDetails?.defCapacity ?? 0) * dataSet.defLevel1) \(unit(UnitIndex.def)) \(dataSet.defLevelFraction)")}
+							HStack{LabelDataText(label: "DEF Level End", data: "\(defQuantityForDisplay.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.def)) \(dataSet.defLevelFraction)")}
 						}
 					}
 				}
@@ -554,12 +623,15 @@ struct EditFuelLog: View {
 					}
 				}
 
-				CardView {
+				// Hidden when no images are attached
+				if hasGraphics {
+					CardView {
 					VStack {
 						SectionText(label: "FUEL GRAPHICS")
 						Image_View_Details(label:"1", imageData: dataSet.image1, imageDescription: dataSet.image1Description)
 						Image_View_Details(label:"2", imageData: dataSet.image2, imageDescription: dataSet.image2Description)
 						Image_View_Details(label:"3", imageData: dataSet.image3, imageDescription: dataSet.image3Description)
+					}
 					}
 				}
 
@@ -577,6 +649,11 @@ struct EditFuelLog: View {
 			.toolbar {
 				ToolbarItem(placement: .automatic) {
 					Button(isEditing ? "Cancel" : "Edit") {
+						// Load the form from the record on the way in. The detail view reads the model
+						// directly, while the form holds its own @State copies seeded back in `init` — so
+						// without this a value written since (by a travel log's enroute stop, say) would
+						// show correctly in details but the form would edit and re-save the stale one.
+						if !isEditing { syncFieldsFromRecord() }
 						isEditing.toggle()
 					}
 					.buttonStyle(GrowingButton(buttonColor: Color.green))
@@ -612,14 +689,159 @@ struct EditFuelLog: View {
 		self.vehicleDetails = functions.loadVehicleDetails(context: modelContext, vehicleId: vehicleId)
 	}
 
-	/// Recomputes fuelQuantityStart and fuelQuantityEnd based on the vehicle's capacity
-	/// and the selected fractional start/end levels.
+	/// Recomputes the fuel and DEF quantities from the vehicle's capacities and the selected
+	/// fractional levels.
+	///
+	/// Only called when the vehicle changes, since the capacities the quantities derive from
+	/// change with it. Not called on appear, where a typed exact quantity must survive.
 	private func recomputeFuelQuantities() {
 		let capacity = Float(vehicleDetails?.fuelCapacity ?? 0)
 		fuelQuantityStart = capacity * fuelLevelStart1
 		fuelQuantityEnd = capacity * fuelLevelEnd1
+		defQuantity = Float(vehicleDetails?.defCapacity ?? 0) * defLevel1
+		defQuantityStart = Float(vehicleDetails?.defCapacity ?? 0) * defLevelStart1
 	}
 
+	/// Stored fuel quantities, which hold a typed exact figure when one was entered and the
+	/// dropdown's derived amount otherwise. Records saved before quantities were tracked fall
+	/// back to the eighths estimate.
+	private var fuelQuantityStartForDisplay: Float {
+		dataSet.fuelQuantityStart > 0
+			? dataSet.fuelQuantityStart
+			: dataSet.fuelLevelStart1 * Float(vehicleDetails?.fuelCapacity ?? 0)
+	}
+	
+	private var fuelQuantityEndForDisplay: Float {
+		dataSet.fuelQuantityEnd > 0
+			? dataSet.fuelQuantityEnd
+			: dataSet.fuelLevelEnd1 * Float(vehicleDetails?.fuelCapacity ?? 0)
+	}
+	
+	/// Stored DEF quantity before adding, falling back to the eighths estimate for records
+	/// saved before the field existed.
+	private var defQuantityStartForDisplay: Float {
+		dataSet.defQuantityStart > 0
+			? dataSet.defQuantityStart
+			: dataSet.defLevelStart1 * Float(vehicleDetails?.defCapacity ?? 0)
+	}
+	
+	/// Stored DEF quantity, falling back to the eighths estimate for records saved before
+	/// the quantity field existed.
+	private var defQuantityForDisplay: Float {
+		dataSet.defQuantity > 0
+			? dataSet.defQuantity
+			: dataSet.defLevel1 * Float(vehicleDetails?.defCapacity ?? 0)
+	}
+	
+	/// Derives a DEF quantity for a record saved before the field existed, so the editable
+	/// field doesn't read zero next to a dropdown saying "1/2 Tank".
+	private func backfillDefQuantity() {
+		let capacity = Float(vehicleDetails?.defCapacity ?? 0)
+		guard capacity > 0 else { return }
+		if defQuantity == 0, defLevel1 > 0 { defQuantity = capacity * defLevel1 }
+		if defQuantityStart == 0, defLevelStart1 > 0 { defQuantityStart = capacity * defLevelStart1 }
+	}
+	
+	/// Re-reads the record's stored values into the form.
+	///
+	/// `@State` is seeded in `init`, which SwiftUI only honours the first time a given view
+	/// instance appears. Re-seeding on appear means a record changed elsewhere — a travel
+	/// log's enroute stop writing to its linked fuel log — shows its current values here.
+	private func syncFieldsFromRecord() {
+		vehicleId = dataSet.vehicleId
+		logName = dataSet.logName
+		fuelNotes = dataSet.fuelNotes
+		fuelDateTime = dataSet.fuelDateTime
+		fuelExitTime = dataSet.fuelExitTime ?? dataSet.fuelDateTime
+		odometer = dataSet.odometer
+		location = dataSet.location
+		engHours = dataSet.engHours
+		fuelQuantityStart = dataSet.fuelQuantityStart
+		fuelQuantityEnd = dataSet.fuelQuantityEnd
+		fuelAdded = dataSet.fuelAdded
+		defAdded = dataSet.defAdded
+		defPrice = dataSet.defPrice
+		defLevel1 = dataSet.defLevel1
+		defLevelFraction = dataSet.defLevelFraction
+		defQuantity = dataSet.defQuantity
+		defLevelStart1 = dataSet.defLevelStart1
+		defLevelStartFraction = dataSet.defLevelStartFraction
+		defQuantityStart = dataSet.defQuantityStart
+		oilAdded = dataSet.oilAdded
+		oilChecked = dataSet.oilChecked
+		engineCoolantChecked = dataSet.engineCoolantChecked
+		secondaryCoolantChecked = dataSet.secondaryCoolantChecked
+		powerSteeringChecked = dataSet.powerSteeringChecked
+		brakeFluidChecked = dataSet.brakeFluidChecked
+		transmissionFluidChecked = dataSet.transmissionFluidChecked
+		rearAxleChecked = dataSet.rearAxleChecked
+		frontAxleChecked = dataSet.frontAxleChecked
+		fuelWaterSeparatorChecked = dataSet.fuelWaterSeparatorChecked
+		airSystemWaterBleedChecked = dataSet.airSystemWaterBleedChecked
+		fuelLevelStart1 = dataSet.fuelLevelStart1
+		fuelLevelEnd1 = dataSet.fuelLevelEnd1
+		fuelLevelStartFraction = dataSet.fuelLevelStartFraction
+		fuelLevelEndFraction = dataSet.fuelLevelEndFraction
+		fuelPrice = dataSet.fuelPrice
+		fuelCost = dataSet.fuelCost
+		fuelType = dataSet.fuelType
+		image1 = dataSet.image1
+		image2 = dataSet.image2
+		image3 = dataSet.image3
+		image1Description = dataSet.image1Description
+		image2Description = dataSet.image2Description
+		image3Description = dataSet.image3Description
+		inactive = dataSet.inactive
+	}
+	
+	/// Ends text editing so an in-flight field commits its value to its binding.
+	///
+	/// `TextField(value:format:)` — used by the price, cost and DEF price fields — only
+	/// writes to its binding when it loses focus. Tapping Save while such a field is still
+	/// focused would otherwise read the previous value and appear to discard the edit.
+	private func commitPendingTextEdits() {
+#if os(iOS)
+		UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+#elseif os(macOS)
+		NSApp.keyWindow?.makeFirstResponder(nil)
+#endif
+	}
+	
+	/// "Fluid Checks" with a running count, so the button says how many were done without
+	/// having to open the sheet.
+	private var fluidChecksTitle: String {
+		let done = [oilChecked, engineCoolantChecked, secondaryCoolantChecked, powerSteeringChecked,
+			 brakeFluidChecked, transmissionFluidChecked, rearAxleChecked, frontAxleChecked,
+			 fuelWaterSeparatorChecked, airSystemWaterBleedChecked].filter { $0 }.count
+		return "Fluid Checks (\(done) completed)"
+	}
+	
+	/// Fills the end fuel quantity in from the level before fuelling plus the amount added.
+	///
+	/// Sets only the quantity, not the eighths dropdown — writing the fraction would trip its
+	/// own `onChange` and overwrite the computed amount with the nearest eighth. The dropdown
+	/// is reconciled from the quantity on save.
+	private func recalcFuelEndFromAdded() {
+		let capacity = Float(vehicleDetails?.fuelCapacity ?? 0)
+		guard capacity > 0 else { return }
+		fuelQuantityEnd = min(capacity, max(0, fuelQuantityStart + fuelAdded))
+	}
+	
+	/// Fills the end DEF quantity in from the level before adding plus the amount added.
+	private func recalcDefEndFromAdded() {
+		let capacity = Float(vehicleDetails?.defCapacity ?? 0)
+		guard capacity > 0 else { return }
+		defQuantity = min(capacity, max(0, defQuantityStart + defAdded))
+	}
+	
+	/// Snaps a 0...1 tank ratio to the nearest eighth, matching the dropdown's choices.
+	/// - Note: `Functions.getFuelLevel(unit:)` only labels exact eighths, so a raw ratio
+	///   has to be snapped before it can be turned into a fraction label.
+	private func nearestFuelEighth(_ ratio: Float) -> Float {
+		let clamped = min(1, max(0, ratio))
+		return (clamped * 8).rounded() / 8
+	}
+	
 	/// Loads unit preferences once and caches them for safe, fast access in the view.
 	private func loadUnitsIfNeeded() {
 		if let arr = prefsFunc.loadSettingsArray(context: modelContext, userName: "primary1") {
@@ -817,6 +1039,29 @@ struct EditFuelLog: View {
 
 	/// Writes all edited @State values back to the FuelLog1 model and persists changes.
 	/// Also updates the associated Vehicle8 with newer odometer/engine hours if needed.
+	/// Finds the travel log whose enroute stop links to this fuel log.
+	///
+	/// The link is held on `TripLog2` — one of its six `fuelAdded#Log` fields stores this
+	/// record's `logId`. `FuelLog1` has no back-reference, so the trips are searched instead.
+	/// - Returns: A "trip name — Stop n" summary, or an empty string when no trip links here.
+	private func linkedTravelLogSummary() -> String {
+		let id = dataSet.logId
+		guard !id.isEmpty else { return "" }
+		var fd = FetchDescriptor<TripLog2>(
+			predicate: #Predicate {
+				$0.fuelAdded1Log == id || $0.fuelAdded2Log == id || $0.fuelAdded3Log == id
+					|| $0.fuelAdded4Log == id || $0.fuelAdded5Log == id || $0.fuelAdded6Log == id
+			}
+		)
+		fd.fetchLimit = 1
+		guard let trip = try? modelContext.fetch(fd).first else { return "" }
+		let name = trip.logName.isEmpty ? "(unnamed travel log)" : trip.logName
+		let stopLogIds = [trip.fuelAdded1Log, trip.fuelAdded2Log, trip.fuelAdded3Log,
+			trip.fuelAdded4Log, trip.fuelAdded5Log, trip.fuelAdded6Log]
+		guard let stopIndex = stopLogIds.firstIndex(of: id) else { return name }
+		return "\(name) — Stop \(stopIndex + 1)"
+	}
+	
 	private func updateItem() {
 		dataSet.inactive = inactive
 		dataSet.vehicleId = vehicleId
@@ -825,16 +1070,54 @@ struct EditFuelLog: View {
 		dataSet.createdAt = createdAt
 		dataSet.updatedAt = Date()
 		dataSet.fuelDateTime = fuelDateTime
+		dataSet.fuelExitTime = max(fuelExitTime, fuelDateTime)
 		dataSet.odometer = odometer
 		dataSet.location = location
 		dataSet.engHours = engHours
+		// The quantity fields are authoritative — a digital readout can be typed straight in.
+		// Bring each eighths dropdown and fraction label back into line with its quantity.
+		var levelStartFraction = fuelLevelStart1
+		var levelEndFraction = fuelLevelEnd1
+		var levelStartText = fuelLevelStartFraction
+		var levelEndText = fuelLevelEndFraction
+		let tankCapacity = Float(vehicleDetails?.fuelCapacity ?? 0)
+		if tankCapacity > 0 {
+			levelStartFraction = nearestFuelEighth(fuelQuantityStart / tankCapacity)
+			levelEndFraction = nearestFuelEighth(fuelQuantityEnd / tankCapacity)
+			levelStartText = functions.getFuelLevel(unit: levelStartFraction)
+			levelEndText = functions.getFuelLevel(unit: levelEndFraction)
+		}
+		var defFraction = defLevel1
+		var defText = defLevelFraction
+		var defStartFraction = defLevelStart1
+		var defStartText = defLevelStartFraction
+		let defTankCapacity = Float(vehicleDetails?.defCapacity ?? 0)
+		if defTankCapacity > 0 {
+			defFraction = nearestFuelEighth(defQuantity / defTankCapacity)
+			defText = functions.getFuelLevel(unit: defFraction)
+			defStartFraction = nearestFuelEighth(defQuantityStart / defTankCapacity)
+			defStartText = functions.getFuelLevel(unit: defStartFraction)
+		}
+		fuelLevelStart1 = levelStartFraction
+		fuelLevelEnd1 = levelEndFraction
+		fuelLevelStartFraction = levelStartText
+		fuelLevelEndFraction = levelEndText
+		defLevel1 = defFraction
+		defLevelFraction = defText
+		defLevelStart1 = defStartFraction
+		defLevelStartFraction = defStartText
+
 		dataSet.fuelQuantityStart = fuelQuantityStart
 		dataSet.fuelQuantityEnd = fuelQuantityEnd
 		dataSet.fuelAdded = fuelAdded
 		dataSet.defAdded = defAdded
 		dataSet.defPrice = defPrice
-		dataSet.defLevel1 = defLevel1
-		dataSet.defLevelFraction = defLevelFraction
+		dataSet.defLevel1 = defFraction
+		dataSet.defLevelFraction = defText
+		dataSet.defQuantity = defQuantity
+		dataSet.defLevelStart1 = defStartFraction
+		dataSet.defLevelStartFraction = defStartText
+		dataSet.defQuantityStart = defQuantityStart
 		dataSet.oilAdded = oilAdded
 		dataSet.oilChecked = oilChecked
 		dataSet.engineCoolantChecked = engineCoolantChecked

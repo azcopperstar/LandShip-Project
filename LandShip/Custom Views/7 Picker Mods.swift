@@ -284,6 +284,10 @@ struct Picker_FuelLevel1: View {
 	let label: String
 	@Binding var data: Float
 	var data1: Float
+	/// Actual quantity in the tank. Supply this to make the quantity editable, for vehicles with
+	/// a digital fuel readout where a typed figure beats an eighths estimate. When `nil` the
+	/// quantity stays read-only and is computed from the fraction, as before.
+	var quantity: Binding<Float>? = nil
 	let functions: Functions = Functions()
 	var body: some View {
 		HStack(spacing: 6) {
@@ -302,9 +306,20 @@ struct Picker_FuelLevel1: View {
 			}
 //			.pickerStyle(.wheel)
 			.pickerModifier_Short()
-			let currentFuel: Float = data * data1
-			No_LabelDataNumber(data: currentFuel, fractionalLength: 1)
-				.textViewModified_Short()
+			if let quantity {
+				TextField("", value: quantity, formatter: functions.DoubleFormatter)
+					.textViewModified_Short()
+#if !os(macOS)
+					.selectAllTextOnBeginEditing()
+					.keyboardType(.decimalPad)
+#endif
+					.accessibilityLabel("\(label) quantity")
+					.accessibilityHint("Enter the exact amount in the tank, or use the dropdown to estimate")
+			} else {
+				let currentFuel: Float = data * data1
+				No_LabelDataNumber(data: currentFuel, fractionalLength: 1)
+					.textViewModified_Short()
+			}
 		}
 	}
 }
@@ -357,16 +372,32 @@ struct LabelDataPicker_Date: View {
 struct LabelDataPicker_DateTime: View {
 	let label: String
 	@Binding var data: Date
+	/// When set, the value cannot be moved earlier than this date. Used to keep an exit
+	/// time from preceding the entry time it belongs to.
+	var notEarlierThan: Date? = nil
 	let functions: Functions = Functions()
 	var body: some View {
 		HStack(spacing: 6) {
-			Button("Now"){data = Date()}
+			Button("Now"){data = clamped(Date())}
 				.buttonStyle(GrowingButton(buttonColor: Color.blue))
 			Text(label)
 				.textLabelModified()
-			DatePicker("", selection: $data, displayedComponents: [.date, .hourAndMinute])
-				.pickerModifier()
+			if let lower = notEarlierThan {
+				DatePicker("", selection: $data, in: lower..., displayedComponents: [.date, .hourAndMinute])
+					.pickerModifier()
+					// Follow the lower bound up if the entry time moves past the exit time.
+					.onChange(of: lower) { _, _ in data = clamped(data) }
+			} else {
+				DatePicker("", selection: $data, displayedComponents: [.date, .hourAndMinute])
+					.pickerModifier()
+			}
 		}
+	}
+
+	/// Pushes a date forward to the lower bound when one is set.
+	private func clamped(_ date: Date) -> Date {
+		guard let lower = notEarlierThan else { return date }
+		return max(date, lower)
 	}
 }
 

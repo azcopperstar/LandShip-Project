@@ -494,8 +494,9 @@ struct EditSubscriptions: View {
 					}
 				}
 				
-				// SERVICE ITEM DETAILS
-				CardView {
+				// SERVICE ITEM DETAILS — hidden when no fields have data
+				if hasItemDetails {
+					CardView {
 					VStack {
 //						SectionText(label: "")
 						if dataSet.itemDescription != "" {CardView {
@@ -505,11 +506,13 @@ struct EditSubscriptions: View {
 							TextNoteDisplay_FullWidth(sectionText: "IMPROVEMENT ITEM NOTES", data: dataSet.itemNotes)}
 						}
 					}
+					}
 				}
 				
 				
-				// SERVICE COMPLETED AT
-				CardView {
+				// SERVICE COMPLETED AT — hidden when no usage values were recorded
+				if hasExpenseIncurred {
+					CardView {
 					VStack {
 						SectionText(label: "EXPENSE INCURRED")
 						if dataSet.miles > 0 {
@@ -519,10 +522,12 @@ struct EditSubscriptions: View {
 							HStack{LabelDataNumber(label: "Engine Hours", data: Float(dataSet.engHours), fractionalLength: 1)}
 						}
 					}
+					}
 				}
 				
-				// SERVICE RECORDS GRAPHICS (read-only images)
-				CardView {
+				// SERVICE RECORDS GRAPHICS (read-only images) — hidden when none attached
+				if hasGraphics {
+					CardView {
 					VStack {
 						SectionText(label: "EXPENSE GRAPHICS")
 						Image_View_Details(label:"1", imageData: dataSet.image1, imageDescription: dataSet.image1Description)
@@ -530,6 +535,7 @@ struct EditSubscriptions: View {
 						Image_View_Details(label:"3", imageData: dataSet.image3, imageDescription: dataSet.image3Description)
 						Image_View_Details(label:"4", imageData: dataSet.image4, imageDescription: dataSet.image4Description)
 						Image_View_Details(label:"5", imageData: dataSet.image5, imageDescription: dataSet.image5Description)
+					}
 					}
 				}
 
@@ -681,6 +687,26 @@ struct EditSubscriptions: View {
 		// Refresh derived info after save
 		refreshVehicleDetails()
 		recomputeTotals()
+	}
+
+	// MARK: - Details section visibility
+	// Card sections in Details mode are only rendered when at least one of their
+	// fields holds data, so a section title never appears above an empty card.
+
+	/// True when a description or note has data.
+	private var hasItemDetails: Bool {
+		!(dataSet.itemDescription.isEmpty && dataSet.itemNotes.isEmpty)
+	}
+
+	/// True when a distance or engine-hour reading was recorded.
+	private var hasExpenseIncurred: Bool {
+		dataSet.miles > 0 || dataSet.engHours > 0
+	}
+
+	/// True when at least one image is attached.
+	private var hasGraphics: Bool {
+		dataSet.image1 != nil || dataSet.image2 != nil || dataSet.image3 != nil
+			|| dataSet.image4 != nil || dataSet.image5 != nil
 	}
 
 	// MARK: - Helpers

@@ -43,6 +43,12 @@ import UniformTypeIdentifiers
 import SwiftData
 import CloudKit
 
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
+
 /// The root view that hosts the three-column navigation interface, top-level sheets,
 /// backup/restore flows, and first-run onboarding.
 struct ContentView: View {
@@ -53,6 +59,7 @@ struct ContentView: View {
 	@State private var showingSettingsSheet = false
 	@State private var showingHelpSheet = false
 	@State private var showingChangelogSheet = false
+	@State private var showingFeedbackSheet = false
 	// Removed showingUpgrades property as per instructions
 	
 	// Hidden Debug Tools sheet (appears on long-press of title)
@@ -89,33 +96,54 @@ struct ContentView: View {
     @State private var splitResetID = UUID()
 	
 	// MARK: - Backup / Restore state
-	
+
+	// Manual backups only — automatic backups track their own timestamp
+	// (StorageKey.lastAutoBackupDate) so the two are never conflated.
 	@AppStorage(StorageKey.lastBackupDate) private var lastBackupDateInterval: Double = 0
+	// Security-scoped bookmark to the folder the last manual backup was saved to
+	// (an arbitrary, user-picked location), so it can be revealed later.
+	@AppStorage(StorageKey.lastManualBackupBookmark) private var lastManualBackupBookmark: Data = Data()
 
 	@State private var isExportingBackup: Bool = false
+	@State private var isBackupInProgress: Bool = false
 	@State private var backupDocument: BackupDocument = .empty
 	@State private var backupErrorMessage: String?
     @State private var backupSuccessMessage: String?
     @State private var isBackupSuccessPresented: Bool = false
-	
+
+	@State private var showRestoreSourceChoice: Bool = false
 	@State private var isImportingRestore: Bool = false
+	@State private var showingManageAutoBackups: Bool = false
 	@State private var pendingRestoreURL: URL?
 	@State private var showConfirmRestore: Bool = false
 	@State private var restoreErrorMessage: String?
 	@State private var restoreSuccessMessage: String?
-	
+
 	@State private var isBackupErrorPresented: Bool = false
 	@State private var isRestoreErrorPresented: Bool = false
 	@State private var isRestoreSuccessPresented: Bool = false
-	
+	@State private var restartRequiredAfterRestore: Bool = false
+
+	// Whether the running ModelContainer was created in CloudKit-backed mode at launch (see
+	// LandShipApp). Restoring a raw local-store snapshot while CloudKit sync is active risks
+	// pushing stale/deleted data back out to every synced device, so restore offers a choice
+	// of mode in that case — see BackupService.restoreFromBackupFolder.
+	private var isCloudKitActive: Bool {
+		BackupService.isCloudKitActive()
+	}
+
 	@Environment(\.modelContext) private var modelContext
-	
+	@Environment(\.scenePhase) private var scenePhase
+
 #if os(iOS)
 	private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 #endif
 
 	// Prevent duplicate launch logging per process
 	private static var didLogLaunch = false
+	// Avoid checking for a due automatic backup more than once per launch on .onAppear;
+	// .onChange(of: scenePhase) still re-checks each time the app becomes active.
+	private static var didCheckAutoBackupOnLaunch = false
 	
 	// MARK: - Body
 
@@ -127,8 +155,11 @@ struct ContentView: View {
             showingSettingsSheet: $showingSettingsSheet,
             showingHelpSheet: $showingHelpSheet,
             showingChangelogSheet: $showingChangelogSheet,
+            showingFeedbackSheet: $showingFeedbackSheet,
+            isBackupInProgress: isBackupInProgress,
             onBackupTapped: handleBackupTapped,
-            onRestoreTapped: { isImportingRestore = true }
+            onRestoreTapped: { showRestoreSourceChoice = true },
+            onShowManageAutoBackups: { showingManageAutoBackups = true }
         )
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 150, ideal: sidebarWidth, max: 300)
@@ -209,7 +240,10 @@ struct ContentView: View {
 	var body: some View {
         splitRoot
 		.sheet(isPresented: $showingSettingsSheet) {
-			SettingsEditorView()
+			SettingsEditorView(onRestoreRequested: { url in
+				showingSettingsSheet = false
+				requestRestore(from: url)
+			})
 		}
 		
 #if !os(macOS)
@@ -226,6 +260,9 @@ struct ContentView: View {
 		}
 		.sheet(isPresented: $showingChangelogSheet) {
 			ChangelogSheet { showingChangelogSheet = false }
+		}
+		.sheet(isPresented: $showingFeedbackSheet) {
+			FeedbackSheet { showingFeedbackSheet = false }
 		}
 #endif
 		
@@ -244,6 +281,7 @@ struct ContentView: View {
                     backupSuccessMessage = summary
                     isBackupSuccessPresented = true
                     lastBackupDateInterval = Date().timeIntervalSince1970
+                    saveLastManualBackupBookmark(for: url)
                     InAppLogger.shared.log("Backup export succeeded: \(url.lastPathComponent)")
                 case .failure(let error):
                     backupErrorMessage = error.localizedDescription
@@ -252,6 +290,37 @@ struct ContentView: View {
             }
         }
 		
+		// Restore source choice — presented before the file picker so the user can
+		// restore from an automatic backup (picked from Manage Auto-Backups) instead.
+		.confirmationDialog(
+			"Restore Data",
+			isPresented: $showRestoreSourceChoice,
+			titleVisibility: .visible
+		) {
+			Button("From Manual Backup…") {
+				isImportingRestore = true
+			}
+			Button("From Automatic Backup…") {
+				showingManageAutoBackups = true
+			}
+			Button("Cancel", role: .cancel) {}
+		} message: {
+			Text("Restore from a backup folder you saved yourself, or from one of the automatic backups \(AppInfo.displayName) has created for you.")
+		}
+		.sheet(isPresented: $showingManageAutoBackups) {
+			NavigationStack {
+				ManageAutoBackupsView(onRestoreRequested: { url in
+					showingManageAutoBackups = false
+					requestRestore(from: url)
+				})
+				.toolbar {
+					ToolbarItem(placement: .cancellationAction) {
+						Button("Close") { showingManageAutoBackups = false }
+					}
+				}
+			}
+		}
+
 		// Restore import
 		.fileImporter(
 			isPresented: $isImportingRestore,
@@ -276,25 +345,23 @@ struct ContentView: View {
 			isPresented: $showConfirmRestore,
 			titleVisibility: .visible
 		) {
-			Button("Replace current data with selected backup", role: .destructive) {
-				if let url = pendingRestoreURL {
-					Task {
-						do {
-							let message = try await BackupService.restoreFromBackupFolder(url)
-							restoreSuccessMessage = message
-							isRestoreSuccessPresented = true
-							InAppLogger.shared.log("Restore complete: \(message)")
-						} catch {
-							restoreErrorMessage = error.localizedDescription
-							isRestoreErrorPresented = true
-							InAppLogger.shared.log("Restore failed: \(error.localizedDescription)")
-						}
-					}
+			if isCloudKitActive {
+				Button("Resync from iCloud (Recommended)") {
+					performRestore(forceExactSnapshot: false)
+				}
+				Button("Restore Exact Snapshot (Advanced)", role: .destructive) {
+					performRestore(forceExactSnapshot: true)
+				}
+			} else {
+				Button("Replace current data with selected backup", role: .destructive) {
+					performRestore(forceExactSnapshot: false)
 				}
 			}
 			Button("Cancel", role: .cancel) {}
 		} message: {
-			Text("This will overwrite your current data (Documents and Application Support) with the contents of the selected backup folder. It’s recommended to relaunch the app after restoring.")
+			Text(isCloudKitActive
+				? "\u{201C}Resync from iCloud\u{201D} restores your Documents (PDFs, etc.) from the backup and re-downloads your vehicle/service data fresh from iCloud — safe, but records already deleted from iCloud will stay deleted. \u{201C}Restore Exact Snapshot\u{201D} instead overwrites your local database with the backup exactly as saved; use this only if you're restoring onto a different iCloud account, or iCloud's data didn't come back correctly and you need to force the backup's data back in — it can conflict with your other devices on the same iCloud account until they resync. A restart is required after restoring either way."
+				: "This will overwrite your current data (Documents and Application Support) with the contents of the selected backup folder. A restart is required after restoring.")
 		}
 		
 		.alert("Backup Failed", isPresented: $isBackupErrorPresented) {
@@ -313,11 +380,21 @@ struct ContentView: View {
 			Text(restoreErrorMessage ?? "")
 		}
 		.alert("Restore Complete", isPresented: $isRestoreSuccessPresented) {
-			Button("OK") { }
+#if os(macOS)
+			Button("Quit Now") { NSApp.terminate(nil) }
+#else
+			Button("OK") { restartRequiredAfterRestore = true }
+#endif
 		} message: {
 			Text(restoreSuccessMessage ?? "")
 		}
-		
+#if !os(macOS)
+		.fullScreenCover(isPresented: $restartRequiredAfterRestore) {
+			RestartRequiredView()
+				.interactiveDismissDisabled(true)
+		}
+#endif
+
 		.tint(.blue)
 		
 		.onAppear {
@@ -384,6 +461,27 @@ struct ContentView: View {
 				}
 				print("[LandShip] (ContentView) iCloud account: \(msg)")
 				InAppLogger.shared.log("iCloud account status: \(msg)")
+			}
+
+			// Check for a due automatic backup once per launch.
+			if !Self.didCheckAutoBackupOnLaunch {
+				Self.didCheckAutoBackupOnLaunch = true
+				checkAutoBackupIfNeeded()
+			}
+		}
+		.onChangeCompat(of: scenePhase) { _, newPhase in
+			// Re-check whenever the app comes back to the foreground, since a scheduled
+			// backup could become due while the app was in the background.
+			if newPhase == .active {
+				checkAutoBackupIfNeeded()
+			}
+		}
+		.onChangeCompat(of: showingSettingsSheet) { _, isShowing in
+			// Re-check right after Settings closes, so turning on automatic backups
+			// (with none yet on record) creates the first one immediately rather than
+			// waiting for the next launch or foreground event.
+			if !isShowing {
+				checkAutoBackupIfNeeded()
 			}
 		}
 		.onChangeCompat(of: splitVisibility) { _, newValue in
@@ -460,15 +558,88 @@ struct ContentView: View {
 	}
 
 	private func handleBackupTapped() {
+		guard !isBackupInProgress else { return }
 		do {
-			let doc = try BackupService.makeBackupDocument(context: modelContext)
-			self.backupDocument = doc
-			self.isExportingBackup = true
+			// Fetching model data must happen here, synchronously, on the main actor —
+			// ModelContext isn't Sendable and can't be touched from a background task.
+			let mediaSnapshots = try BackupService.collectMediaSnapshots(context: modelContext)
+			isBackupInProgress = true
 			InAppLogger.shared.log("Backup export started")
+			Task {
+				defer { isBackupInProgress = false }
+				do {
+					// The actual file-system read happens off the main thread so this
+					// doesn't freeze the UI while scanning Application Support/Documents.
+					let doc = try await BackupService.makeBackupDocument(mediaSnapshots: mediaSnapshots)
+					self.backupDocument = doc
+					self.isExportingBackup = true
+				} catch {
+					self.backupErrorMessage = error.localizedDescription
+					self.isBackupErrorPresented = true
+					InAppLogger.shared.log("Backup export failed: \(error.localizedDescription)")
+				}
+			}
 		} catch {
 			self.backupErrorMessage = error.localizedDescription
 			self.isBackupErrorPresented = true
 			InAppLogger.shared.log("Backup export failed early: \(error.localizedDescription)")
+		}
+	}
+
+	/// Persists a security-scoped bookmark to the folder the user just picked for a manual
+	/// backup, so its location can be reopened/revealed later (see SidebarView's "Last Manual
+	/// Backup" link) even in a future launch of the app.
+	private func saveLastManualBackupBookmark(for url: URL) {
+#if os(macOS)
+		let options: URL.BookmarkCreationOptions = [.withSecurityScope]
+#else
+		let options: URL.BookmarkCreationOptions = []
+#endif
+		do {
+			lastManualBackupBookmark = try url.bookmarkData(options: options, includingResourceValuesForKeys: nil, relativeTo: nil)
+		} catch {
+			InAppLogger.shared.log("Failed to bookmark manual backup location: \(error.localizedDescription)")
+		}
+	}
+
+	/// Presents the restore confirmation for a given backup folder URL, deferred to the next
+	/// run loop so it doesn't race with another sheet/view that's still dismissing.
+	private func requestRestore(from url: URL) {
+		DispatchQueue.main.async {
+			pendingRestoreURL = url
+			showConfirmRestore = true
+		}
+	}
+
+	/// Silently creates an automatic backup if one is due (see AutoBackupInterval in Settings).
+	/// Safe to call opportunistically — it's a no-op unless enabled and overdue.
+	private func checkAutoBackupIfNeeded() {
+		guard AutoBackupService.isDue() else { return }
+		do {
+			// Must happen here, synchronously, on the main actor — ModelContext isn't
+			// Sendable and can't be fetched from a background task.
+			let mediaSnapshots = try BackupService.collectMediaSnapshots(context: modelContext)
+			Task {
+				await AutoBackupService.run(mediaSnapshots: mediaSnapshots)
+			}
+		} catch {
+			InAppLogger.shared.log("Automatic backup snapshot collection failed: \(error.localizedDescription)")
+		}
+	}
+
+	private func performRestore(forceExactSnapshot: Bool) {
+		guard let url = pendingRestoreURL else { return }
+		Task {
+			do {
+				let message = try await BackupService.restoreFromBackupFolder(url, forceExactSnapshot: forceExactSnapshot)
+				restoreSuccessMessage = message
+				isRestoreSuccessPresented = true
+				InAppLogger.shared.log("Restore complete (\(forceExactSnapshot ? "exact snapshot" : "auto")): \(message)")
+			} catch {
+				restoreErrorMessage = error.localizedDescription
+				isRestoreErrorPresented = true
+				InAppLogger.shared.log("Restore failed: \(error.localizedDescription)")
+			}
 		}
 	}
 	
@@ -747,10 +918,17 @@ private struct SidebarView: View {
 	@Binding var showingSettingsSheet: Bool
 	@Binding var showingHelpSheet: Bool
 	@Binding var showingChangelogSheet: Bool
+	@Binding var showingFeedbackSheet: Bool
+	var isBackupInProgress: Bool
 	var onBackupTapped: () -> Void
 	var onRestoreTapped: () -> Void
+	// Opens ContentView's Manage Auto-Backups sheet (kept centralized there so both this
+	// link and the Restore… source-choice dialog share the same presentation state).
+	var onShowManageAutoBackups: () -> Void
 
 	@AppStorage(StorageKey.lastBackupDate) private var lastBackupDateInterval: Double = 0
+	@AppStorage(StorageKey.lastManualBackupBookmark) private var lastManualBackupBookmark: Data = Data()
+	@AppStorage(StorageKey.lastAutoBackupDate) private var lastAutoBackupDateInterval: Double = 0
 
 	private var lastBackupLabel: String {
 		guard lastBackupDateInterval > 0 else { return "No backup on record" }
@@ -760,6 +938,46 @@ private struct SidebarView: View {
 		df.timeStyle = .short
 		return df.string(from: date)
 	}
+
+	private var lastAutoBackupLabel: String {
+		guard lastAutoBackupDateInterval > 0 else { return "None yet" }
+		let date = Date(timeIntervalSince1970: lastAutoBackupDateInterval)
+		let df = DateFormatter()
+		df.dateStyle = .medium
+		df.timeStyle = .short
+		return df.string(from: date)
+	}
+
+	/// Resolves the bookmarked manual-backup location and reveals it: in Finder on macOS,
+	/// or in a Files-style folder browser on iOS/iPadOS. No-op if nothing's bookmarked yet
+	/// or the bookmark can no longer be resolved (e.g. the folder was moved or deleted).
+	private func revealLastManualBackup() {
+		guard !lastManualBackupBookmark.isEmpty else { return }
+#if os(macOS)
+		let resolveOptions: URL.BookmarkResolutionOptions = [.withSecurityScope]
+#else
+		let resolveOptions: URL.BookmarkResolutionOptions = []
+#endif
+		var isStale = false
+		guard let url = try? URL(
+			resolvingBookmarkData: lastManualBackupBookmark,
+			options: resolveOptions,
+			relativeTo: nil,
+			bookmarkDataIsStale: &isStale
+		) else { return }
+
+#if os(macOS)
+		let accessed = url.startAccessingSecurityScopedResource()
+		NSWorkspace.shared.activateFileViewerSelecting([url])
+		if accessed { url.stopAccessingSecurityScopedResource() }
+#else
+		folderBrowserURL = url
+#endif
+	}
+
+#if !os(macOS)
+	@State private var folderBrowserURL: URL?
+#endif
 
 	var body: some View {
 		List(selection: $sidebarSelection) {
@@ -844,16 +1062,53 @@ private struct SidebarView: View {
 				Button {
 					onBackupTapped()
 				} label: {
-					Label("Backup…", systemImage: "square.and.arrow.up")
-						.sidebarRowStyle(selected: sidebarSelection == .backup)
+					HStack {
+						Label("Backup…", systemImage: "square.and.arrow.up")
+							.sidebarRowStyle(selected: sidebarSelection == .backup)
+						if isBackupInProgress {
+							Spacer()
+							ProgressView()
+								.controlSize(.small)
+						}
+					}
 				}
 				.buttonStyle(.plain)
+				.disabled(isBackupInProgress)
 
 				HStack(spacing: 0) {
 					Spacer().frame(width: 32)
-					Text("Last: " + lastBackupLabel)
-						.font(.caption2)
-						.foregroundStyle(.secondary)
+					if lastManualBackupBookmark.isEmpty {
+						Text("Last Manual Backup: " + lastBackupLabel)
+							.font(.caption2)
+							.foregroundStyle(.secondary)
+					} else {
+						Button {
+							revealLastManualBackup()
+						} label: {
+							Text("Last Manual Backup: " + lastBackupLabel)
+								.font(.caption2)
+								.underline()
+								.foregroundStyle(.tint)
+						}
+						.buttonStyle(.plain)
+						.accessibilityHint("Opens the folder this backup was saved to")
+					}
+					Spacer()
+				}
+				.listRowBackground(Color.clear)
+
+				HStack(spacing: 0) {
+					Spacer().frame(width: 32)
+					Button {
+						onShowManageAutoBackups()
+					} label: {
+						Text("Last Auto Backup: " + lastAutoBackupLabel)
+							.font(.caption2)
+							.underline()
+							.foregroundStyle(.tint)
+					}
+					.buttonStyle(.plain)
+					.accessibilityHint("Opens the Manage Auto-Backups screen")
 					Spacer()
 				}
 				.listRowBackground(Color.clear)
@@ -886,11 +1141,56 @@ private struct SidebarView: View {
 						.sidebarRowStyle(selected: false)
 				}
 				.buttonStyle(.plain)
+
+				Button {
+					showingFeedbackSheet = true
+					InAppLogger.shared.log("Opened Send Feedback")
+				} label: {
+					Label("Send Feedback", systemImage: "paperplane")
+						.sidebarRowStyle(selected: false)
+				}
+				.buttonStyle(.plain)
 			}
 #endif
 		}
+#if !os(macOS)
+		.sheet(isPresented: Binding(
+			get: { folderBrowserURL != nil },
+			set: { isPresented in if !isPresented { folderBrowserURL = nil } }
+		)) {
+			if let url = folderBrowserURL {
+				FolderBrowserView(url: url)
+			}
+		}
+#endif
 	}
 }
+
+#if !os(macOS)
+/// Presents a system folder browser already navigated to a given folder's enclosing
+/// directory, so the user can see/open it — used to "reveal" a manual backup's saved
+/// location, which lives outside the app's own sandbox so it can't be shown any other way.
+/// Browsing only: picking or cancelling both just dismiss the sheet.
+private struct FolderBrowserView: UIViewControllerRepresentable {
+	let url: URL
+
+	func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+		let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
+		picker.directoryURL = url.deletingLastPathComponent()
+		picker.delegate = context.coordinator
+		return picker
+	}
+
+	func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+	func makeCoordinator() -> Coordinator { Coordinator() }
+
+	final class Coordinator: NSObject, UIDocumentPickerDelegate {
+		func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {}
+		func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {}
+	}
+}
+#endif
 
 /// Extracted middle column content to reduce type-checking complexity
 struct MiddleColumnView: View {

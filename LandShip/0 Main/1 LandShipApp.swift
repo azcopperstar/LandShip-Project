@@ -112,16 +112,16 @@ struct LandShipApp: App {
 		// These features were used to troubleshoot and test CloudKit sync.
 		// Uncomment if you need to debug sync issues in the future.
 		
-		// Optional: async check iCloud account status (helpful when debugging devices)
-		// Task {
-		// 	await Self.checkCloudKitStatus()
-		// }
+		// Log which CloudKit database this build is signed for, plus account status.
+		Task {
+			await Self.checkCloudKitStatus()
+		}
 		
-		// Initialize sync monitor if we have a CloudKit container
-		// Includes: polling fallback, heartbeat logging, and notification observers
-		// if !isLocalOnly, let container = modelContainer {
-		// 	Self.syncMonitor = CloudKitSyncMonitor(container: container)
-		// }
+		// Initialize sync monitor if we have a CloudKit container, so export and
+		// import failures surface with their real CKError instead of failing silently.
+		if !isLocalOnly, let container = modelContainer {
+			Self.syncMonitor = CloudKitSyncMonitor(container: container)
+		}
 	}
 	
 	// MARK: - CloudKit Diagnostics
@@ -169,40 +169,22 @@ struct LandShipApp: App {
 		#endif
 	}
 	
+	/// The CloudKit database this build is signed to talk to.
+	///
+	/// Accurate by construction: CODE_SIGN_ENTITLEMENTS resolves to
+	/// LandShip-$(CONFIGURATION).entitlements, so the value of the
+	/// `com.apple.developer.icloud-container-environment` entitlement and the
+	/// DEBUG compilation condition both derive from the build configuration
+	/// and cannot drift apart.
+	///
+	/// Note: `aps-environment` does NOT select the CloudKit environment -- it
+	/// only controls APNs. The entitlement above is what CloudKit reads.
 	private static func detectCloudKitEnvironment() -> String {
-		// Check the aps-environment entitlement to determine which CloudKit environment is active
-		if let entitlements = Bundle.main.object(forInfoDictionaryKey: "Entitlements") as? [String: Any],
-		   let apsEnv = entitlements["aps-environment"] as? String {
-			return apsEnv.uppercased()
-		}
-		
-		// Fallback: check if running from Xcode (development) or installed (production)
-		#if DEBUG
-		// When running from Xcode, even with production entitlement, it uses development
-		if isRunningFromXcode() {
-			return "DEVELOPMENT (Xcode)"
-		}
-		#endif
-		
-		// Check embedded.mobileprovision for environment
-		if let provisionPath = Bundle.main.path(forResource: "embedded", ofType: "mobileprovision"),
-		   let provisionData = try? Data(contentsOf: URL(fileURLWithPath: provisionPath)),
-		   let provisionString = String(data: provisionData, encoding: .ascii) {
-			if provisionString.contains("<key>aps-environment</key>") {
-				if provisionString.contains("<string>production</string>") {
-					return "PRODUCTION"
-				} else if provisionString.contains("<string>development</string>") {
-					return "DEVELOPMENT"
-				}
-			}
-		}
-		
-		return "PRODUCTION (default)"
-	}
-	
-	private static func isRunningFromXcode() -> Bool {
-		// Xcode sets specific environment variables
-		return ProcessInfo.processInfo.environment["__XCODE_BUILT_PRODUCTS_DIR_PATHS"] != nil
+#if DEBUG
+		return "DEVELOPMENT"
+#else
+		return "PRODUCTION"
+#endif
 	}
 	
 	var body: some Scene {
@@ -439,7 +421,8 @@ final class CloudKitSyncMonitor: @unchecked Sendable {
 		self.container = container
 		setupObservers()
 		startHeartbeat()
-		startPolling()
+		// startPolling() is deliberately not called: saving on a timer gets the
+		// container throttled by CloudKit and amplifies whatever is already failing.
 		print("[LandShip] 🔍 CloudKitSyncMonitor initialized")
 		logger.notice("🔍 CloudKitSyncMonitor initialized")
 	}
@@ -510,15 +493,16 @@ final class CloudKitSyncMonitor: @unchecked Sendable {
 		}
 		observers.append(contextDidSaveObserver)
 		
-		// Monitor for CloudKit import events
-		let importObserver = NotificationCenter.default.addObserver(
-			forName: NSNotification.Name("NSPersistentCloudKitContainerEventChangedNotification"),
+		// Monitor CloudKit setup/import/export events. Use the framework's own
+		// Notification.Name -- the hand-written string does not match it.
+		let eventObserver = NotificationCenter.default.addObserver(
+			forName: NSPersistentCloudKitContainer.eventChangedNotification,
 			object: nil,
 			queue: .main
 		) { [weak self] notification in
 			self?.handleCloudKitEvent(notification)
 		}
-		observers.append(importObserver)
+		observers.append(eventObserver)
 		
 		print("[LandShip] 🔍 Registered observers for:")
 		print("  - NSPersistentStoreRemoteChange (remote sync)")
@@ -576,27 +560,78 @@ final class CloudKitSyncMonitor: @unchecked Sendable {
 	}
 	
 	private func handleCloudKitEvent(_ notification: Notification) {
-		let message = "☁️ CloudKit EVENT at \(formatTime(Date()))"
+		// The typed event is stored under the framework's own userInfo key.
+		// Reading arbitrary string keys such as "type" or "error" always yields nil.
+		guard let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
+				as? NSPersistentCloudKitContainer.Event else {
+			logger.error("☁️ CloudKit event posted with no decodable Event payload")
+			return
+		}
+
+		let kind = Self.describe(event.type)
+
+		// Each operation posts twice: once on start (endDate == nil), once on
+		// completion. Only the completion carries succeeded/error.
+		guard event.endDate != nil else {
+			logger.info("☁️ CloudKit \(kind, privacy: .public) started")
+			return
+		}
+
+		guard let error = event.error else {
+			let message = "✅ CloudKit \(kind) succeeded at \(formatTime(Date()))"
+			print("[LandShip] \(message)")
+			logger.notice("\(message, privacy: .public)")
+			return
+		}
+
+		let message = "❌ CloudKit \(kind) FAILED at \(formatTime(Date())): \(error.localizedDescription)"
 		print("[LandShip] \(message)")
-		logger.notice("\(message, privacy: .public)")
-		
-		if let userInfo = notification.userInfo {
-			// Try to extract event type
-			if let eventType = userInfo["type"] as? String {
-				print("[LandShip]    Event type: \(eventType)")
-				logger.notice("   Event type: \(eventType, privacy: .public)")
+		logger.error("\(message, privacy: .public)")
+		Self.logDetail(for: error)
+	}
+
+	/// Unpacks a CloudKit error far enough to name the failing record type and
+	/// record ID, which is what the CloudKit Console hides behind "BAD_REQUEST".
+	private static func logDetail(for error: Error, indent: String = "   ") {
+		let nsError = error as NSError
+		logger.error("\(indent, privacy: .public)domain: \(nsError.domain, privacy: .public) code: \(nsError.code, privacy: .public)")
+
+		if let ckError = error as? CKError {
+			logger.error("\(indent, privacy: .public)CKError.Code: \(String(describing: ckError.code), privacy: .public)")
+
+			if let retry = ckError.retryAfterSeconds {
+				logger.error("\(indent, privacy: .public)retryAfter: \(retry, privacy: .public)s")
 			}
-			
-			// Check for errors
-			if let error = userInfo["error"] as? Error {
-				print("[LandShip]    ❌ ERROR: \(error.localizedDescription)")
-				logger.error("   CloudKit error: \(error.localizedDescription, privacy: .public)")
+
+			// Per-item errors name the exact CKRecord.ID the server rejected.
+			if let partial = ckError.partialErrorsByItemID {
+				logger.error("\(indent, privacy: .public)partial failures: \(partial.count, privacy: .public)")
+				for (itemID, itemError) in partial {
+					logger.error("\(indent, privacy: .public)- item: \(String(describing: itemID), privacy: .public)")
+					logDetail(for: itemError, indent: indent + "   ")
+				}
 			}
-			
-			// Log all keys for debugging
-			print("[LandShip]    Event keys: \(userInfo.keys.map { String(describing: $0) })")
+
+			if let serverRecord = ckError.serverRecord {
+				logger.error("\(indent, privacy: .public)serverRecord type: \(serverRecord.recordType, privacy: .public)")
+			}
+		}
+
+		if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
+			logger.error("\(indent, privacy: .public)underlying:")
+			logDetail(for: underlying, indent: indent + "   ")
 		}
 	}
+
+	private static func describe(_ type: NSPersistentCloudKitContainer.EventType) -> String {
+		switch type {
+			case .setup: return "SETUP"
+			case .import: return "IMPORT"
+			case .export: return "EXPORT"
+			@unknown default: return "UNKNOWN"
+		}
+	}
+
 	
 	private func formatTime(_ date: Date) -> String {
 		let formatter = DateFormatter()

@@ -404,7 +404,7 @@ struct DisplayTripLog: View {
 	private func movingTimeInterval(for record: TripLog2) -> TimeInterval {
 		let totalInterval = record.tripDateTimeEnd.timeIntervalSince(record.tripDateTimeStart)
 		guard totalInterval > 0 else { return 0 }
-		let stops: [(active: Bool, enter: Date, exit: Date)] = [
+		let stops: [(active: Bool, enter: Date?, exit: Date?)] = [
 			(record.fuelAdded1 > 0 || !record.stopReason1.isEmpty, record.fuelDateTime1, record.fuelExitTime1),
 			(record.fuelAdded2 > 0 || !record.stopReason2.isEmpty, record.fuelDateTime2, record.fuelExitTime2),
 			(record.fuelAdded3 > 0 || !record.stopReason3.isEmpty, record.fuelDateTime3, record.fuelExitTime3),
@@ -413,7 +413,8 @@ struct DisplayTripLog: View {
 			(record.fuelAdded6 > 0 || !record.stopReason6.isEmpty, record.fuelDateTime6, record.fuelExitTime6),
 		]
 		let stopInterval = stops.reduce(0.0) { total, stop in
-			stop.active && stop.exit > stop.enter ? total + stop.exit.timeIntervalSince(stop.enter) : total
+			guard stop.active, let enter = stop.enter, let exit = stop.exit, exit > enter else { return total }
+			return total + exit.timeIntervalSince(enter)
 		}
 		return max(0, totalInterval - stopInterval)
 	}

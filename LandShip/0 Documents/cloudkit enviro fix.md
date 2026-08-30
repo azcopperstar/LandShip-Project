@@ -1,236 +1,166 @@
-# CloudKit Environment Fix - Development vs Production
+# CloudKit Environment — Development vs Production
 
-## Problem Identified ✅
+> **Corrected 2026-08-30.** An earlier version of this document claimed that
+> `aps-environment` selects which CloudKit database the app uses. **That is wrong.**
+> `aps-environment` controls APNs (push notifications) only. The CloudKit database is
+> selected exclusively by the `com.apple.developer.icloud-container-environment`
+> entitlement. Acting on the old advice is what kept macOS builds pointed at the
+> live Production database.
 
-Your macOS app was syncing to **Development** CloudKit when run from Xcode, but **Production** CloudKit when installed from an archive. Since these are completely separate databases, data doesn't sync between them.
+## How the environment is actually chosen
 
-Your iOS devices are syncing to **Production** (from TestFlight/App Store), while your Mac was stuck on **Development** when running the installed build.
+Per [`CKContainer`](https://developer.apple.com/documentation/CloudKit/CKContainer#Testing-Your-Code-Using-the-Development-Container):
 
-## Changes Made
+> At runtime, CloudKit uses your app's `com.apple.developer.icloud-container-environment`
+> entitlement to discover whether you're using a `Development` or `Production` version
+> of your provisioning profile.
 
-### 1. Updated Entitlements (LandShip.entitlements)
-Changed `aps-environment` from `development` to `production`:
-```xml
-<key>aps-environment</key>
-<string>production</string>
-```
+Two consequences worth internalising:
 
-### 2. Added Environment Detection (LandShipApp.swift)
-The app now logs which CloudKit environment it's using:
-- `🌐 CloudKit Environment: PRODUCTION` - Good for archived builds
-- `🌐 CloudKit Environment: DEVELOPMENT (Xcode)` - When running from Xcode
+- **If the key is absent, macOS builds run from Xcode use Production.** This is the
+  trap. iOS development builds default to Development, so the two platforms behave
+  differently and macOS silently reads and writes live user data.
+- **APNs must match the container environment.** A Development container with
+  `aps-environment: production` will not receive remote-change pushes, so sync appears
+  broken for reasons unrelated to the database.
 
-## Fix Steps - Choose Your Approach
+## Current setup (as of 2026-08-30)
 
-### Option A: Use Production for Everything (Recommended)
-
-This makes all builds (Xcode and archived) use the **Production** environment, matching your iOS devices.
-
-**Steps:**
-
-1. ✅ **Entitlements already updated** to `production`
-
-2. **Deploy Development Schema to Production:**
-   - Go to https://icloud.developer.apple.com/dashboard
-   - Sign in with your Apple Developer account
-   - Select **"CloudKit Database"**
-   - Choose **"iCloud.com.aeronauticaltrax.LandShip"** container
-   - Switch to **Development** environment (top dropdown)
-   - Click **"Deploy Schema Changes"**
-   - Select **"Deploy to Production"**
-   - Confirm the deployment
-
-3. **Clear Development Cache on macOS:**
-   ```bash
-   # Quit LandShip completely first!
-   
-   # Clear app caches
-   rm -rf ~/Library/Caches/com.aeronauticaltrax.LandShip
-   
-   # Clear CloudKit development cache
-   rm -rf ~/Library/Application\ Support/CloudKit/iCloud.com.aeronauticaltrax.LandShip
-   
-   # Clear app containers (will re-sync from production)
-   rm -rf ~/Library/Containers/com.aeronauticaltrax.LandShip
-   ```
-
-4. **Restart your Mac** (recommended)
-
-5. **Archive and Install** the app (don't run from Xcode yet)
-
-6. **Launch and verify:**
-   - Check Console.app for: `🌐 CloudKit Environment: PRODUCTION`
-   - Data should sync with iOS devices
-
-7. **For Xcode Development:**
-   - When running from Xcode, it will still try to use Development
-   - To force Production even in Xcode, add this to your scheme:
-     - Edit Scheme → Run → Options
-     - Uncheck "Use the Run button's build configuration"
-
-### Option B: Use Development in Xcode, Production for Archives
-
-Keep Development environment for Xcode testing, Production for released builds.
-
-**Steps:**
-
-1. **Revert entitlements to development:**
-   ```bash
-   # Edit LandShip/LandShip.entitlements
-   # Change aps-environment back to "development"
-   ```
-
-2. **Create a separate Release entitlements file:**
-   - Duplicate `LandShip.entitlements` as `LandShip-Release.entitlements`
-   - In the Release version, set `aps-environment` to `production`
-
-3. **Update Xcode build settings:**
-   - Select your project in Xcode
-   - Select the LandShip target
-   - Go to "Build Settings"
-   - Find "Code Signing Entitlements"
-   - For Debug: `LandShip/LandShip.entitlements`
-   - For Release: `LandShip/LandShip-Release.entitlements`
-
-4. **Deploy schema to production** (same as Option A, step 2)
-
-5. **Clear caches** (same as Option A, step 3)
-
-## Verification Steps
-
-After implementing either option:
-
-1. **Run from Xcode** (Cmd+R):
-   ```bash
-   # Open Terminal and watch logs:
-   log stream --predicate 'process == "LandShip"' --level debug
-   ```
-   Look for: `🌐 CloudKit Environment: DEVELOPMENT (Xcode)` or `PRODUCTION`
-
-2. **Archive and Install**:
-   - Product → Archive
-   - Distribute App → Copy App
-   - Install on your Mac
-   - Launch and check logs
-   - Should see: `🌐 CloudKit Environment: PRODUCTION`
-
-3. **Test Sync**:
-   - Add a vehicle on iOS device
-   - Wait 30 seconds
-   - Should appear on macOS
-   - Check logs for: `🔄 CloudKit sync: Remote change notification received`
-
-## Understanding CloudKit Environments
-
-### Development Environment
-- **Purpose:** Testing and development
-- **Used by:** Apps run from Xcode, development builds
-- **Data:** Separate from production, can be reset
-- **Schema:** Can be modified freely
-
-### Production Environment
-- **Purpose:** Released apps (App Store, TestFlight)
-- **Used by:** Archived builds, distributed apps
-- **Data:** Persistent, shared by all users
-- **Schema:** Requires deployment from Development, cannot be easily changed
-
-## Common Issues After Fixing
-
-### Issue: "No data appears after switching to production"
-**Cause:** Production database is empty (all data was in Development)
-
-**Solutions:**
-1. Accept the fresh start and enter data on production
-2. Manually migrate data:
-   - Export from Development using your backup feature
-   - Import to Production build
-
-### Issue: "Schema mismatch errors"
-**Cause:** Production schema not deployed
-
-**Solution:**
-- Deploy Development schema to Production in CloudKit Dashboard
-- Wait a few minutes for propagation
-- Restart the app
-
-### Issue: "Still seeing Development environment after changes"
-**Cause:** Cached build or entitlements not updated
-
-**Solution:**
-```bash
-# Clean build folder
-rm -rf ~/Library/Developer/Xcode/DerivedData
-
-# In Xcode: Product → Clean Build Folder (Cmd+Shift+K)
-
-# Rebuild completely
-```
-
-## Monitoring CloudKit Sync
-
-The app now includes detailed logging. Watch for these messages:
+Target `VehicleTrax` uses one build setting that self-selects the right file:
 
 ```
-[LandShip] 🌐 CloudKit Environment: PRODUCTION
-[LandShip] ✅ iCloud account status: available
-[LandShip] ✅ Successfully created CloudKit-backed container
-[LandShip] Store mode: CloudKit-backed
-[LandShip] 🔄 CloudKit sync: Remote change notification received
+CODE_SIGN_ENTITLEMENTS = LandShip/LandShip-$(CONFIGURATION).entitlements
 ```
 
-## CloudKit Dashboard - Checking Your Data
+| File | icloud-container-environment | aps-environment |
+|------|------------------------------|-----------------|
+| `LandShip/LandShip-Debug.entitlements` | `Development` | `development` |
+| `LandShip/LandShip-Release.entitlements` | `Production` | `production` |
 
-1. Go to https://icloud.developer.apple.com/dashboard
-2. Select "CloudKit Database"
-3. Choose your container: "iCloud.com.aeronauticaltrax.LandShip"
-4. Switch between Development/Production environments
-5. Click "Records" to see your data
-6. Search for record types: Vehicle8, ServiceRecords1, FuelLog1, etc.
+`LandShip/LandShip.entitlements` is no longer referenced by the build.
 
-## Recommended Workflow Going Forward
+Note: adding a new build configuration requires a matching
+`LandShip-<Config>.entitlements` file, or signing will fail.
 
-**For Development:**
-- Use Development environment from Xcode
-- Test new features safely
-- Schema changes won't affect production
+The `$(CONFIGURATION)` indirection is used because Xcode's automation cannot create
+user-defined build settings or write per-configuration values for
+`CODE_SIGN_ENTITLEMENTS`. One target-level value that expands per configuration
+achieves the same result.
 
-**For Release:**
-1. Test thoroughly in Development
-2. Deploy schema to Production in CloudKit Dashboard
-3. Archive with production entitlements
-4. Test archived build before distributing
-5. Distribute via TestFlight or direct install
+## Verifying which environment a build is signed for
 
-## Quick Commands Reference
+Do not trust the source `.entitlements` file — check what was actually signed:
 
 ```bash
-# Watch CloudKit logs in real-time
-log stream --predicate 'process == "LandShip" OR subsystem CONTAINS "cloudkit"' --level debug
+# Debug build for My Mac
+codesign -d --entitlements :- \
+  ~/Library/Developer/Xcode/DerivedData/LandShip-*/Build/Products/Debug/VehicleTrax.app \
+  2>/dev/null | plutil -p - | grep -E "icloud-container-environment|aps-environment"
 
-# Check which environment an installed app uses
-strings /Applications/LandShip.app/Contents/embedded.mobileprovision | grep aps-environment
+# Installed / archived build
+codesign -d --entitlements :- /Applications/VehicleTrax.app \
+  2>/dev/null | plutil -p - | grep -E "icloud-container-environment|aps-environment"
+```
 
-# Clear all CloudKit caches
-rm -rf ~/Library/Application\ Support/CloudKit
-rm -rf ~/Library/Caches/CloudKit
+Expected: `Development` / `development` for Debug, `Production` / `production` for Release.
 
-# Reset LandShip completely
+The app also logs its environment at launch:
+
+```
+🌐 CloudKit Environment: DEVELOPMENT
+✅ iCloud account status: available
+```
+
+Be aware this log line is derived from the `DEBUG` compilation condition, not read
+from the signed entitlement. It is a sanity check, not proof — `codesign` above is
+the authority.
+
+## Confirming that Development *data* is in use
+
+The strongest signal is the data itself. The Development database is a separate,
+initially empty dataset:
+
+1. Clear the local store (see below) and launch the Debug build.
+2. An empty app — no vehicles — means you are on Development.
+3. Your real fleet appearing means you are still on Production.
+
+Then confirm in [CloudKit Console](https://icloud.developer.apple.com/dashboard):
+select the container, switch the environment dropdown to **Development**, open
+Records, and query for `CD_Vehicle8`. Records created by the Debug build appear
+there and must not appear under Production.
+
+## The local store is shared between configurations
+
+Debug and Release use the same bundle identifier, so they share one sandbox
+container:
+
+```
+~/Library/Containers/com.aeronauticaltrax.LandShip
+```
+
+The store inside it carries CloudKit sync metadata (change tokens, record names)
+bound to whichever environment last used it. **Clear the container whenever you flip
+environments**, or you will debug metadata confusion instead of real behaviour:
+
+```bash
+# Quit the app first
 rm -rf ~/Library/Containers/com.aeronauticaltrax.LandShip
-rm -rf ~/Library/Caches/com.aeronauticaltrax.LandShip
 ```
 
-## Support
+`~/Library` is hidden in Finder. Reach it with Go → Go to Folder, or:
 
-If you continue to have sync issues:
+```bash
+open ~/Library/Containers/com.aeronauticaltrax.LandShip
+```
 
-1. Check the logs for the exact environment being used
-2. Verify schema is deployed to production
-3. Confirm all devices use the same Apple ID
-4. Check https://www.apple.com/support/systemstatus/ for CloudKit outages
+Export via the app's Backup/Restore feature first if the local data matters.
+
+## Understanding the two environments
+
+### Development
+- Used by builds signed with `icloud-container-environment: Development`
+- Schema is created automatically as the app runs and can be edited freely in Console
+- Data is separate from Production and can be reset
+- The iOS Simulator only ever uses Development, regardless of entitlement
+
+### Production
+- Used by App Store and TestFlight builds, and by Release builds
+- Schema is **append-only**: record types and fields can be added but never deleted
+  or retyped once deployed
+- Requires an explicit Deploy Schema Changes from Development
+
+## Same account, different database
+
+Development and Production are two databases inside the **same container for the
+same Apple Account**. There is no separate "development iCloud account", and no
+per-app account selection on macOS — CloudKit uses the account of the current macOS
+login session.
+
+To test against a genuinely different Apple Account on macOS, create a second macOS
+login account and sign it into the test account. Fast User Switching allows both
+sessions to run at once, which is useful for observing sync between two accounts on
+one machine.
+
+## Deploying schema to Production
+
+1. Sign in to <https://icloud.developer.apple.com/dashboard>
+2. Select the CloudKit Database app and choose `iCloud.com.aeronauticaltrax.LandShip`
+3. Select **Deploy Schema Changes**
+4. Review the diff carefully — a non-empty diff means Production was missing fields,
+   which causes `BAD_REQUEST` on every save from a Production build
+5. Deploy, then wait a few minutes for propagation
+
+## Monitoring sync
+
+```bash
+log stream --predicate 'subsystem == "com.aeronauticaltrax.LandShip"' \
+  --level debug --style compact
+```
+
+Export and import failures now log the real `CKError`, including
+`partialErrorsByItemID`, which names the specific record the server rejected.
 
 ---
-**Last Updated:** February 22, 2026
-**Files Modified:**
-- `LandShip/LandShip.entitlements` - Changed to production
-- `LandShip/0 Main/1 LandShipApp.swift` - Added environment detection
-
+**Last updated:** 2026-08-30
+**Related:** `CloudKit Sync Fix.md` (historical troubleshooting log — see its own
+correction notice)

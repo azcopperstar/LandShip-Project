@@ -833,7 +833,10 @@ struct EditProjectList: View {
 				// Display entered parts summary
 				CardView {
 					VStack(alignment: .leading, spacing: 8) {
-						SectionText(label: "PARTS ENTERED")
+						// Title only appears when at least one part line was entered
+						if hasPartsEntered {
+							SectionText(label: "PARTS ENTERED")
+						}
 						
 						// Part 1 line
 						if !part1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -937,8 +940,9 @@ struct EditProjectList: View {
 					}
 				}
 
-				// SERVICE RECORDS GRAPHICS (read-only images)
-				CardView {
+				// SERVICE RECORDS GRAPHICS (read-only images) — hidden when none attached
+				if hasGraphics {
+					CardView {
 					VStack {
 //						SectionText(label: "PROJECT ITEM GRAPHICS")
 						Image_View_Details(label:"1", imageData: dataSet.image1, imageDescription: dataSet.image1Description)
@@ -946,6 +950,7 @@ struct EditProjectList: View {
 						Image_View_Details(label:"3", imageData: dataSet.image3, imageDescription: dataSet.image3Description)
 						Image_View_Details(label:"4", imageData: dataSet.image4, imageDescription: dataSet.image4Description)
 						Image_View_Details(label:"5", imageData: dataSet.image5, imageDescription: dataSet.image5Description)
+					}
 					}
 				}
 
@@ -1109,6 +1114,22 @@ struct EditProjectList: View {
 		if !additionsLinkId.isEmpty { syncLinkedAddition() }
 		dataSet.additionsLinkId = additionsLinkId
 		refreshVehicleDetails()
+	}
+
+	// MARK: - Details section visibility
+	// Card sections in Details mode only show their title when the section holds data,
+	// so a section title never appears above an empty card.
+
+	/// True when at least one part line was entered.
+	private var hasPartsEntered: Bool {
+		![part1, part2, part3, part4, part5]
+			.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+	}
+
+	/// True when at least one image is attached.
+	private var hasGraphics: Bool {
+		dataSet.image1 != nil || dataSet.image2 != nil || dataSet.image3 != nil
+			|| dataSet.image4 != nil || dataSet.image5 != nil
 	}
 
 	// MARK: - Helpers
