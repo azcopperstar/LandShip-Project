@@ -61,7 +61,11 @@ struct EditParts: View {
 
 	@State private var isPresentingConfirm: Bool = false
 	@State private var isEditing: Bool = false
-	
+
+	// Controls presentation of the rename-cascade confirmation dialog, shown when saving
+	// a part name change that would otherwise orphan records that reference it by name.
+	@State private var showingRenameChoice: Bool = false
+
 	@State private var createdAt = Date()
 	@State private var updatedAt = Date()
 	@State private var vehicleId = ""
@@ -80,6 +84,14 @@ struct EditParts: View {
 	@State private var inactive: Bool = false
 //	@State private var partImage = ""
 	@State private var partSupplier = ""
+	@State private var supplierWebsite = ""
+	@State private var inventoryTracked: Bool = false
+	@State private var inventoryQuantityOnHand: Float = 0
+	@State private var inventoryReorderPoint: Float = 0
+	@State private var inventoryReorderQuantity: Float = 0
+	/// Transient input for adding a brand-new supplier inline. Not mirrored from `dataSet` —
+	/// it exists only to spawn a `Vendors1` record on save; the persisted link is `partSupplier`.
+	@State private var newSupplierName = ""
 	@State private var image1: Data?
 	@State private var image2: Data?
 	@State private var image3: Data?
@@ -121,6 +133,10 @@ struct EditParts: View {
 		self._partStatus = State(initialValue: mxParts.partStatus)
 		self._inactive = State(initialValue: mxParts.inactive)
 		self._partSupplier = State(initialValue: mxParts.partSupplier)
+		self._inventoryTracked = State(initialValue: mxParts.inventoryTracked)
+		self._inventoryQuantityOnHand = State(initialValue: mxParts.inventoryQuantityOnHand)
+		self._inventoryReorderPoint = State(initialValue: mxParts.inventoryReorderPoint)
+		self._inventoryReorderQuantity = State(initialValue: mxParts.inventoryReorderQuantity)
 		self._image1 = State(initialValue: mxParts.image1)
 		self._image2 = State(initialValue: mxParts.image2)
 		self._image3 = State(initialValue: mxParts.image3)
@@ -142,9 +158,9 @@ struct EditParts: View {
 						LabeledContent {
 							ModelPicker<Vehicle8>(
 								selection: $selectedVehicle,
-								title: "Vehicle",
+								title: Vertical.current.assetSingular,
 								includeEmptyChoice: true,
-								emptyChoiceLabel: "All Vehicles",
+								emptyChoiceLabel: FleetScope.allDisplayLabel,
 								autoSelectFirst: false,
 								sort: [SortDescriptor(\.name, order: .forward)],
 								labelProvider: { v in "\(v.year) \(v.displayName)"},
@@ -155,11 +171,11 @@ struct EditParts: View {
 							)
 							.fixedSize(horizontal: true, vertical: true)
 						} label: {
-							Text("Vehicle")
+							Text(Vertical.current.assetSingular)
 								.textLabelModified()
 						}
 
-						Picker_VehicleSystem(label: "Vehicle System", data: $vehicleSystem)
+						Picker_VehicleSystem(label: "\(Vertical.current.assetSingular) System", data: $vehicleSystem)
 					}
 				}
 				
@@ -168,6 +184,10 @@ struct EditParts: View {
 						SectionText(label: "PART DETAILS")
 						
 						HStack{LabelDataTextview(label: "Part Name", data: $partName)}
+						Text("Renaming this part offers to update any records that reference it by name.")
+							.font(.caption)
+							.foregroundStyle(.secondary)
+							.frame(maxWidth: .infinity, alignment: .trailing)
 						HStack{LabelDataTextview(label: "Part #", data: $partNumber)}
 						HStack{LabelDataTextview(label: "Manufacturer", data: $partManufacture)}
 						HStack{LabelDataTextview(label: "Description", data: $partDescription)}
@@ -180,14 +200,30 @@ struct EditParts: View {
 
 				CardView {
 					VStack {
-						SectionText(label: "PART COSTS")
-						
-						HStack{LabelDataTextview_Numberpad_Currency(label: "Cost/Unit", data: $costPerUnit)}
-						Picker_PartsUnit(label: "Unit", data: $partUnit)
-						HStack{LabelDataTextview_Numberpad_Int(label: "Quantity (\(partUnit))", data: $partQuantity)}
+						SectionText(label: "INVENTORY TRACKING")
+						HStack{LabelDataToggle(label: "Track Inventory for this Part", data: $inventoryTracked)}
+						if inventoryTracked {
+							HStack{LabelDataTextview_Numberpad_Float(label: "Quantity On Hand (\(partUnit))", data: $inventoryQuantityOnHand)}
+							HStack{LabelDataTextview_Numberpad_Float(label: "Reorder Point (\(partUnit))", data: $inventoryReorderPoint)}
+							HStack{LabelDataTextview_Numberpad_Float(label: "Reorder Quantity (\(partUnit))", data: $inventoryReorderQuantity)}
+							Text("When this part is consumed on a service record or item, the quantity on hand is automatically reduced. A low-stock alert appears once the quantity on hand falls to or below the reorder point.")
+								.font(.caption)
+								.foregroundStyle(.secondary)
+								.frame(maxWidth: .infinity, alignment: .leading)
+						}
 					}
 				}
-				
+
+				CardView {
+					VStack {
+						SectionText(label: "PART COSTS")
+
+						HStack{LabelDataTextview_Numberpad_Currency(label: "Cost/Unit", data: $costPerUnit)}
+						Picker_PartsUnit(label: "Unit", data: $partUnit)
+						HStack{LabelDataTextview_Numberpad_Int(label: "Quantity Used/Repair", data: $partQuantity)}
+					}
+				}
+
 				CardView {
 					VStack {
 						SectionText(label: "PART SOURCE")
@@ -202,6 +238,9 @@ struct EditParts: View {
 								labelProvider: { v in v.vendorName },
 								onSelectionChanged: { sel in
 									partSupplier = sel?.vendorName ?? ""
+									supplierWebsite = sel?.vendorWebsite ?? ""
+									// Picking an existing supplier supersedes any in-progress "new supplier" entry.
+									if sel != nil { newSupplierName = "" }
 								}
 							)
 							.fixedSize(horizontal: true, vertical: true)
@@ -210,6 +249,12 @@ struct EditParts: View {
 								.textLabelModified()
 						}
 
+						HStack{LabelDataTextview(label: "New Supplier", data: $newSupplierName)}
+						Text("Not in the list above? Type a name here to add it as a new supplier when you save.")
+							.font(.caption)
+							.foregroundStyle(.secondary)
+							.frame(maxWidth: .infinity, alignment: .trailing)
+						HStack{LabelDataTextview(label: "Website", data: $supplierWebsite)}
 						HStack{LabelDataTextview(label: "Source", data: $partSource)}
 						HStack{LabelDataTextview(label: "Location", data: $partLocation)}
 						HStack{LabelDataTextview(label: "Status", data: $partStatus)}
@@ -250,11 +295,16 @@ struct EditParts: View {
 				}
 
 				// Preselect the Vendor picker from the current partSupplier when possible.
-				if partSupplier.isEmpty {
-					selectedVendor = nil
-				} else {
+				// Source is a separate, independent field and is intentionally never used
+				// to infer or auto-create a supplier.
+				if !partSupplier.isEmpty {
 					selectedVendor = vendors.first(where: { $0.vendorName == partSupplier })
+					supplierWebsite = selectedVendor?.vendorWebsite ?? ""
+				} else {
+					selectedVendor = nil
+					supplierWebsite = ""
 				}
+				newSupplierName = ""
 			}
 			.frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -275,12 +325,37 @@ struct EditParts: View {
 				}
 				ToolbarItem(placement: .automatic) {
 					Button("Save") {
-						isEditing.toggle()
-						updateItem()}
+						let trimmedName = trimmed(partName)
+						let oldName = dataSet.partName
+						if oldName != trimmedName && hasLinkedRecords(oldName) {
+							showingRenameChoice = true
+						} else {
+							updateItem()
+							isEditing.toggle()
+						}
+					}
 					.buttonStyle(GrowingButton(buttonColor: Color.red))
+					.confirmationDialog(
+						"Part Name Changed",
+						isPresented: $showingRenameChoice,
+						titleVisibility: .visible
+					) {
+						Button("Update Linked Records") {
+							renameLinkedRecords(from: dataSet.partName, to: trimmed(partName))
+							updateItem()
+							isEditing.toggle()
+						}
+						Button("Save Without Updating Links", role: .destructive) {
+							updateItem()
+							isEditing.toggle()
+						}
+						Button("Cancel", role: .cancel) { }
+					} message: {
+						Text("Renaming \"\(dataSet.partName)\" to \"\(trimmed(partName))\" will break its links to other records unless they're updated to the new name. Update them now?")
+					}
 				}
 			}
-			
+
 		} else {
 			
 			// display data
@@ -290,8 +365,8 @@ struct EditParts: View {
 				CardView {
 					VStack{
 						SectionText(label: "GENERAL")
-						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
-						HStack{LabelDataText(label: "Vehicle System", data: functions.cleanOptional(inputString: dataSet.vehicleSystem))}
+						HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
+						HStack{LabelDataText(label: "\(Vertical.current.assetSingular) System", data: functions.cleanOptional(inputString: dataSet.vehicleSystem))}
 						HStack{LabelDataText(label: "Status", data: dataSet.inactive ? "Inactive" : "Active")}
 					}
 				}
@@ -319,6 +394,30 @@ struct EditParts: View {
 					TextNoteDisplay_FullWidth(sectionText: "PART NOTES", data: dataSet.Notes)}
 				}
 
+				// Hidden unless this part is inventory-tracked
+				if dataSet.inventoryTracked {
+					CardView {
+					VStack{
+						SectionText(label: "INVENTORY TRACKING")
+						let isLowStock = dataSet.inventoryQuantityOnHand <= dataSet.inventoryReorderPoint
+						HStack{LabelDataText(label: "Quantity On Hand", data: "\(dataSet.inventoryQuantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(dataSet.partUnit)")}
+							.foregroundColor(isLowStock ? .red : .primary)
+						if dataSet.inventoryReorderPoint != 0 {
+							HStack{LabelDataText(label: "Reorder Point", data: "\(dataSet.inventoryReorderPoint.formatted(.number.precision(.fractionLength(0...2)))) \(dataSet.partUnit)")}
+						}
+						if dataSet.inventoryReorderQuantity != 0 {
+							HStack{LabelDataText(label: "Reorder Quantity", data: "\(dataSet.inventoryReorderQuantity.formatted(.number.precision(.fractionLength(0...2)))) \(dataSet.partUnit)")}
+						}
+						if isLowStock {
+							Text("Low stock — quantity on hand is at or below the reorder point.")
+								.font(.caption)
+								.foregroundStyle(.red)
+								.frame(maxWidth: .infinity, alignment: .leading)
+						}
+					}
+					}
+				}
+
 				// Hidden when no cost fields have data
 				if hasPartCosts {
 					CardView {
@@ -331,12 +430,12 @@ struct EditParts: View {
 							HStack{LabelDataText(label: "Unit Type", data: functions.cleanOptional(inputString: dataSet.partUnit))}
 						}
 						if dataSet.partQuantity != 0 {
-							HStack{LabelDataText(label: "Quantity", data: "\(dataSet.partQuantity) \(dataSet.partUnit)")}
+							HStack{LabelDataText(label: "Quantity Used/Repair", data: "\(dataSet.partQuantity) \(dataSet.partUnit)")}
 						}
 					}
 					}
 				}
-				
+
 				// Hidden when no source fields have data
 				if hasPartSource {
 					CardView {
@@ -351,13 +450,60 @@ struct EditParts: View {
 						if dataSet.partStatus != "" {
 							HStack{LabelDataText(label: "Status", data: functions.cleanOptional(inputString: dataSet.partStatus))}
 						}
-						if dataSet.partSupplier != "" {
-							HStack{LabelDataText(label: "Supplier", data: functions.cleanOptional(inputString: dataSet.partSupplier))}
+					}
+					}
+				}
+
+				// Full supplier record details, shown only when the part's Supplier
+				// matches a known `Vendors1` record — so all its saved contact info and a
+				// hyperlinked website are visible without leaving the part. The Supplier
+				// name itself leads this card rather than the Part Source one above, since
+				// it belongs to the vendor record, not the part.
+				if let supplier = matchedSupplier {
+					CardView {
+					VStack {
+						SectionText(label: "SUPPLIER DETAILS")
+						HStack{LabelDataText(label: "Supplier", data: supplier.vendorName)}
+						if supplier.vendorType != "" {
+							HStack{LabelDataText(label: "Vendor Type", data: supplier.vendorType)}
+						}
+						if supplier.vendorContact1 != "" {
+							HStack{LabelDataText(label: "Contact 1", data: supplier.vendorContact1)}
+						}
+						if supplier.vendorContact2 != "" {
+							HStack{LabelDataText(label: "Contact 2", data: supplier.vendorContact2)}
+						}
+						if supplier.vendorContact3 != "" {
+							HStack{LabelDataText(label: "Contact 3", data: supplier.vendorContact3)}
+						}
+						if supplier.vendorAddress != "" {
+							HStack{LabelDataText(label: "Address", data: supplier.vendorAddress)}
+						}
+						if supplier.vendorCity != "" {
+							HStack{LabelDataText(label: "City", data: supplier.vendorCity)}
+						}
+						if supplier.vendorState != "" {
+							HStack{LabelDataText(label: "State", data: supplier.vendorState)}
+						}
+						if supplier.vendorZip != "" {
+							HStack{LabelDataText(label: "Zip Code", data: supplier.vendorZip)}
+						}
+						if supplier.vendorPhone != "" {
+							HStack{LabelDataText(label: "Phone", data: supplier.vendorPhone)}
+						}
+						if supplier.vendorEmail != "" {
+							HStack{LabelDataText(label: "Email", data: supplier.vendorEmail)}
+						}
+						if supplier.vendorWebsite != "" {
+							HStack{LabelDataLink(label: "Website", data: supplier.vendorWebsite)}
+						}
+						if supplier.vendorNotes != "" {
+							HStack{LabelDataText(label: "Notes", data: supplier.vendorNotes)}
 						}
 					}
 					}
 				}
-				
+
 				// Hidden when no images are attached
 				if hasGraphics {
 					CardView {
@@ -416,17 +562,26 @@ struct EditParts: View {
 		dataSet.costPerUnit != 0 || !dataSet.partUnit.isEmpty || dataSet.partQuantity != 0
 	}
 
-	/// True when any source field has data.
+	/// True when any source field has data. Supplier isn't counted here — it's now
+	/// displayed as the lead line of the separate "Supplier Details" card.
 	private var hasPartSource: Bool {
 		!(dataSet.partSource.isEmpty
 		  && dataSet.partLocation.isEmpty
-		  && dataSet.partStatus.isEmpty
-		  && dataSet.partSupplier.isEmpty)
+		  && dataSet.partStatus.isEmpty)
 	}
 
 	/// True when at least one image is attached.
 	private var hasGraphics: Bool {
 		dataSet.image1 != nil || dataSet.image2 != nil || dataSet.image3 != nil
+	}
+
+	/// Looks up the `Vendors1` record matching the part's current supplier, so Details mode
+	/// can surface the full supplier record — including a hyperlinked website — without
+	/// duplicating that data on `MxParts1`. Source is a separate field and is never used here;
+	/// Supplier and Source represent two distinct concepts and shouldn't be conflated.
+	private var matchedSupplier: Vendors1? {
+		guard !dataSet.partSupplier.isEmpty else { return nil }
+		return vendors.first(where: { $0.vendorName == dataSet.partSupplier })
 	}
 
 	/// Commits staged edits from local `@State` back to `dataSet` and saves the context.
@@ -443,7 +598,7 @@ struct EditParts: View {
 		dataSet.updatedAt = Date()
 		dataSet.vehicleId = vehicleId
 		dataSet.vehicleSystem = vehicleSystem
-		dataSet.partName = partName
+		dataSet.partName = trimmed(partName)
 		dataSet.partNumber = partNumber
 		dataSet.partManufacture = partManufacture
 		dataSet.partDescription = partDescription
@@ -454,7 +609,10 @@ struct EditParts: View {
 		dataSet.partQuantity = partQuantity
 		dataSet.partLocation = partLocation
 		dataSet.partStatus = partStatus
-		dataSet.partSupplier = partSupplier
+		dataSet.inventoryTracked = inventoryTracked
+		dataSet.inventoryQuantityOnHand = inventoryQuantityOnHand
+		dataSet.inventoryReorderPoint = inventoryReorderPoint
+		dataSet.inventoryReorderQuantity = inventoryReorderQuantity
 		dataSet.image1 = image1
 		dataSet.image2 = image2
 		dataSet.image3 = image3
@@ -463,6 +621,11 @@ struct EditParts: View {
 		dataSet.image3Description = image3Description
 
 		createSystemIfNeeded()
+		// Resolve the Supplier — creating/updating the Vendors1 record as needed — and stamp
+		// the resolved name onto the part. Source (dataSet.partSource, above) is unrelated.
+		partSupplier = resolveAndSyncSupplier()
+		dataSet.partSupplier = partSupplier
+		newSupplierName = ""
 
 		// Attempt to persist all changes to the model context.
 		do {
@@ -499,6 +662,58 @@ struct EditParts: View {
 		)
 		modelContext.insert(newSystem)
 	}
+
+	/// Resolves the part's Supplier and persists that choice into the `Vendors1` database,
+	/// then returns the name that should be stamped onto `dataSet.partSupplier`.
+	/// - If the "New Supplier" field has text, that takes priority: a new `Vendors1` record is
+	///   created (or, if the name already exists, updated) with the current Website value.
+	/// - Otherwise, if a supplier was picked from the Supplier dropdown, that record's website
+	///   is updated directly.
+	/// - Otherwise the existing `partSupplier` value (if any) is left as-is; a plain, unmatched
+	///   name is not auto-vivified into a new vendor record.
+	private func resolveAndSyncSupplier() -> String {
+		let website = normalizeURL(trimmed(supplierWebsite))
+		let newName = trimmed(newSupplierName)
+
+		if !newName.isEmpty {
+			let fetch = FetchDescriptor<Vendors1>(predicate: #Predicate<Vendors1> {
+				$0.vendorName == newName
+			})
+			if let existing = (try? modelContext.fetch(fetch))?.first {
+				existing.vendorWebsite = website
+				existing.updatedAt = Date()
+			} else {
+				let newVendor = Vendors1(
+					createdAt: Date(),
+					updatedAt: Date(),
+					vendorName: newName,
+					vendorType: "",
+					vendorContact1: "",
+					vendorContact2: "",
+					vendorContact3: "",
+					vendorAddress: "",
+					vendorCity: "",
+					vendorState: "",
+					vendorZip: "",
+					vendorPhone: "",
+					vendorEmail: "",
+					vendorWebsite: website,
+					vendorNotes: ""
+				)
+				modelContext.insert(newVendor)
+			}
+			return newName
+		}
+
+		if let vendor = selectedVendor {
+			vendor.vendorWebsite = website
+			vendor.updatedAt = Date()
+			return vendor.vendorName
+		}
+
+		return partSupplier
+	}
+
 	/// Permanently deletes the current `MxParts1` record and dismisses the view.
 	///
 	/// Removes `dataSet` from the `modelContext` and saves. If saving fails, the error
@@ -558,6 +773,82 @@ struct EditParts: View {
 		// after a destructive or terminal action. Adjust if you prefer to remain on screen
 		// when persistence fails.
 		dismiss()
+	}
+
+	/// True if any other record references `name` by part name. Used to decide whether the
+	/// rename-cascade dialog is worth showing — a brand-new or never-referenced part has
+	/// nothing to break, so saving proceeds silently.
+	private func hasLinkedRecords(_ name: String) -> Bool {
+		guard !name.isEmpty else { return false }
+		func exists<T: PersistentModel>(_ descriptor: FetchDescriptor<T>) -> Bool {
+			var fd = descriptor
+			fd.fetchLimit = 1
+			return ((try? modelContext.fetch(fd)) ?? []).isEmpty == false
+		}
+		if exists(FetchDescriptor<ServiceRecords1>(predicate: #Predicate {
+			$0.part1 == name || $0.part2 == name || $0.part3 == name || $0.part4 == name || $0.part5 == name
+		})) { return true }
+		if exists(FetchDescriptor<MxItems3>(predicate: #Predicate {
+			$0.part1 == name || $0.part2 == name || $0.part3 == name || $0.part4 == name || $0.part5 == name
+		})) { return true }
+		if exists(FetchDescriptor<ProjectList>(predicate: #Predicate {
+			$0.part1 == name || $0.part2 == name || $0.part3 == name || $0.part4 == name || $0.part5 == name
+		})) { return true }
+		return false
+	}
+
+	/// Updates every other record type that references this part by name (LandShip's
+	/// string-based linking convention — the same one used for vendor and vehicle renames),
+	/// so existing links survive a part rename instead of silently orphaning.
+	private func renameLinkedRecords(from oldName: String, to newName: String) {
+		guard !oldName.isEmpty, oldName != newName else { return }
+
+		func rename<T: PersistentModel>(_ descriptor: FetchDescriptor<T>, _ apply: (T) -> Void) {
+			guard let records = try? modelContext.fetch(descriptor), !records.isEmpty else { return }
+			records.forEach(apply)
+		}
+
+		rename(FetchDescriptor<ServiceRecords1>(predicate: #Predicate { $0.part1 == oldName })) { $0.part1 = newName }
+		rename(FetchDescriptor<ServiceRecords1>(predicate: #Predicate { $0.part2 == oldName })) { $0.part2 = newName }
+		rename(FetchDescriptor<ServiceRecords1>(predicate: #Predicate { $0.part3 == oldName })) { $0.part3 = newName }
+		rename(FetchDescriptor<ServiceRecords1>(predicate: #Predicate { $0.part4 == oldName })) { $0.part4 = newName }
+		rename(FetchDescriptor<ServiceRecords1>(predicate: #Predicate { $0.part5 == oldName })) { $0.part5 = newName }
+		rename(FetchDescriptor<MxItems3>(predicate: #Predicate { $0.part1 == oldName })) { $0.part1 = newName }
+		rename(FetchDescriptor<MxItems3>(predicate: #Predicate { $0.part2 == oldName })) { $0.part2 = newName }
+		rename(FetchDescriptor<MxItems3>(predicate: #Predicate { $0.part3 == oldName })) { $0.part3 = newName }
+		rename(FetchDescriptor<MxItems3>(predicate: #Predicate { $0.part4 == oldName })) { $0.part4 = newName }
+		rename(FetchDescriptor<MxItems3>(predicate: #Predicate { $0.part5 == oldName })) { $0.part5 = newName }
+		rename(FetchDescriptor<ProjectList>(predicate: #Predicate { $0.part1 == oldName })) { $0.part1 = newName }
+		rename(FetchDescriptor<ProjectList>(predicate: #Predicate { $0.part2 == oldName })) { $0.part2 = newName }
+		rename(FetchDescriptor<ProjectList>(predicate: #Predicate { $0.part3 == oldName })) { $0.part3 = newName }
+		rename(FetchDescriptor<ProjectList>(predicate: #Predicate { $0.part4 == oldName })) { $0.part4 = newName }
+		rename(FetchDescriptor<ProjectList>(predicate: #Predicate { $0.part5 == oldName })) { $0.part5 = newName }
+
+		do {
+			try modelContext.save()
+		} catch {
+			print("Failed to update linked records after part rename: \(error.localizedDescription)")
+		}
+	}
+}
+
+// MARK: - Normalization helpers
+private extension EditParts {
+	/// Trims leading and trailing whitespace/newlines from the provided string.
+	func trimmed(_ s: String) -> String {
+		s.trimmingCharacters(in: .whitespacesAndNewlines)
+	}
+
+	/// Ensures the provided URL string has an explicit scheme.
+	/// - If the string is empty, returns it as-is.
+	/// - If no `http://` or `https://` prefix is found, prefixes with `https://`.
+	func normalizeURL(_ s: String) -> String {
+		guard !s.isEmpty else { return s }
+		let lower = s.lowercased()
+		if lower.hasPrefix("http://") || lower.hasPrefix("https://") {
+			return s
+		}
+		return "https://\(s)"
 	}
 }
 

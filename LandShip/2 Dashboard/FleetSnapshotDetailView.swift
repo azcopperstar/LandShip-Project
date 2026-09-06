@@ -19,7 +19,7 @@ struct FleetSnapshotDetailView: View {
 
                 // Fleet counts
                 VStack(alignment: .leading, spacing: 12) {
-                    metricRow(title: "Total Vehicles", value: "\(fleetSnapshot.total)", icon: "car.2.fill", color: .indigo)
+                    metricRow(title: "Total \(Vertical.current.assetPlural)", value: "\(fleetSnapshot.total)", icon: "car.2.fill", color: .indigo)
                     metricRow(title: "Active", value: "\(fleetSnapshot.active)", icon: "checkmark.circle.fill", color: .green)
                     metricRow(title: "Inactive", value: "\(fleetSnapshot.inactive)", icon: "moon.zzz.fill", color: .gray)
                 }
@@ -59,7 +59,7 @@ struct FleetSnapshotDetailView: View {
                 // Per-vehicle list
                 if !fleetSnapshot.vehicles.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Vehicles")
+                        Text(Vertical.current.assetPlural)
                             .font(.headline)
                         VStack(alignment: .leading, spacing: 0) {
                             ForEach(fleetSnapshot.vehicles) { v in

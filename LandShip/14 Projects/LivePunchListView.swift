@@ -13,6 +13,7 @@ struct LivePunchListView: View {
 
     // Data
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.entitlements) private var entitlements
 
     // Dynamic query backing store – we will reconstruct via init based on filters
     @Query private var items: [ProjectList]
@@ -64,7 +65,7 @@ struct LivePunchListView: View {
         // Pull vehicles from current items set to offer choices; fallback to explicit 'All Vehicles'
         let vehicles = uniqueVehicles()
         return Menu {
-            Button("All Vehicles") { selectedVehicle = "All Vehicles" }
+            Button(FleetScope.allDisplayLabel) { selectedVehicle = FleetScope.allSentinel }
             ForEach(vehicles, id: \.self) { v in
                 Button(v) { selectedVehicle = v }
             }
@@ -74,7 +75,7 @@ struct LivePunchListView: View {
                 .padding(8)
                 .background(RoundedRectangle(cornerRadius: 8).stroke(.separator))
         }
-        .accessibilityLabel("Vehicle Filter")
+        .accessibilityLabel("\(Vertical.current.assetSingular) Filter")
     }
 
     private var subcategoryPicker: some View {
@@ -135,7 +136,7 @@ struct LivePunchListView: View {
 						} else {
 							tipRowChecklist(icon: "checklist", text: "All Projects")
 						}
-						tipRowVehicle(icon: "car", text: "\(selectedVehicle)")
+						tipRowVehicle(icon: Vertical.current.assetIcon, text: "\(selectedVehicle)")
 					}
 			}
     }
@@ -296,13 +297,13 @@ struct LivePunchListView: View {
                                 .accessibilityLabel("Item name suggestions")
                             }
                         }
-                        LabeledContent("Vehicle:") {
+                        LabeledContent("\(Vertical.current.assetSingular):") {
                             HStack(spacing: 6) {
                                 let vehicleBinding: Binding<String> = Binding<String>(
                                     get: { item.vehicleId },
                                     set: { v in item.vehicleId = v; persistChange(for: item) }
                                 )
-                                TextField("Vehicle ID", text: vehicleBinding)
+                                TextField("\(Vertical.current.assetSingular) ID", text: vehicleBinding)
 #if os(iOS)
     .disableAutocorrection(true)
     .textInputAutocapitalization(.never)
@@ -314,7 +315,7 @@ struct LivePunchListView: View {
                                 } label: {
                                     Image(systemName: "text.badge.plus")
                                 }
-                                .accessibilityLabel("Vehicle suggestions")
+                                .accessibilityLabel("\(Vertical.current.assetSingular) suggestions")
                             }
                         }
                         LabeledContent("Project:") {
@@ -669,14 +670,14 @@ struct LivePunchListView: View {
             Label("PDF Report", systemImage: "doc.text")
         }
         Menu {
-            Button("All Vehicles") { selectedVehicle = "All Vehicles" }
+            Button(FleetScope.allDisplayLabel) { selectedVehicle = FleetScope.allSentinel }
             ForEach(uniqueVehicles(), id: \.self) { v in
                 Button(v) { selectedVehicle = v }
             }
         } label: {
             Image(systemName: "car")
         }
-        .accessibilityLabel("Vehicle Filter")
+        .accessibilityLabel("\(Vertical.current.assetSingular) Filter")
         Menu {
             Button("All Projects") { selectedSubcategory = "All Projects" }
             ForEach(uniqueSubcategories(), id: \.self) { s in
@@ -839,6 +840,7 @@ struct LivePunchListView: View {
 
     private func newItem() {
         guard canCreateItem else { return }
+        guard entitlements.requestCreate(ProjectList.self, in: modelContext) else { return }
         let now = Date()
         let sRaw = selectedSubcategory.trimmingCharacters(in: .whitespacesAndNewlines)
         let s = (selectedSubcategory == "All Projects") ? "General" : (sRaw.isEmpty ? "General" : sRaw)

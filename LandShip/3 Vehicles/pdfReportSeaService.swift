@@ -23,6 +23,8 @@ struct pdfReportSeaService: View {
 
 	@State private var pdfDocument: PDFDocument?
 	@State private var zoomAction: ZoomAction?
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 
 	let functions = Functions()
 
@@ -81,7 +83,39 @@ struct pdfReportSeaService: View {
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
+			}
 		}
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: "Sea Service Log") { _ in }
+	}
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let entries = fetchEntries()
+		let headers = [
+			"Date", "Vessel", "Route", "Waters", "Capacity Served", "Tonnage", "Days of Service", "Hours Underway", "Remarks",
+			"Image 1 Description"
+		]
+		let rows: [[String]] = entries.map { entry in
+			[
+				CSVField.date(entry.date), vesselDisplay(entry), entry.routeDescription, entry.watersType, entry.capacityServed,
+				CSVField.float(entry.tonnage), CSVField.float(entry.daysOfService), CSVField.float(entry.hoursUnderway), entry.remarks, entry.image1Description
+			]
+		}
+		var output = CSVBuilder.build(headers: headers, rows: rows)
+		if let cred = fetchCredential() {
+			output += "\r\nCREDENTIAL & CURRENCY\r\n"
+			output += CSVBuilder.build(headers: ["Credential Type", "Credential Number", "Endorsements", "Issue Date", "Expiration Date", "Medical Cert Expiration", "Notes"],
+				rows: [[cred.credentialType, cred.credentialNumber, cred.endorsements, CSVField.date(cred.issueDate), CSVField.date(cred.expirationDate), CSVField.date(cred.medicalCertExpirationDate), cred.notes]])
+		}
+		return output
 	}
 
 	// MARK: - Generation

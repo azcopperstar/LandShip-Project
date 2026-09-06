@@ -62,6 +62,10 @@ struct EditIVendors: View {
 	// Controls presentation of confirmation dialogs for destructive actions.
 	@State private var isPresentingConfirm: Bool = false
 
+	// Controls presentation of the rename-cascade confirmation dialog, shown when saving
+	// a vendor name change that would otherwise orphan records that reference it by name.
+	@State private var showingRenameChoice: Bool = false
+
 	// Toggles between details and edit modes.
 	@State private var isEditing: Bool = false
 
@@ -132,7 +136,7 @@ struct EditIVendors: View {
             VStack(spacing: 16) {
                 Text("This vendor is marked as Inactive.")
                     .font(.headline)
-                Text("Enable ‘Show Inactive Vehicles’ in Settings to view details, or switch to Edit to change status.")
+                Text("Enable ‘Show Inactive \(Vertical.current.assetPlural)’ in Settings to view details, or switch to Edit to change status.")
                     .font(.subheadline)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -179,6 +183,10 @@ struct EditIVendors: View {
 					VStack {
 						SectionText(label: "GENERAL")
 						HStack{LabelDataTextview(label: "Vendor Name", data: $vendorName)}
+						Text("Renaming this vendor offers to update any records that reference it by name.")
+							.font(.caption)
+							.foregroundStyle(.secondary)
+							.frame(maxWidth: .infinity, alignment: .trailing)
 						HStack{
 							Text("Vendor Type")
 								.textLabelModified()
@@ -276,11 +284,35 @@ struct EditIVendors: View {
 				// Toolbar: save edits (persists to SwiftData)
 				ToolbarItem(placement: .automatic) {
 					Button("Save") {
-						updateItem()
-						isEditing = false
+						let trimmedName = trimmed(vendorName)
+						let oldName = dataSet.vendorName
+						if oldName != trimmedName && hasLinkedRecords(oldName) {
+							showingRenameChoice = true
+						} else {
+							updateItem()
+							isEditing = false
+						}
 					}
 					.buttonStyle(GrowingButton(buttonColor: Color.red))
 					.disabled(vendorName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+					.confirmationDialog(
+						"Vendor Name Changed",
+						isPresented: $showingRenameChoice,
+						titleVisibility: .visible
+					) {
+						Button("Update Linked Records") {
+							renameLinkedRecords(from: dataSet.vendorName, to: trimmed(vendorName))
+							updateItem()
+							isEditing = false
+						}
+						Button("Save Without Updating Links", role: .destructive) {
+							updateItem()
+							isEditing = false
+						}
+						Button("Cancel", role: .cancel) { }
+					} message: {
+						Text("Renaming \"\(dataSet.vendorName)\" to \"\(trimmed(vendorName))\" will break its links to other records unless they're updated to the new name. Update them now?")
+					}
 				}
 			}
 			.alert("Couldn't Save", isPresented: $showVendorSaveError) {
@@ -495,6 +527,51 @@ struct EditIVendors: View {
 			print(error.localizedDescription)
 			vendorSaveErrorMessage = error.localizedDescription
 			showVendorSaveError = true
+		}
+	}
+
+	/// True if any other record references `name` by vendor name. Used to decide whether the
+	/// rename-cascade dialog is worth showing — a brand-new or never-referenced vendor has
+	/// nothing to break, so saving proceeds silently.
+	private func hasLinkedRecords(_ name: String) -> Bool {
+		guard !name.isEmpty else { return false }
+		func exists<T: PersistentModel>(_ descriptor: FetchDescriptor<T>) -> Bool {
+			var fd = descriptor
+			fd.fetchLimit = 1
+			return ((try? modelContext.fetch(fd)) ?? []).isEmpty == false
+		}
+		if exists(FetchDescriptor<MxParts1>(predicate: #Predicate { $0.partSupplier == name || $0.partSource == name })) { return true }
+		if exists(FetchDescriptor<MxItems3>(predicate: #Predicate { $0.vendor == name })) { return true }
+		if exists(FetchDescriptor<ServiceRecords1>(predicate: #Predicate { $0.vendor == name })) { return true }
+		if exists(FetchDescriptor<Additions>(predicate: #Predicate { $0.itemVendor == name })) { return true }
+		if exists(FetchDescriptor<Subscriptions>(predicate: #Predicate { $0.itemVendor == name })) { return true }
+		if exists(FetchDescriptor<ProjectList>(predicate: #Predicate { $0.itemVendor == name })) { return true }
+		return false
+	}
+
+	/// Updates every other record type that references this vendor by name (LandShip's
+	/// string-based linking convention — the same one used for vehicle renames), so existing
+	/// links survive a vendor rename instead of silently orphaning.
+	private func renameLinkedRecords(from oldName: String, to newName: String) {
+		guard !oldName.isEmpty, oldName != newName else { return }
+
+		func rename<T: PersistentModel>(_ descriptor: FetchDescriptor<T>, _ apply: (T) -> Void) {
+			guard let records = try? modelContext.fetch(descriptor), !records.isEmpty else { return }
+			records.forEach(apply)
+		}
+
+		rename(FetchDescriptor<MxParts1>(predicate: #Predicate { $0.partSupplier == oldName })) { $0.partSupplier = newName }
+		rename(FetchDescriptor<MxParts1>(predicate: #Predicate { $0.partSource == oldName })) { $0.partSource = newName }
+		rename(FetchDescriptor<MxItems3>(predicate: #Predicate { $0.vendor == oldName })) { $0.vendor = newName }
+		rename(FetchDescriptor<ServiceRecords1>(predicate: #Predicate { $0.vendor == oldName })) { $0.vendor = newName }
+		rename(FetchDescriptor<Additions>(predicate: #Predicate { $0.itemVendor == oldName })) { $0.itemVendor = newName }
+		rename(FetchDescriptor<Subscriptions>(predicate: #Predicate { $0.itemVendor == oldName })) { $0.itemVendor = newName }
+		rename(FetchDescriptor<ProjectList>(predicate: #Predicate { $0.itemVendor == oldName })) { $0.itemVendor = newName }
+
+		do {
+			try modelContext.save()
+		} catch {
+			print("Failed to update linked records after vendor rename: \(error.localizedDescription)")
 		}
 	}
 

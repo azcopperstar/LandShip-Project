@@ -48,6 +48,7 @@ import SwiftUI
 struct ChooseVehicle: View {
 	/// The SwiftData model context used for creating, saving, and deleting `Vehicle8` records.
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 
 	/// User preference (persisted via AppStorage) that determines whether inactive vehicles
 	/// should be included in the list. The toggle is surfaced in Settings; this view only reads it.
@@ -117,16 +118,45 @@ struct ChooseVehicle: View {
 		}
 	}
 	
+#if os(iOS)
+	/// Custom inline search field used in place of `.searchable` on iOS — see the
+	/// `.safeAreaInset` usage below for why.
+	private var searchField: some View {
+		HStack(spacing: 6) {
+			Image(systemName: "magnifyingglass")
+				.foregroundStyle(.secondary)
+			TextField("Search \(Vertical.current.assetPlural.lowercased())", text: $searchText)
+				.textFieldStyle(.plain)
+			if !searchText.isEmpty {
+				Button {
+					searchText = ""
+				} label: {
+					Image(systemName: "xmark.circle.fill")
+						.foregroundStyle(.secondary)
+				}
+				.buttonStyle(.plain)
+				.accessibilityLabel("Clear search")
+			}
+		}
+		.padding(.horizontal, 10)
+		.padding(.vertical, 7)
+		.background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+		.padding(.horizontal, 12)
+		.padding(.top, 6)
+		.padding(.bottom, 4)
+	}
+#endif
+
 	var body: some View {
 		// Layout: List with empty state fallback, row navigation to editor, and toolbar with report, sort, and add actions.
 		List {
 			// Empty-state guidance when there are no vehicles to show.
 			if vehicles.isEmpty {
 					EmptyStateSection(
-						title: "Add your first vehicle",
-						systemImage: "car.2.fill",
-						description: "Create a new vehicle to begin tracking, parts, fuel logs, travel logs, service items, service records.\n\nThe vehicles entered here will be available in all the other tables.\n\nTo add additional vehicles, after this first one, select the '+' button at the top of the form.",
-						actionTitle: "Add First Vehicle",
+						title: "Add your first \(Vertical.current.assetSingular.lowercased())",
+						systemImage: Vertical.current.assetGroupIcon,
+						description: "Create a new \(Vertical.current.assetSingular.lowercased()) to begin tracking, parts, fuel logs, travel logs, service items, service records.\n\nThe \(Vertical.current.assetPlural.lowercased()) entered here will be available in all the other tables.\n\nTo add additional \(Vertical.current.assetPlural.lowercased()), after this first one, select the '+' button at the top of the form.",
+						actionTitle: "Add First \(Vertical.current.assetSingular)",
 						action: { addNewRecord() }
 					)
 			} else {
@@ -152,13 +182,13 @@ struct ChooseVehicle: View {
 										Text("\(year) \(manufacturer) \(trim)")
 											.font(.subheadline)
 											.foregroundStyle(.secondary)
-										if vehicle.mileage > 0 {
+										if vehicle.mileage > 0, Vertical.current.id == .land {
 											Text("Odometer: \(vehicle.mileage)")
 												.font(.subheadline)
 												.foregroundStyle(.secondary)
 										}
 										if vehicle.engHours > 0 {
-											Text("Engine Hours: \(vehicle.engHours, specifier: "%.1f")")
+											Text("\(Vertical.current.id == .land ? "Engine Hours" : Vertical.current.primaryMeterLabel): \(vehicle.engHours, specifier: "%.1f")")
 												.font(.subheadline)
 												.foregroundStyle(.secondary)
 										}
@@ -169,7 +199,7 @@ struct ChooseVehicle: View {
 										}
 										let linkedChildren = linkedChildrenNames(for: vehicle)
 										if !linkedChildren.isEmpty {
-											Text("Linked vehicles: \(linkedChildren.joined(separator: ", "))")
+											Text("Linked \(Vertical.current.assetPlural.lowercased()): \(linkedChildren.joined(separator: ", "))")
 												.font(.subheadline)
 												.foregroundStyle(.secondary)
 										}
@@ -180,7 +210,7 @@ struct ChooseVehicle: View {
 							}
 							.accessibilityElement(children: .combine)
 							.accessibilityLabel("\(vehicle.displayName), \(yearDescription(vehicle))")
-							.accessibilityHint("Opens vehicle details")
+							.accessibilityHint("Opens \(Vertical.current.assetSingular.lowercased()) details")
 						}
 					}
 					// Map deletions from the filtered view back to the underlying model objects.
@@ -188,20 +218,29 @@ struct ChooseVehicle: View {
 					.conditionalModifier(isEditMode) { view in
 						view.onMove(perform: performMove)
 					}
-				} header: {
-					HStack() {
-						Image(systemName: "pencil")
-						Text(isEditMode ? "Drag to reorder" : "Pencil icon in toolbar sets sort order")
-					}
-					.font(.caption)
-					.foregroundStyle(.secondary)
-					.padding(.top, 4)
 				}
 			}
 		}
 		
+#if os(iOS)
+		// .insetGrouped (the default here) wraps each Section in a floating card with its
+		// own top/bottom margins — that's what was still leaving dead space around the
+		// sort-order hint even after it stopped being a `header:`. .plain removes that
+		// outer card margin; the custom cardStyle() on each row already provides the
+		// visual grouping, so nothing is lost.
+		.listStyle(.plain)
+#endif
 		.safeAreaInset(edge: .top) {
-			PageTitle_Col2_NoPhoto(label: "VEHICLES")
+			VStack(spacing: 8) {
+				PageTitle_Col2_NoPhoto(label: Vertical.current.assetPlural.uppercased())
+#if os(iOS)
+				// Inline rather than via .searchable: a system search bar renders in the
+				// navigation bar drawer above this title, pushing this column's blue title
+				// underline lower than the other columns'. Placing it here instead, in the
+				// space above the sort-order hint, keeps that underline flush with the top.
+				searchField
+#endif
+			}
 		}
 
 		// Toolbar: title label, report button, edit button, and add button.
@@ -265,13 +304,16 @@ struct ChooseVehicle: View {
 			}
 		}
 
+#if os(macOS)
 		// Enable system search UI to pair with in-memory filtering.
-		.searchable(text: $searchText, placement: .automatic, prompt: Text("Search vehicles"))
+		.searchable(text: $searchText, placement: .automatic, prompt: Text("Search \(Vertical.current.assetPlural.lowercased())"))
+#endif
 
 		// Navigation destination for the PDF report (boolean-driven).
 		.navigationDestination(item: $reportDestination) { dest in
-			pdfReportVehicles(trackVehicleSelected: .constant(dest.scope))
-				.id("VehicleReport-\(dest.scope)") // ensure refresh if vehicle changes
+			// The report owns and re-fetches its own scope via an in-report vehicle picker,
+			// so no .id() here — that would reset the user's picker selection on navigation.
+			pdfReportVehicles(trackVehicleSelected: dest.scope)
 				.ignoresSafeArea()
 		}
 		// Navigation destination for editing a newly created record (item-driven).
@@ -307,11 +349,12 @@ struct ChooseVehicle: View {
 	/// Creates a new `Vehicle8` with minimal defaults, saves it, and navigates directly to its
 	/// editor so the user can immediately provide details.
 	private func addNewRecord() {
+		guard entitlements.requestCreate(Vehicle8.self, in: modelContext) else { return }
 		let maxSortOrder = vehicles.map { $0.sortOrder }.max() ?? -1
 		let newRecord = Vehicle8(
 			inactive: false,
 			name: UUID().uuidString,
-			displayName: "New vehicle",
+			displayName: "New \(Vertical.current.assetSingular.lowercased())",
 			manufacturer: "",
 			model: "",
 			year: Calendar.current.component(.year, from: Date()),

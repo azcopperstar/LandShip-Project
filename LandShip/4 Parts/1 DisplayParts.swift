@@ -53,6 +53,7 @@ struct DisplayParts: View {
 
     /// SwiftData model context used for inserting and saving new records.
     @Environment(\.modelContext) var modelContext
+    @Environment(\.entitlements) private var entitlements
 
     // MARK: - Selection & Navigation State
 
@@ -99,6 +100,10 @@ struct DisplayParts: View {
         case updatedDesc = "Recently Updated"
         var id: String { rawValue }
 
+        /// Vertical-aware display text — the persisted rawValue stays "Vehicle ..." so
+        /// existing AppStorage selections keep decoding correctly.
+        var displayName: String { rawValue.replacingOccurrences(of: "Vehicle", with: Vertical.current.assetSingular) }
+
         /// Concrete sort descriptors used by the SwiftData query for `MxParts1`.
         var descriptors: [SortDescriptor<MxParts1>] {
             switch self {
@@ -139,7 +144,7 @@ struct DisplayParts: View {
                 selection: $selectedVehicle,
                 title: "",
                 includeEmptyChoice: true,
-                emptyChoiceLabel: "All Vehicles",
+                emptyChoiceLabel: FleetScope.allDisplayLabel,
                 autoSelectFirst: false,
                 filter: nil,
                 sort: [SortDescriptor(\.displayName, order: .forward)],
@@ -233,8 +238,19 @@ struct DisplayParts: View {
                                                         .font(.subheadline)
                                                         .foregroundStyle(.secondary)
                                                 }
-                                                if !record.partStatus.isEmpty || !record.partSupplier.isEmpty {
-                                                    Text("\([record.partStatus, record.partSupplier].filter { !$0.isEmpty }.joined(separator: " · "))")
+                                                if !record.partStatus.isEmpty {
+                                                    Text("\(record.partStatus)")
+                                                        .font(.subheadline)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                if record.inventoryTracked {
+                                                    let isLowStock = record.inventoryQuantityOnHand <= record.inventoryReorderPoint
+                                                    Text("In Stock: \(record.inventoryQuantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(record.partUnit)\(isLowStock ? " · LOW STOCK" : "")")
+                                                        .font(.subheadline)
+                                                        .foregroundStyle(isLowStock ? .red : .secondary)
+                                                }
+                                                if !record.partSupplier.isEmpty {
+                                                    Text("Supplier: \(record.partSupplier)")
                                                         .font(.subheadline)
                                                         .foregroundStyle(.secondary)
                                                 }
@@ -248,7 +264,7 @@ struct DisplayParts: View {
                                         }
                                         // Improve VoiceOver by combining child elements into a single label.
                                         .accessibilityElement(children: .combine)
-                                        .accessibilityLabel("\(record.partName), vehicle \(record.vehicleId)")
+                                        .accessibilityLabel("\(record.partName), \(Vertical.current.assetSingular.lowercased()) \(record.vehicleId)")
                                     }
                                 }
 //                                .textModifier_ListDivider()
@@ -277,7 +293,7 @@ struct DisplayParts: View {
                                     Menu {
                                         Picker("Sort by", selection: $selectedSort) {
                                             ForEach(PartsSort.allCases) { sortCase in
-                                                Text(sortCase.rawValue).tag(sortCase)
+                                                Text(sortCase.displayName).tag(sortCase)
                                             }
                                         }
                                     } label: {
@@ -317,7 +333,7 @@ struct DisplayParts: View {
                             // Shows the active sort option above the list.
                             HStack(spacing: 6) {
                                 Image(systemName: "arrow.up.arrow.down")
-                                Text("Sort: \(selectedSort.rawValue)")
+                                Text("Sort: \(selectedSort.displayName)")
                             }
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -343,9 +359,10 @@ struct DisplayParts: View {
         if #available(iOS 17.0, macOS 14.0, *) {
             sharedContent
                 // Route to the PDF report when requested via toolbar.
+                // The report owns and re-fetches its own scope via an in-report vehicle picker,
+                // so no .id() here — that would reset the user's picker selection on navigation.
                 .navigationDestination(item: $reportDestination) { dest in
-                    pdfReportParts(trackVehicleSelected: .constant(dest.scope))
-                        .id("PartsReport-\(dest.scope)") // ensure refresh if vehicle changes
+                    pdfReportParts(trackVehicleSelected: dest.scope)
                         .ignoresSafeArea()
                 }
                 // Programmatic navigation when a new record is created and assigned.
@@ -355,9 +372,10 @@ struct DisplayParts: View {
         } else {
             sharedContent
                 // Legacy route to the PDF report for iOS 16/macOS 13.
+                // The report owns and re-fetches its own scope via an in-report vehicle picker,
+                // so no .id() here — that would reset the user's picker selection on navigation.
                 .navigationDestination(item: $reportDestination) { dest in
-                    pdfReportParts(trackVehicleSelected: .constant(dest.scope))
-                        .id("PartsReport-\(dest.scope)")
+                    pdfReportParts(trackVehicleSelected: dest.scope)
                         .ignoresSafeArea()
                 }
                 // Fallback hidden NavigationLink to push EditParts when creating a new record.
@@ -384,6 +402,7 @@ struct DisplayParts: View {
     /// Creates and inserts a new `MxParts1` record, saves it, and triggers
     /// programmatic navigation into `EditParts` in editing mode.
     private func addNewRecord() {
+        guard entitlements.requestCreate(MxParts1.self, in: modelContext) else { return }
         let newRecord = MxParts1(
             inactive: false,
             createdAt: Date(),

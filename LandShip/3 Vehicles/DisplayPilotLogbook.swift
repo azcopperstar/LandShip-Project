@@ -18,6 +18,7 @@ struct DisplayPilotLogbook: View {
 
 	@State private var newRecordToEdit: PilotLogbookEntry?
 	@State private var showingCertification: Bool = false
+	@State private var isShowingPDFReport: Bool = false
 
 	private enum LogSort: String, CaseIterable, Identifiable {
 		case dateDesc = "Date ↓"
@@ -85,6 +86,22 @@ struct DisplayPilotLogbook: View {
 						}
 						.textModifier_ListDivider()
 						.toolbar {
+							ToolbarItem(placement: .automatic) {
+								Button {
+									isShowingPDFReport = true
+								} label: {
+#if os(macOS)
+									Image(systemName: "doc.text")
+#else
+									VStack(spacing: 2) {
+										Image(systemName: "doc.text")
+										Text("Report").font(.caption2)
+									}
+#endif
+								}
+								.help("Report")
+								.accessibilityLabel("Report")
+							}
 							ToolbarItem(placement: .automatic) {
 								Button {
 									showingCertification = true
@@ -155,6 +172,10 @@ struct DisplayPilotLogbook: View {
 			EditPilotLogbookEntry(entry: record)
 				.id(record.persistentModelID)
 		}
+		.navigationDestination(isPresented: $isShowingPDFReport) {
+			pdfReportPilotLogbook()
+				.ignoresSafeArea()
+		}
 		.sheet(isPresented: $showingCertification) {
 			NavigationStack {
 				EditPilotCertification()
@@ -203,4 +224,25 @@ struct DisplayPilotLogbook: View {
 			print("Failed to delete logbook entry(s): \(error.localizedDescription)")
 		}
 	}
+}
+
+#Preview("Pilot Logbook - Sample Data") {
+	let config = ModelConfiguration(isStoredInMemoryOnly: true)
+	let container = try! ModelContainer(for: PilotLogbookEntry.self, PilotCertification.self, Vehicle8.self, configurations: config)
+	let context = container.mainContext
+
+	let vehicle = Vehicle8(name: "N12345", manufacturer: "Cessna", model: "172")
+	context.insert(vehicle)
+
+	let samples: [PilotLogbookEntry] = [
+		PilotLogbookEntry(date: Date(), vehicleId: "N12345", departureLocation: "KPAO", arrivalLocation: "KSQL", totalTime: 1.2, picTime: 1.2, dayLandings: 3),
+		PilotLogbookEntry(date: Date().addingTimeInterval(-86400 * 7), aircraftIdentifier: "N54321 (rental)", departureLocation: "KSQL", arrivalLocation: "KPAO", totalTime: 0.9, picTime: 0.9, nightTime: 0.9, nightLandings: 1)
+	]
+	samples.forEach { context.insert($0) }
+	try? context.save()
+
+	return NavigationStack {
+		DisplayPilotLogbook()
+	}
+	.modelContainer(container)
 }

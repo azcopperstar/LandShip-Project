@@ -8,6 +8,7 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import StoreKit
 
 
 // MARK: - Unit Localization Helpers
@@ -448,20 +449,18 @@ struct AppVersion: Hashable {
         let ver = (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? ""
         let bld = (bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? ""
 
-        // TestFlight detection
-        // iOS 18+: Avoid deprecated receipt URL API. Consider adopting StoreKit's AppTransaction/Transaction APIs asynchronously if needed.
+        // TestFlight detection. EntitlementStore's receipt check (AppTransaction.shared,
+        // async) caches the App Store environment on every launch — read that cache here
+        // rather than duplicating an async StoreKit call in this synchronous initializer.
+        // One-launch lag on a fresh install: acceptable for a version-string suffix.
         var isTestFlight: Bool
-//        if #available(iOS 18.0, *) {
-            // TODO: Adopt StoreKit's AppTransaction.shared / Transaction.all to detect TestFlight if needed.
-//            isTestFlight = false
-//        } else {
-            // Pre–macOS 15: sandbox receipt indicates TestFlight install
-            if #available(macOS 15.0, iOS 18.0, *) {
-                isTestFlight = false // TODO: Adopt AppTransaction.shared / Transaction.all from StoreKit
-            } else {
-                isTestFlight = bundle.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
-            }
-//        }
+        if let raw = UserDefaults.standard.string(forKey: StorageKey.appStoreEnvironment) {
+            isTestFlight = (raw == String(describing: AppStore.Environment.sandbox))
+        } else if #available(macOS 15.0, iOS 18.0, *) {
+            isTestFlight = false // no cached environment yet (first launch)
+        } else {
+            isTestFlight = bundle.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+        }
 
         // Allow build-time override using a custom Swift flag (e.g., -D BETA)
         #if BETA

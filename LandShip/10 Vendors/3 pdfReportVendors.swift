@@ -44,6 +44,8 @@ struct pdfReportVendors: View {
 
 	@State private var pdfDocument: PDFDocument?
 	@State private var zoomAction: ZoomAction?
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 
 	let functions = Functions()
 
@@ -102,7 +104,36 @@ struct pdfReportVendors: View {
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
+			}
 		}
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: "Vendors and Shops") { _ in }
+	}
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let headers = [
+			"Inactive", "Created At", "Updated At", "Vendor Name", "Vendor Type",
+			"Contact 1", "Contact 2", "Contact 3", "Address", "City", "State", "Zip",
+			"Phone", "Email", "Website", "Notes",
+			"Image 1 Description", "Image 2 Description", "Image 3 Description"
+		]
+		let rows: [[String]] = dataSet.map { v in
+			[
+				CSVField.bool(v.inactive), CSVField.date(v.createdAt), CSVField.date(v.updatedAt), v.vendorName, v.vendorType,
+				v.vendorContact1, v.vendorContact2, v.vendorContact3, v.vendorAddress, v.vendorCity, v.vendorState, v.vendorZip,
+				v.vendorPhone, v.vendorEmail, v.vendorWebsite, v.vendorNotes,
+				v.image1Description, v.image2Description, v.image3Description
+			]
+		}
+		return CSVBuilder.build(headers: headers, rows: rows)
 	}
 
 	// MARK: - Generation
@@ -137,7 +168,26 @@ struct pdfReportVendors: View {
 		let vendorWord = dataSet.count == 1 ? "vendor" : "vendors"
 		let subtitle = "\(functions.formatDate_DDMMMyy(date: Date())) • \(dataSet.count) \(vendorWord)"
 
-		return PDFReportRenderer.render(title: "Vendors and Shops Report", subtitle: subtitle, columns: columns, rows: rows, style: .standard)
+		let summary = vendorsSummary(dataSet)
+		return PDFReportRenderer.render(title: "Vendors and Shops Report", subtitle: subtitle, columns: columns, rows: rows, summary: summary, style: .standard)
+	}
+
+	/// Breaks down the vendor list by type — the one categorical dimension worth totaling here.
+	/// Vendors have no vehicle association, so there's no per-vehicle breakdown to add here.
+	private func vendorsSummary(_ vendors: [Vendors1]) -> PDFReportSummary {
+		var countsByType: [String: Int] = [:]
+		for vendor in vendors {
+			let type = text(vendor.vendorType) ?? "Uncategorized"
+			countsByType[type, default: 0] += 1
+		}
+		// countsByType only ever contains types that were actually observed, so every count here
+		// is already nonzero; only the trailing "Total Vendors" line needs its own zero guard.
+		let byType: [(label: String, value: String)] = countsByType.sorted { $0.key < $1.key }.map { ($0.key, "\($0.value)") }
+		let fields = byType + (vendors.isEmpty ? [] : [("Total Vendors", "\(vendors.count)")])
+		return PDFReportSummary(
+			title: "VENDORS SUMMARY",
+			groups: fields.isEmpty ? [] : [PDFFieldGroup(fields: fields)]
+		)
 	}
 
 	// MARK: - Field-group builders
@@ -223,8 +273,8 @@ private struct VendorsReportPreviewHost: View {
 		let context = container.mainContext
 
 		let samples: [Vendors1] = [
-			Vendors1(vendorName: "AutoParts Plus", vendorType: "Parts Vendor", vendorContact1: "Jane Doe", vendorAddress: "123 Main St", vendorCity: "Springfield", vendorState: "IL", vendorZip: "62704", vendorPhone: "555-1234", vendorEmail: "jane@autopartsplus.com", vendorNotes: "Preferred parts supplier."),
-			Vendors1(vendorName: "Quick Lube", vendorType: "Service & Repair")
+			Vendors1(createdAt: Date(), updatedAt: Date(), vendorName: "AutoParts Plus", vendorType: "Parts Vendor", vendorContact1: "Jane Doe", vendorContact2: "", vendorContact3: "", vendorAddress: "123 Main St", vendorCity: "Springfield", vendorState: "IL", vendorZip: "62704", vendorPhone: "555-1234", vendorEmail: "jane@autopartsplus.com", vendorWebsite: "", vendorNotes: "Preferred parts supplier."),
+			Vendors1(createdAt: Date(), updatedAt: Date(), vendorName: "Quick Lube", vendorType: "Service & Repair", vendorContact1: "", vendorContact2: "", vendorContact3: "", vendorAddress: "", vendorCity: "", vendorState: "", vendorZip: "", vendorPhone: "", vendorEmail: "", vendorWebsite: "", vendorNotes: "")
 		]
 		samples.forEach { context.insert($0) }
 		try? context.save()

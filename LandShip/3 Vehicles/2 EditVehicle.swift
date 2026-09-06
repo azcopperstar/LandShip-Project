@@ -59,6 +59,7 @@ struct EditVehicle: View {
 	// back to the model in `updateItem()` and persisted via SwiftData.
 	@State private var dataSet: Vehicle8
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 	@Environment(\.dismiss) private var dismiss
 	@Binding var trackVehicleSelected: String
 	
@@ -160,6 +161,24 @@ struct EditVehicle: View {
 	@State private var scaleTickets: [VehicleScaleTicket] = []
 	@State private var showingAddScaleTicket: Bool = false
 	@State private var scaleTicketToEdit: VehicleScaleTicket? = nil
+
+	@State private var airworthinessDirectives: [AirworthinessDirective] = []
+	@State private var adToEdit: AirworthinessDirective? = nil
+	@State private var showingAddAD: Bool = false
+	@State private var inspectionCycles: [InspectionCycle] = []
+	@State private var inspectionToEdit: InspectionCycle? = nil
+	@State private var showingAddInspection: Bool = false
+	@State private var componentTimesList: [ComponentTimes] = []
+	@State private var componentToEdit: ComponentTimes? = nil
+	@State private var showingAddComponent: Bool = false
+	@State private var showingRegulatoryReport: Bool = false
+
+	@State private var haulOutRecords: [HaulOutRecord] = []
+	@State private var haulOutToEdit: HaulOutRecord? = nil
+	@State private var showingAddHaulOut: Bool = false
+	@State private var surveyRecords: [SurveyRecord] = []
+	@State private var surveyToEdit: SurveyRecord? = nil
+	@State private var showingAddSurvey: Bool = false
 
 	@State private var serialItems: [VehicleSerialItem] = []
 	@State private var showingAddSerialItem: Bool = false
@@ -410,8 +429,12 @@ struct EditVehicle: View {
 				CardView {
 					VStack {
 						SectionText(label: "GENERAL INFORMATION")
-						HStack{LabelDataTextview(label: "Name", data: $name, prompt: "(New Vehicle)")}
+						HStack{LabelDataTextview(label: "Name", data: $name, prompt: "(New \(Vertical.current.assetSingular))")}
 							.onChange(of: name) { _, _ in nameValidationError = nil }
+						Text("Renaming this \(Vertical.current.assetSingular.lowercased()) offers to update any records that reference it by name.")
+							.font(.caption)
+							.foregroundStyle(.secondary)
+							.frame(maxWidth: .infinity, alignment: .trailing)
 						if let nameValidationError {
 							HStack(alignment: .top, spacing: 6) {
 								Image(systemName: "exclamationmark.triangle.fill")
@@ -424,7 +447,7 @@ struct EditVehicle: View {
 							HStack(alignment: .top, spacing: 6) {
 								Image(systemName: "exclamationmark.triangle.fill")
 									.foregroundStyle(.orange)
-								Text("Changing this name will break links to this vehicle's Fuel Log, Trip Log, Service Records, Parts, Maintenance Items, Systems, Additions, Subscriptions, Projects, CheckLists, Warranties, Serial Items, Scale Tickets, and any linked vehicle records — unless you choose to update them when you save.")
+								Text("Changing this name will break links to this \(Vertical.current.assetSingular.lowercased())'s Fuel Log, Trip Log, Service Records, Parts, Maintenance Items, Systems, Additions, Subscriptions, Projects, CheckLists, Warranties, Serial Items, Scale Tickets, and any linked \(Vertical.current.assetSingular.lowercased()) records — unless you choose to update them when you save.")
 									.font(.caption)
 									.foregroundStyle(.secondary)
 							}
@@ -444,9 +467,9 @@ struct EditVehicle: View {
 						HStack{LabelDataTextview(label: "Manufacturer", data: $manufacturer)}
 						HStack{LabelDataTextview(label: "Model", data: $model)}
 						HStack{LabelDataTextview(label: "Trim Level", data: $trim)}
-						HStack{LabelDataTextview(label: "VIN", data: $vin)}
+						HStack{LabelDataTextview(label: Vertical.current.registrationLabel, data: $vin)}
 						HStack{LabelDataTextview(label: "Title Number", data: $titleNumber)}
-						HStack{LabelDataTextview(label: "Plate Number", data: $licensePlate)}
+						HStack{LabelDataTextview(label: Vertical.current.plateLabel, data: $licensePlate)}
 					}
 				}
 			
@@ -467,6 +490,7 @@ struct EditVehicle: View {
 							HStack {
 								Spacer()
 								Button("Add Item") {
+									guard entitlements.requestCreate(VehicleSerialItem.self, in: modelContext) else { return }
 									let item = VehicleSerialItem(
 										vehicleId: dataSet.name,
 										itemName: newSerialItemName,
@@ -574,17 +598,19 @@ struct EditVehicle: View {
 		
 				CardView {
 					VStack {
-						SectionText(label: "VEHICLE DETAILS")
-						if linkedSyncFields.contains(.odometer), let master = masterVehicle {
-							HStack{LabelDataText(label: "Odometer (synced w/ master)", data: "\(master.mileage) \(unit(UnitIndex.distance))")}
-						} else {
-							HStack{LabelDataTextview_Numberpad_Int(label: "Odometer", data: $mileage)}
-							HStack{LabelDataTextview_Numberpad_Int(label: "Odometer (Virtual)", data: $mileageVirtual)}
+						SectionText(label: "\(Vertical.current.assetSingular.uppercased()) DETAILS")
+						if Vertical.current.id == .land {
+							if linkedSyncFields.contains(.odometer), let master = masterVehicle {
+								HStack{LabelDataText(label: "Odometer (synced w/ master)", data: "\(master.mileage) \(unit(UnitIndex.distance))")}
+							} else {
+								HStack{LabelDataTextview_Numberpad_Int(label: "Odometer", data: $mileage)}
+								HStack{LabelDataTextview_Numberpad_Int(label: "Odometer (Virtual)", data: $mileageVirtual)}
+							}
 						}
 						if linkedSyncFields.contains(.engineHours), let master = masterVehicle {
-							HStack{LabelDataText(label: "Engine Hours (synced w/ master)", data: "\(master.engHours) hrs")}
+							HStack{LabelDataText(label: "\(Vertical.current.id == .land ? "Engine Hours" : Vertical.current.primaryMeterLabel) (synced w/ master)", data: "\(master.engHours) hrs")}
 						} else {
-							HStack{LabelDataTextview_Numberpad_Float(label: "Engine Hours", data: $engHours)}
+							HStack{LabelDataTextview_Numberpad_Float(label: Vertical.current.id == .land ? "Engine Hours" : Vertical.current.primaryMeterLabel, data: $engHours)}
 						}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Doors", data: $doors)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Seats", data: $seats)}
@@ -594,8 +620,8 @@ struct EditVehicle: View {
 				// NEW: Linked Vehicle Records (Edit mode)
 				CardView {
 					VStack(alignment: .leading, spacing: 8) {
-						SectionText(label: "LINKED VEHICLE RECORDS")
-						Text("Link separate vehicle records that represent different aspects of the same physical vehicle (e.g. Chassis, Engine, Body/House). One record is the master; linked records can mirror its odometer and engine hours.")
+						SectionText(label: "LINKED \(Vertical.current.assetSingular.uppercased()) RECORDS")
+						Text("Link separate \(Vertical.current.assetSingular.lowercased()) records that represent different aspects of the same physical \(Vertical.current.assetSingular.lowercased()) (e.g. Chassis, Engine, Body/House). One record is the master; linked records can mirror its odometer and engine hours.")
 							.font(.caption)
 							.foregroundStyle(.secondary)
 
@@ -614,13 +640,13 @@ struct EditVehicle: View {
 								.padding(.vertical, 2)
 								Divider()
 							}
-							Text("A master record cannot also link to another vehicle's master.")
+							Text("A master record cannot also link to another \(Vertical.current.assetSingular.lowercased())'s master.")
 								.font(.caption)
 								.foregroundStyle(.secondary)
 						} else {
-							HStack{LabelDataTextview(label: "Vehicle Aspect", data: $vehicleAspect)}
+							HStack{LabelDataTextview(label: "\(Vertical.current.assetSingular) Aspect", data: $vehicleAspect)}
 							HStack {
-								Text("Master Vehicle")
+								Text("Master \(Vertical.current.assetSingular)")
 									.textLabelModified()
 								Picker("", selection: $linkedMasterVehicleId) {
 									Text("None (Standalone)").tag("")
@@ -692,6 +718,7 @@ struct EditVehicle: View {
 				}
 			
 				CardView {
+					if Vertical.current.visibleFieldGroups.contains(.tires) {
 					VStack {
 						SectionText(label: "TIRE SPECIFICATIONS")
 						HStack{LabelDataTextview(label: "Make/Model/Size", data: $tireSize)}
@@ -699,9 +726,15 @@ struct EditVehicle: View {
 						HStack{LabelDataTextview_Numberpad_Int(label: "Pressure Rear (\(unit(UnitIndex.pressure)))", data: $tirePressureRear)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Pressure Tag Axle (\(unit(UnitIndex.pressure)))", data: $tirePressureTag)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Pressure Pusher Axle (\(unit(UnitIndex.pressure)))", data: $tirePressurePusher)}
+					}
+					}
+					if Vertical.current.visibleFieldGroups.contains(.wheelFasteners) {
+					VStack {
+						SectionText(label: "WHEEL FASTENERS")
 						HStack{LabelDataTextview(label: "Wheel Stud Size", data: $wheelStudSize)}
 						HStack{LabelDataTextview(label: "Wheel Nut Socket", data: $wheelNutSocket)}
 						HStack{LabelDataTextview(label: "Wheel Nut Torque", data: $wheelNutTorque)}
+					}
 					}
 					VStack {
 						SectionText(label: "DIMENSIONS")
@@ -711,18 +744,25 @@ struct EditVehicle: View {
 						HStack{LabelDataTextview_Numberpad_Int(label: "Height (\(unit(UnitIndex.height)))", data: $height)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Cargo Space (\(unit(UnitIndex.area)))", data: $cargoSpace)}
 					}
+					if Vertical.current.visibleFieldGroups.contains(.weightRatings) {
 					VStack {
 						SectionText(label: "WEIGHT DATA")
-						HStack{LabelDataTextview_Numberpad_Int(label: "Vehicle Weight (\(unit(UnitIndex.mass)))", data: $weight)}
+						HStack{LabelDataTextview_Numberpad_Int(label: "\(Vertical.current.assetSingular) Weight (\(unit(UnitIndex.mass)))", data: $weight)}
 						HStack{LabelDataPicker_Date(label: "Date Weighed", data: $dateWeighed)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "GVWR (\(unit(UnitIndex.mass)))", data: $gvwr)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "GCWR (\(unit(UnitIndex.mass)))", data: $gcwr)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "GAWR Front (\(unit(UnitIndex.mass)))", data: $gawrFront)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "GAWR Rear (\(unit(UnitIndex.mass)))", data: $gawrRear)}
-						HStack{LabelDataTextview_Numberpad_Int(label: "Towing Capacity (\(unit(UnitIndex.mass)))", data: $towingCapcity)}
+						if Vertical.current.visibleFieldGroups.contains(.towing) {
+							HStack{LabelDataTextview_Numberpad_Int(label: "Towing Capacity (\(unit(UnitIndex.mass)))", data: $towingCapcity)}
+						}
 						HStack{LabelDataTextview_Numberpad_Int(label: "UVW (\(unit(UnitIndex.mass)))", data: $uvw)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "CCC (\(unit(UnitIndex.mass)))", data: $ccc)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Payload (\(unit(UnitIndex.mass)))", data: $availablePayload)}
+					}
+					}
+					if Vertical.current.visibleFieldGroups.contains(.axleWeights) {
+					VStack {
 						SectionText(label: "SCALE WEIGHT READINGS")
 						HStack{LabelDataTextview_Numberpad_Int(label: "Steer Axle (\(unit(UnitIndex.mass)))", data: $scaleWeightFrontAxle)}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Drive Axle(s) (\(unit(UnitIndex.mass)))", data: $scaleWeightRearAxle)}
@@ -732,7 +772,7 @@ struct EditVehicle: View {
 						let totalVehicleWt = scaleWeightFrontAxle + scaleWeightRearAxle + scaleWeightPusherAxle + scaleWeightTagAxle
 						let totalRollingWt = totalVehicleWt + scaleWeightTrailerAxle
 						if totalVehicleWt > 0 {
-							HStack{LabelDataText(label: "Total Vehicle Weight", data: "\(totalVehicleWt) \(unit(UnitIndex.mass))")}
+							HStack{LabelDataText(label: "Total \(Vertical.current.assetSingular) Weight", data: "\(totalVehicleWt) \(unit(UnitIndex.mass))")}
 						}
 						if totalRollingWt > 0 {
 							HStack{LabelDataText(label: "Total Rolling Weight", data: "\(totalRollingWt) \(unit(UnitIndex.mass))")}
@@ -741,6 +781,7 @@ struct EditVehicle: View {
 							SectionText(label: "WEIGHT SCALE TICKETS")
 							Spacer()
 							Button {
+								guard entitlements.requestCreate(VehicleScaleTicket.self, in: modelContext) else { return }
 								showingAddScaleTicket = true
 							} label: {
 								Image(systemName: "plus.capsule")
@@ -775,16 +816,19 @@ struct EditVehicle: View {
 							}
 						}
 					}
+					}
 				}
 
 				CardView {
 					VStack {
 						SectionText(label: "CAPACITIES")
 						HStack{LabelDataTextview_Numberpad_Int(label: "Fuel (\(unit(UnitIndex.fuel)))", data: $fuelCapacity)}
-						HStack{LabelDataTextview_Numberpad_Int(label: "DEF (\(unit(UnitIndex.def)))", data: $defCapacity)}
-						HStack{LabelDataTextview_Numberpad_Int(label: "Fresh Water (\(unit(UnitIndex.fuel)))", data: $waterCapacity)}
-						HStack{LabelDataTextview_Numberpad_Int(label: "Gray Water (\(unit(UnitIndex.fuel)))", data: $grayCapacity)}
-						HStack{LabelDataTextview_Numberpad_Int(label: "Black Water (\(unit(UnitIndex.fuel)))", data: $blackCapacity)}
+						if Vertical.current.visibleFieldGroups.contains(.rvTanks) {
+							HStack{LabelDataTextview_Numberpad_Int(label: "DEF (\(unit(UnitIndex.def)))", data: $defCapacity)}
+							HStack{LabelDataTextview_Numberpad_Int(label: "Fresh Water (\(unit(UnitIndex.fuel)))", data: $waterCapacity)}
+							HStack{LabelDataTextview_Numberpad_Int(label: "Gray Water (\(unit(UnitIndex.fuel)))", data: $grayCapacity)}
+							HStack{LabelDataTextview_Numberpad_Int(label: "Black Water (\(unit(UnitIndex.fuel)))", data: $blackCapacity)}
+						}
 					}
 				}
 				
@@ -800,7 +844,7 @@ struct EditVehicle: View {
 				}
 						
 				CardView {
-					TextFieldNote_FullWidth_3lines(sectionText: "VEHICLE NOTES", prompt: "Enter notes...", data: $notes)
+					TextFieldNote_FullWidth_3lines(sectionText: "\(Vertical.current.assetSingular.uppercased()) NOTES", prompt: "Enter notes...", data: $notes)
 				}
 				
 				CardView {
@@ -819,6 +863,7 @@ struct EditVehicle: View {
 							SectionText(label: "WARRANTIES")
 							Spacer()
 							Button {
+								guard entitlements.requestCreate(VehicleWarranty.self, in: modelContext) else { return }
 								showingAddWarranty = true
 							} label: {
 								Image(systemName: "plus.capsule")
@@ -866,6 +911,231 @@ struct EditVehicle: View {
 					}
 				}
 
+				if Vertical.current.enabledFeatures.contains(.airworthinessDirectives) {
+				CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						HStack {
+							SectionText(label: "AIRWORTHINESS DIRECTIVES")
+							Spacer()
+							Button {
+								guard entitlements.requestCreate(AirworthinessDirective.self, in: modelContext) else { return }
+								showingAddAD = true
+							} label: {
+								Image(systemName: "plus.capsule")
+							}
+						}
+						if airworthinessDirectives.isEmpty {
+							Text("No airworthiness directives recorded.")
+								.font(.subheadline)
+								.foregroundStyle(.secondary)
+						} else {
+							ForEach(airworthinessDirectives) { ad in
+								HStack(alignment: .top) {
+									VStack(alignment: .leading, spacing: 2) {
+										Text(ad.adNumber).font(.subheadline).bold()
+										if !ad.title.isEmpty {
+											Text(ad.title).font(.caption).foregroundStyle(.secondary)
+										}
+										Text("Next Due: \(functions.formatDate_DDMMMyy(date: ad.nextDueDate))")
+											.font(.caption).foregroundStyle(.secondary)
+									}
+									Spacer()
+									Button {
+										adToEdit = ad
+									} label: {
+										Image(systemName: "pencil.circle").imageScale(.large)
+									}
+									.buttonStyle(.plain)
+								}
+								.padding(.vertical, 4)
+								Divider()
+							}
+						}
+					}
+				}
+				}
+
+				if Vertical.current.enabledFeatures.contains(.inspectionCycles) {
+				CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						HStack {
+							SectionText(label: "INSPECTION CYCLES")
+							Spacer()
+							Button {
+								guard entitlements.requestCreate(InspectionCycle.self, in: modelContext) else { return }
+								showingAddInspection = true
+							} label: {
+								Image(systemName: "plus.capsule")
+							}
+						}
+						if inspectionCycles.isEmpty {
+							Text("No inspections recorded.")
+								.font(.subheadline)
+								.foregroundStyle(.secondary)
+						} else {
+							ForEach(inspectionCycles) { insp in
+								HStack(alignment: .top) {
+									VStack(alignment: .leading, spacing: 2) {
+										Text(insp.inspectionType).font(.subheadline).bold()
+										if !insp.performingShop.isEmpty {
+											Text(insp.performingShop).font(.caption).foregroundStyle(.secondary)
+										}
+										Text("Next Due: \(functions.formatDate_DDMMMyy(date: insp.nextDueDate))")
+											.font(.caption).foregroundStyle(.secondary)
+									}
+									Spacer()
+									Button {
+										inspectionToEdit = insp
+									} label: {
+										Image(systemName: "pencil.circle").imageScale(.large)
+									}
+									.buttonStyle(.plain)
+								}
+								.padding(.vertical, 4)
+								Divider()
+							}
+						}
+					}
+				}
+				}
+
+				if Vertical.current.enabledFeatures.contains(.componentTimes) {
+				CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						HStack {
+							SectionText(label: "COMPONENT TIMES")
+							Spacer()
+							Button {
+								guard entitlements.requestCreate(ComponentTimes.self, in: modelContext) else { return }
+								showingAddComponent = true
+							} label: {
+								Image(systemName: "plus.capsule")
+							}
+						}
+						if componentTimesList.isEmpty {
+							Text("No component times recorded.")
+								.font(.subheadline)
+								.foregroundStyle(.secondary)
+						} else {
+							ForEach(componentTimesList) { comp in
+								HStack(alignment: .top) {
+									VStack(alignment: .leading, spacing: 2) {
+										Text(comp.componentName).font(.subheadline).bold()
+										Text("\(comp.componentType) — TT \(comp.totalTime, specifier: "%.1f")")
+											.font(.caption).foregroundStyle(.secondary)
+									}
+									Spacer()
+									Button {
+										componentToEdit = comp
+									} label: {
+										Image(systemName: "pencil.circle").imageScale(.large)
+									}
+									.buttonStyle(.plain)
+								}
+								.padding(.vertical, 4)
+								Divider()
+							}
+						}
+					}
+				}
+				}
+
+				if Vertical.current.enabledFeatures.contains(.haulOutRecords) {
+				CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						HStack {
+							SectionText(label: "HAUL-OUT RECORDS")
+							Spacer()
+							Button {
+								guard entitlements.requestCreate(HaulOutRecord.self, in: modelContext) else { return }
+								showingAddHaulOut = true
+							} label: {
+								Image(systemName: "plus.capsule")
+							}
+						}
+						if haulOutRecords.isEmpty {
+							Text("No haul-out records recorded.")
+								.font(.subheadline)
+								.foregroundStyle(.secondary)
+						} else {
+							ForEach(haulOutRecords) { ho in
+								HStack(alignment: .top) {
+									VStack(alignment: .leading, spacing: 2) {
+										Text(ho.yardName.isEmpty ? "Haul-Out" : ho.yardName).font(.subheadline).bold()
+										if !ho.bottomPaintType.isEmpty {
+											Text(ho.bottomPaintType).font(.caption).foregroundStyle(.secondary)
+										}
+										Text("Next Due: \(functions.formatDate_DDMMMyy(date: ho.nextDueDate))")
+											.font(.caption).foregroundStyle(.secondary)
+									}
+									Spacer()
+									Button {
+										haulOutToEdit = ho
+									} label: {
+										Image(systemName: "pencil.circle").imageScale(.large)
+									}
+									.buttonStyle(.plain)
+								}
+								.padding(.vertical, 4)
+								Divider()
+							}
+						}
+					}
+				}
+				}
+
+				if Vertical.current.enabledFeatures.contains(.surveyRecords) {
+				CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						HStack {
+							SectionText(label: "SURVEY RECORDS")
+							Spacer()
+							Button {
+								guard entitlements.requestCreate(SurveyRecord.self, in: modelContext) else { return }
+								showingAddSurvey = true
+							} label: {
+								Image(systemName: "plus.capsule")
+							}
+						}
+						if surveyRecords.isEmpty {
+							Text("No survey records recorded.")
+								.font(.subheadline)
+								.foregroundStyle(.secondary)
+						} else {
+							ForEach(surveyRecords) { sv in
+								HStack(alignment: .top) {
+									VStack(alignment: .leading, spacing: 2) {
+										Text(sv.surveyType.isEmpty ? "Survey" : sv.surveyType).font(.subheadline).bold()
+										if !sv.surveyorName.isEmpty {
+											Text(sv.surveyorName).font(.caption).foregroundStyle(.secondary)
+										}
+										Text("Next Due: \(functions.formatDate_DDMMMyy(date: sv.nextDueDate))")
+											.font(.caption).foregroundStyle(.secondary)
+									}
+									Spacer()
+									Button {
+										surveyToEdit = sv
+									} label: {
+										Image(systemName: "pencil.circle").imageScale(.large)
+									}
+									.buttonStyle(.plain)
+								}
+								.padding(.vertical, 4)
+								Divider()
+							}
+						}
+					}
+				}
+				}
+
+				if let disclaimer = Vertical.current.regulatoryDisclaimer {
+					Text(disclaimer)
+						.font(.caption)
+						.foregroundStyle(.secondary)
+						.padding(.horizontal)
+						.frame(maxWidth: .infinity, alignment: .leading)
+				}
+
 				CardView {
 					VStack {
 						SectionText(label: "ONLINE SERVICE (OnStar...)")
@@ -874,16 +1144,16 @@ struct EditVehicle: View {
 						HStack{LabelDataTextview(label: "URL", data: $onlineServiceURL)}
 						HStack{LabelDataTextview(label: "Login/Password", data: $onlineServiceLogin)}
 						HStack{LabelDataTextview(label: "Billing Account", data: $onlineServiceBillingAccount)}
-						HStack{LabelDataTextview(label: "Vehicle Mobile #", data: $vehicleMobileNumber)}
+						HStack{LabelDataTextview(label: "\(Vertical.current.assetSingular) Mobile #", data: $vehicleMobileNumber)}
 					}
 				}
 
 				CardView {
 					VStack {
 #if os(macOS)
-						SectionText(label: "VEHICLE GRAPHICS")
+						SectionText(label: "\(Vertical.current.assetSingular.uppercased()) GRAPHICS")
 #elseif os(iOS)
-						SectionText(label: "  VEHICLE GRAPHICS\n(Click Image to Change)")
+						SectionText(label: "  \(Vertical.current.assetSingular.uppercased()) GRAPHICS\n(Click Image to Change)")
 #endif
 						HStack {Image_Edit(label: "1", imageData: $image1, imageDescription: $image1Description)}
 						HStack {Image_Edit(label: "2", imageData: $image2, imageDescription: $image2Description)}
@@ -893,7 +1163,7 @@ struct EditVehicle: View {
 				CardView {
 					VStack {
 						SectionText(label: "STATUS")
-						HStack{LabelDataToggle(label: "Deactivate Vehicle Record", data: $inactive)}
+						HStack{LabelDataToggle(label: "Deactivate \(Vertical.current.assetSingular) Record", data: $inactive)}
 						Text("When selected, this record is marked as inactive. It will be hidden in lists and pickers, but its data remains available for viewing and editing, and can be un-hidden by selecting 'View Inactive' on the 'Settings' screen.")
 							.font(.caption)
 							.foregroundStyle(.secondary)
@@ -913,6 +1183,11 @@ struct EditVehicle: View {
 				loadSerialItems()
 				loadScaleTickets()
 				loadLinkedVehicles()
+				loadAirworthinessDirectives()
+				loadInspectionCycles()
+				loadComponentTimes()
+				loadHaulOutRecords()
+				loadSurveyRecords()
 			}
 			.onChange(of: mileage) { _, _ in recomputeNextDue() }
 			.onChange(of: engHours) { _, _ in recomputeNextDue() }
@@ -928,6 +1203,36 @@ struct EditVehicle: View {
 			}
 			.sheet(item: $scaleTicketToEdit, onDismiss: { loadScaleTickets(); syncWeightsFromModel() }) { ticket in
 				EditScaleTicket(vehicleId: dataSet.name, ticket: ticket)
+			}
+			.sheet(isPresented: $showingAddAD, onDismiss: loadAirworthinessDirectives) {
+				EditAirworthinessDirective(vehicleId: dataSet.name)
+			}
+			.sheet(item: $adToEdit, onDismiss: loadAirworthinessDirectives) { ad in
+				EditAirworthinessDirective(vehicleId: dataSet.name, directive: ad)
+			}
+			.sheet(isPresented: $showingAddInspection, onDismiss: loadInspectionCycles) {
+				EditInspectionCycle(vehicleId: dataSet.name)
+			}
+			.sheet(item: $inspectionToEdit, onDismiss: loadInspectionCycles) { insp in
+				EditInspectionCycle(vehicleId: dataSet.name, inspection: insp)
+			}
+			.sheet(isPresented: $showingAddComponent, onDismiss: loadComponentTimes) {
+				EditComponentTimes(vehicleId: dataSet.name)
+			}
+			.sheet(item: $componentToEdit, onDismiss: loadComponentTimes) { comp in
+				EditComponentTimes(vehicleId: dataSet.name, component: comp)
+			}
+			.sheet(isPresented: $showingAddHaulOut, onDismiss: loadHaulOutRecords) {
+				EditHaulOutRecord(vehicleId: dataSet.name)
+			}
+			.sheet(item: $haulOutToEdit, onDismiss: loadHaulOutRecords) { ho in
+				EditHaulOutRecord(vehicleId: dataSet.name, record: ho)
+			}
+			.sheet(isPresented: $showingAddSurvey, onDismiss: loadSurveyRecords) {
+				EditSurveyRecord(vehicleId: dataSet.name)
+			}
+			.sheet(item: $surveyToEdit, onDismiss: loadSurveyRecords) { sv in
+				EditSurveyRecord(vehicleId: dataSet.name, record: sv)
 			}
 			.sheet(isPresented: $showingLinkedFieldsPicker) {
 				LinkedFieldsPickerSheet(selection: $linkedSyncFields)
@@ -950,11 +1255,11 @@ struct EditVehicle: View {
 					Button("Save") {
 						let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
 						guard !trimmedName.isEmpty else {
-							nameValidationError = "Vehicle name cannot be blank."
+							nameValidationError = "\(Vertical.current.assetSingular) name cannot be blank."
 							return
 						}
 						guard !isNameTaken(trimmedName) else {
-							nameValidationError = "That name is already used by another vehicle."
+							nameValidationError = "That name is already used by another \(Vertical.current.assetSingular.lowercased())."
 							return
 						}
 						nameValidationError = nil
@@ -969,7 +1274,7 @@ struct EditVehicle: View {
 					}
 					.buttonStyle(GrowingButton(buttonColor: Color.red))
 					.confirmationDialog(
-						"Vehicle Name Changed",
+						"\(Vertical.current.assetSingular) Name Changed",
 						isPresented: $showingRenameChoice,
 						titleVisibility: .visible
 					) {
@@ -1009,19 +1314,19 @@ struct EditVehicle: View {
 							}
 						
 						HStack{LabelDataText(label: "Status", data: dataSet.inactive ? "Inactive" : "Active")}
-						HStack{LabelDataText(label: "Vehicle Name", data: "\(dataSet.name)")}
+						HStack{LabelDataText(label: "\(Vertical.current.assetSingular) Name", data: "\(dataSet.name)")}
 						HStack{LabelDataText(label: "Model Year", data: "\(functions.formatYear(year: dataSet.year))")}
 						HStack{LabelDataText(label: "Manufacturer", data: "\(dataSet.manufacturer)")}
 						HStack{LabelDataText(label: "Model", data: "\(dataSet.model)")}
 						HStack{LabelDataText(label: "Trim Level", data: "\(dataSet.trim)")}
 						if dataSet.vin != "" {
-							HStack{LabelDataText(label: "VIN", data: "\(dataSet.vin)")}
+							HStack{LabelDataText(label: Vertical.current.registrationLabel, data: "\(dataSet.vin)")}
 						}
 						if dataSet.titleNumber != "" {
 							HStack{LabelDataText(label: "Title Number", data: "\(dataSet.titleNumber)")}
 						}
 						if dataSet.licensePlate != "" {
-							HStack{LabelDataText(label: "Plate Number", data: "\(dataSet.licensePlate)")}
+							HStack{LabelDataText(label: Vertical.current.plateLabel, data: "\(dataSet.licensePlate)")}
 						}
 					}
 				}
@@ -1066,15 +1371,15 @@ struct EditVehicle: View {
 				if hasVehicleDetails {
 					CardView {
 					VStack {
-						SectionText(label: "VEHICLE DETAILS")
-						if dataSet.mileage > 0 {
+						SectionText(label: "\(Vertical.current.assetSingular.uppercased()) DETAILS")
+						if Vertical.current.id == .land && dataSet.mileage > 0 {
 							HStack{LabelDataText(label: "Odometer", data: "\(dataSet.mileage) \(unit(UnitIndex.distance))")}
 						}
-						if dataSet.mileageVirtual > 0 {
+						if Vertical.current.id == .land && dataSet.mileageVirtual > 0 {
 							HStack{LabelDataText(label: "Odometer (Virtual)", data: "\(dataSet.mileageVirtual) \(unit(UnitIndex.distance))")}
 						}
 						if dataSet.engHours > 0 {
-							HStack{LabelDataText(label: "Current Engine Hours", data: "\(dataSet.engHours) hrs")}
+							HStack{LabelDataText(label: Vertical.current.id == .land ? "Engine Hours" : Vertical.current.primaryMeterLabel, data: "\(dataSet.engHours) hrs")}
 						}
 						if dataSet.doors > 0 {
 							HStack{LabelDataText(label: "Doors", data: "\(dataSet.doors)")}
@@ -1090,7 +1395,7 @@ struct EditVehicle: View {
 				if !linkedAspectVehicles.isEmpty || !dataSet.linkedMasterVehicleId.isEmpty {
 					CardView {
 						VStack(alignment: .leading, spacing: 8) {
-							SectionText(label: "LINKED VEHICLE RECORDS")
+							SectionText(label: "LINKED \(Vertical.current.assetSingular.uppercased()) RECORDS")
 							if !linkedAspectVehicles.isEmpty {
 								HStack{LabelDataText(label: "Role", data: "Master Record")}
 								ForEach(linkedAspectVehicles) { child in
@@ -1100,7 +1405,7 @@ struct EditVehicle: View {
 								}
 							} else if let master = masterVehicle {
 								HStack{LabelDataText(label: "Aspect", data: dataSet.vehicleAspect.isEmpty ? "Linked Record" : dataSet.vehicleAspect)}
-								HStack{LabelDataText(label: "Master Vehicle", data: master.displayName.isEmpty ? master.name : master.displayName)}
+								HStack{LabelDataText(label: "Master \(Vertical.current.assetSingular)", data: master.displayName.isEmpty ? master.name : master.displayName)}
 								if dataSet.linkedSyncFields.isEmpty {
 									HStack{LabelDataText(label: "Synced Fields", data: "None")}
 								} else {
@@ -1153,7 +1458,7 @@ struct EditVehicle: View {
 				}
 				
 				// Hidden when no tire fields have data
-				if hasTireInformation {
+				if hasTireInformation && Vertical.current.visibleFieldGroups.contains(.tires) {
 					CardView {
 					VStack {
 						SectionText(label: "TIRE INFORMATION")
@@ -1203,6 +1508,7 @@ struct EditVehicle: View {
 					}
 				}
 				
+				if Vertical.current.visibleFieldGroups.contains(.weightRatings) {
 				CardView {
 					VStack {
 						// Title only appears when weight figures were entered
@@ -1210,7 +1516,7 @@ struct EditVehicle: View {
 							SectionText(label: "WEIGHT DATA")
 						}
 						if dataSet.weight > 0 {
-							HStack{LabelDataText(label: "Vehicle Weight", data: "\(dataSet.weight) \(unit(UnitIndex.mass))")}
+							HStack{LabelDataText(label: "\(Vertical.current.assetSingular) Weight", data: "\(dataSet.weight) \(unit(UnitIndex.mass))")}
 							HStack{LabelDataText(label: "Date Weighed", data: "\(functions.formatDate_DDMMMyy(date:dataSet.dateWeighed))")}
 						}
 						if dataSet.gvwr > 0 {
@@ -1225,7 +1531,7 @@ struct EditVehicle: View {
 						if dataSet.gawrRear > 0 {
 							HStack{LabelDataText(label: "GAWR Rear", data: "\(dataSet.gawrRear) \(unit(UnitIndex.mass))")}
 						}
-						if dataSet.towingCapcity > 0 {
+						if Vertical.current.visibleFieldGroups.contains(.towing) && dataSet.towingCapcity > 0 {
 							HStack{LabelDataText(label: "Towing Capacity", data: "\(dataSet.towingCapcity) \(unit(UnitIndex.mass))")}
 						}
 						if dataSet.uvw > 0 {
@@ -1237,6 +1543,12 @@ struct EditVehicle: View {
 						if dataSet.availablePayload > 0 {
 							HStack{LabelDataText(label: "Payload", data: "\(dataSet.availablePayload) \(unit(UnitIndex.mass))")}
 						}
+					}
+				}
+				}
+				if Vertical.current.visibleFieldGroups.contains(.axleWeights) {
+				CardView {
+					VStack {
 						let totalVehicleWt = dataSet.scaleWeightFrontAxle + dataSet.scaleWeightRearAxle + dataSet.scaleWeightPusherAxle + dataSet.scaleWeightTagAxle
 						let totalRollingWt = totalVehicleWt + dataSet.scaleWeightTrailerAxle
 						if dataSet.scaleWeightFrontAxle > 0 || dataSet.scaleWeightRearAxle > 0 || dataSet.scaleWeightPusherAxle > 0 || dataSet.scaleWeightTagAxle > 0 || dataSet.scaleWeightTrailerAxle > 0 {
@@ -1257,7 +1569,7 @@ struct EditVehicle: View {
 								HStack{LabelDataText(label: "Trailer Axle(s)", data: "\(dataSet.scaleWeightTrailerAxle) \(unit(UnitIndex.mass))")}
 							}
 							if totalVehicleWt > 0 {
-								HStack{LabelDataText(label: "Total Vehicle Weight", data: "\(totalVehicleWt) \(unit(UnitIndex.mass))")}
+								HStack{LabelDataText(label: "Total \(Vertical.current.assetSingular) Weight", data: "\(totalVehicleWt) \(unit(UnitIndex.mass))")}
 							}
 							if totalRollingWt > 0 {
 								HStack{LabelDataText(label: "Total Rolling Weight", data: "\(totalRollingWt) \(unit(UnitIndex.mass))")}
@@ -1279,6 +1591,7 @@ struct EditVehicle: View {
 						}
 					}
 				}
+				}
 				
 				// Hidden when no capacities were entered
 				if hasCapacities {
@@ -1288,17 +1601,19 @@ struct EditVehicle: View {
 						if dataSet.fuelCapacity > 0 {
 							HStack{LabelDataText(label: "Fuel", data: "\(dataSet.fuelCapacity) \(unit(UnitIndex.fuel))")}
 						}
-						if dataSet.defCapacity > 0 {
-							HStack{LabelDataText(label: "DEF", data: "\(dataSet.defCapacity) \(unit(UnitIndex.def))")}
-						}
-						if dataSet.waterCapacity > 0 {
-							HStack{LabelDataText(label: "Fresh Water", data: "\(dataSet.waterCapacity) \(unit(UnitIndex.fuel))")}
-						}
-						if dataSet.grayCapacity > 0 {
-							HStack{LabelDataText(label: "Gray Water", data: "\(dataSet.grayCapacity) \(unit(UnitIndex.fuel))")}
-						}
-						if dataSet.blackCapacity > 0 {
-							HStack{LabelDataText(label: "Black Water", data: "\(dataSet.blackCapacity) \(unit(UnitIndex.fuel))")}
+						if Vertical.current.visibleFieldGroups.contains(.rvTanks) {
+							if dataSet.defCapacity > 0 {
+								HStack{LabelDataText(label: "DEF", data: "\(dataSet.defCapacity) \(unit(UnitIndex.def))")}
+							}
+							if dataSet.waterCapacity > 0 {
+								HStack{LabelDataText(label: "Fresh Water", data: "\(dataSet.waterCapacity) \(unit(UnitIndex.fuel))")}
+							}
+							if dataSet.grayCapacity > 0 {
+								HStack{LabelDataText(label: "Gray Water", data: "\(dataSet.grayCapacity) \(unit(UnitIndex.fuel))")}
+							}
+							if dataSet.blackCapacity > 0 {
+								HStack{LabelDataText(label: "Black Water", data: "\(dataSet.blackCapacity) \(unit(UnitIndex.fuel))")}
+							}
 						}
 					}
 					}
@@ -1325,7 +1640,7 @@ struct EditVehicle: View {
 				}
 				
 				if dataSet.notes != "" {CardView {
-					TextNoteDisplay_FullWidth(sectionText: "VEHICLE NOTES", data: dataSet.notes)}
+					TextNoteDisplay_FullWidth(sectionText: "\(Vertical.current.assetSingular.uppercased()) NOTES", data: dataSet.notes)}
 				}
 
 				// Hidden when no insurance fields have data
@@ -1351,7 +1666,7 @@ struct EditVehicle: View {
 				
 				CardView {
 					VStack(alignment: .leading, spacing: 8) {
-						SectionText(label: "VEHICLE WARRANTIES")
+						SectionText(label: "\(Vertical.current.assetSingular.uppercased()) WARRANTIES")
 						if warranties.isEmpty {
 							Text("No warranties recorded.")
 								.font(.subheadline)
@@ -1424,7 +1739,7 @@ struct EditVehicle: View {
 							HStack{LabelDataText(label: "Billing Account", data: "\(dataSet.onlineServiceBillingAccount)")}
 						}
 						if dataSet.vehicleMobileNumber != "" {
-							HStack{LabelDataText(label: "Vehicle Mobile #", data: "\(dataSet.vehicleMobileNumber)")}
+							HStack{LabelDataText(label: "\(Vertical.current.assetSingular) Mobile #", data: "\(dataSet.vehicleMobileNumber)")}
 						}
 					}
 					}
@@ -1434,7 +1749,7 @@ struct EditVehicle: View {
 				if hasGraphics {
 					CardView {
 					VStack {
-						SectionText(label: "VEHICLE GRAPHICS")
+						SectionText(label: "\(Vertical.current.assetSingular.uppercased()) GRAPHICS")
 						Image_View_Details(label:"1", imageData: dataSet.image1, imageDescription: dataSet.image1Description)
 						Image_View_Details(label:"2", imageData: dataSet.image2, imageDescription: dataSet.image2Description)
 						Image_View_Details(label:"3", imageData: dataSet.image3, imageDescription: dataSet.image3Description)
@@ -1450,6 +1765,11 @@ struct EditVehicle: View {
 				loadSerialItems()
 				loadScaleTickets()
 				loadLinkedVehicles()
+				loadAirworthinessDirectives()
+				loadInspectionCycles()
+				loadComponentTimes()
+				loadHaulOutRecords()
+				loadSurveyRecords()
 			}
 			.frame(maxWidth: .infinity, maxHeight: .infinity)
 			// implementation of persistant titles at top of page
@@ -1461,6 +1781,17 @@ struct EditVehicle: View {
 			}
 			
 			.toolbar {
+				if !Vertical.current.enabledFeatures.isEmpty {
+					ToolbarItem(placement: .automatic) {
+						Button {
+							showingRegulatoryReport = true
+						} label: {
+							Label("Logbook", systemImage: "doc.text")
+						}
+						.help("Logbook Report")
+						.accessibilityLabel("Logbook Report")
+					}
+				}
 				ToolbarItem(placement: .automatic) {
 					Button(isEditing ? "Cancel" : "Edit") {
 						isEditing.toggle()
@@ -1488,6 +1819,22 @@ struct EditVehicle: View {
 				Button("OK", role: .cancel) {}
 			} message: {
 				Text(vehicleSaveErrorMessage ?? "")
+			}
+			.sheet(isPresented: $showingRegulatoryReport) {
+				NavigationStack {
+					Group {
+						if Vertical.current.id == .aviation {
+							pdfReportAviationLogbook(trackVehicleSelected: dataSet.name)
+						} else if Vertical.current.id == .marine {
+							pdfReportMarineRecords(trackVehicleSelected: dataSet.name)
+						}
+					}
+					.toolbar {
+						ToolbarItem(placement: .cancellationAction) {
+							Button("Close") { showingRegulatoryReport = false }
+						}
+					}
+				}
 			}
 		}
 	}
@@ -1531,6 +1878,51 @@ struct EditVehicle: View {
 			sortBy: [SortDescriptor(\VehicleScaleTicket.date, order: .reverse)]
 		)
 		scaleTickets = (try? modelContext.fetch(fd)) ?? []
+	}
+
+	private func loadAirworthinessDirectives() {
+		let vehicleId = dataSet.name
+		let fd = FetchDescriptor<AirworthinessDirective>(
+			predicate: #Predicate { $0.vehicleId == vehicleId },
+			sortBy: [SortDescriptor(\AirworthinessDirective.nextDueDate)]
+		)
+		airworthinessDirectives = (try? modelContext.fetch(fd)) ?? []
+	}
+
+	private func loadInspectionCycles() {
+		let vehicleId = dataSet.name
+		let fd = FetchDescriptor<InspectionCycle>(
+			predicate: #Predicate { $0.vehicleId == vehicleId },
+			sortBy: [SortDescriptor(\InspectionCycle.nextDueDate)]
+		)
+		inspectionCycles = (try? modelContext.fetch(fd)) ?? []
+	}
+
+	private func loadComponentTimes() {
+		let vehicleId = dataSet.name
+		let fd = FetchDescriptor<ComponentTimes>(
+			predicate: #Predicate { $0.vehicleId == vehicleId },
+			sortBy: [SortDescriptor(\ComponentTimes.componentName)]
+		)
+		componentTimesList = (try? modelContext.fetch(fd)) ?? []
+	}
+
+	private func loadHaulOutRecords() {
+		let vehicleId = dataSet.name
+		let fd = FetchDescriptor<HaulOutRecord>(
+			predicate: #Predicate { $0.vehicleId == vehicleId },
+			sortBy: [SortDescriptor(\HaulOutRecord.nextDueDate)]
+		)
+		haulOutRecords = (try? modelContext.fetch(fd)) ?? []
+	}
+
+	private func loadSurveyRecords() {
+		let vehicleId = dataSet.name
+		let fd = FetchDescriptor<SurveyRecord>(
+			predicate: #Predicate { $0.vehicleId == vehicleId },
+			sortBy: [SortDescriptor(\SurveyRecord.nextDueDate)]
+		)
+		surveyRecords = (try? modelContext.fetch(fd)) ?? []
 	}
 
 	// MARK: - Linked Vehicle Records
@@ -1957,7 +2349,7 @@ private struct LinkedFieldsPickerSheet: View {
 						.buttonStyle(.plain)
 					}
 				} header: {
-					Text("Select which fields this record should mirror from its master vehicle. Selected fields become read-only here and update automatically whenever the master is saved.")
+					Text("Select which fields this record should mirror from its master \(Vertical.current.assetSingular.lowercased()). Selected fields become read-only here and update automatically whenever the master is saved.")
 				}
 			}
 			.navigationTitle("Synced Fields")

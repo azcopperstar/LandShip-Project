@@ -416,8 +416,8 @@ struct PickerVehicle: View {
 	@State private var minPickerWidth: CGFloat = 0
 
 	private func titleForSelection(_ selection: String) -> String {
-		if selection == "All Vehicles" || selection.isEmpty {
-			return "All Vehicles"
+		if FleetScope.isAll(selection) {
+			return FleetScope.allDisplayLabel
 		}
 		if let v = vehicles.first(where: { $0.name == selection }) {
 			return "\(v.year) \(v.displayName)"
@@ -427,7 +427,7 @@ struct PickerVehicle: View {
 
 	var body: some View {
 		HStack(spacing: 3) {
-			Text("Vehicle:")
+			Text("\(Vertical.current.assetSingular):")
 				.textLabelModified()
 
 			let currentTitle = titleForSelection(trackVehicleSelected)
@@ -438,14 +438,14 @@ struct PickerVehicle: View {
 					Text("\(year) \(vehicle.displayName)")
 						.tag(vehicle.name)
 				}
-				Text("All Vehicles")
-					.tag("All Vehicles")
+				Text(FleetScope.allDisplayLabel)
+					.tag(FleetScope.allSentinel)
 			}
 			.frame(minWidth: max(0, minPickerWidth), alignment: .trailing)
 			.fixedSize(horizontal: true, vertical: false)
 			.onAppear {
 				if trackVehicleSelected.isEmpty {
-					trackVehicleSelected = "All Vehicles"
+					trackVehicleSelected = FleetScope.allSentinel
 				}
 			}
 

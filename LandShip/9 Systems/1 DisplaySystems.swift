@@ -61,6 +61,7 @@ struct DisplaySystems: View {
 	
 	/// SwiftData model context used for fetching, inserting, and saving records.
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 	
 	/// User preference that controls whether inactive vehicles are included in the list.
 	@AppStorage("showInactiveVehicles") private var showInactiveVehicles: Bool = false
@@ -104,7 +105,11 @@ struct DisplaySystems: View {
 		case nameDesc = "System Z–A"
 		case updatedDesc = "Recently Updated"
 		var id: String { rawValue }
-		
+
+		/// Vertical-aware display text — the persisted rawValue stays "Vehicle ..." so
+		/// existing AppStorage selections keep decoding correctly.
+		var displayName: String { rawValue.replacingOccurrences(of: "Vehicle", with: Vertical.current.assetSingular) }
+
 		/// The concrete SwiftData sort descriptors used by `QueryView` for this sort mode.
 		var descriptors: [SortDescriptor<VehicleSystems1>] {
 			switch self {
@@ -143,7 +148,7 @@ struct DisplaySystems: View {
 			selection: $selectedVehicle,
 			title: "",
 			includeEmptyChoice: true,
-			emptyChoiceLabel: "All Vehicles",
+			emptyChoiceLabel: FleetScope.allDisplayLabel,
 			autoSelectFirst: false,
 			filter: nil,
 			sort: [SortDescriptor(\.displayName, order: .forward)],
@@ -233,7 +238,7 @@ struct DisplaySystems: View {
 							Menu {
 								Picker("Sort by", selection: $selectedSort) {
 									ForEach(PartsSort.allCases) { sortCase in
-										Text(sortCase.rawValue).tag(sortCase)
+										Text(sortCase.displayName).tag(sortCase)
 									}
 								}
 							} label: {
@@ -275,7 +280,7 @@ struct DisplaySystems: View {
 					// Lightweight header summarizing the current sort selection.
 					HStack(spacing: 6) {
 						Image(systemName: "arrow.up.arrow.down")
-						Text("Sort: \(selectedSort.rawValue)")
+						Text("Sort: \(selectedSort.displayName)")
 					}
 					.font(.caption)
 					.foregroundStyle(.secondary)
@@ -324,6 +329,7 @@ struct DisplaySystems: View {
 	/// - Persists the record and updates local selection/navigation state.
 	@MainActor
 	private func addNewRecord() {
+		guard entitlements.requestCreate(VehicleSystems1.self, in: modelContext) else { return }
 		// Prepare timestamps and determine vehicle scoping for the new record.
 		let now = Date()
 		let assignedVehicleId = (trackVehicleSelected == "All Vehicles") ? "" : trackVehicleSelected
@@ -334,7 +340,7 @@ struct DisplaySystems: View {
 			createdAt: now,
 			updatedAt: now,
 			vehicleId: assignedVehicleId,
-			systemName: "New vehicle system...",
+			systemName: "New \(Vertical.current.assetSingular.lowercased()) system...",
 			systemDescription: "",
 			systemType: "",
 			systemManufacturer: "",

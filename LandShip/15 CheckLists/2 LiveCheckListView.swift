@@ -13,6 +13,8 @@ struct LiveCheckListView: View {
     @State private var editingItemID: PersistentIdentifier? = nil
     @FocusState private var isEditingName: Bool
     @State private var isEditMode: Bool = false
+    @State private var showingCompletionHistory: Bool = false
+    @State private var showingTips: Bool = false
     
     @State private var editingSectionNameID: PersistentIdentifier? = nil
     @FocusState private var isEditingSectionName: Bool
@@ -26,6 +28,7 @@ struct LiveCheckListView: View {
 
     // Data
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.entitlements) private var entitlements
     
     // PDF destination wrapper
     struct PDFDestination: Identifiable, Hashable {
@@ -56,10 +59,11 @@ struct LiveCheckListView: View {
     var body: some View {
         VStack(spacing: 0) {
             contentList
-            
-            // Completion log summary
+
+            // Completion history is tucked behind a button rather than shown inline,
+            // so it never competes with the checklist items for vertical space.
             if !checklist.completionLog.isEmpty {
-                completionLogSummary
+                completionHistoryButton
             }
         }
 //        .navigationTitle(checklist.checklistName)
@@ -91,8 +95,40 @@ struct LiveCheckListView: View {
 
     // MARK: - Views
     
-    private var completionLogSummary: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    /// Bottom bar button that reveals the full completion history in a popover, instead of
+    /// permanently occupying space in the checklist itself.
+    private var completionHistoryButton: some View {
+        Button {
+            showingCompletionHistory = true
+        } label: {
+            HStack {
+                Image(systemName: "clock.fill")
+                    .foregroundStyle(.green)
+                Text("Completion History")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Spacer()
+                Text("\(checklist.completionLog.count) completions")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.up")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(Color.secondary.opacity(0.05))
+        .popover(isPresented: $showingCompletionHistory) {
+            completionHistoryPopoverContent
+        }
+    }
+
+    /// Full, scrollable completion history shown inside the popover.
+    private var completionHistoryPopoverContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Image(systemName: "clock.fill")
                     .foregroundStyle(.green)
@@ -104,11 +140,10 @@ struct LiveCheckListView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal)
-            .padding(.top, 12)
-            
+            .padding()
+
             Divider()
-            
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(checklist.completionLog.reversed().enumerated()), id: \.offset) { index, date in
@@ -135,11 +170,10 @@ struct LiveCheckListView: View {
                         .padding(.horizontal, 8)
                     }
                 }
+                .padding(.vertical, 8)
             }
-            .frame(maxHeight: 200)
         }
-        .padding(.vertical, 8)
-        .background(Color.secondary.opacity(0.05))
+        .frame(minWidth: 300, idealWidth: 340, minHeight: 250, idealHeight: 420, maxHeight: 500)
     }
 
     private var contentList: some View {
@@ -150,7 +184,7 @@ struct LiveCheckListView: View {
             } else {
                 let flattened = flattenedItemsForDisplay()
                 List {
-                    Section(header: headerView(count: filteredItems().count)) {
+                    Section {
                         ForEach(Array(flattened.enumerated()), id: \.element.persistentModelID) { index, item in
                             if item.parentItemUUID == nil {
                                 // Parent item
@@ -171,10 +205,12 @@ struct LiveCheckListView: View {
                 }
                 .id("\(flattened.count)_\(expandedSubItems.count)")
 								.safeAreaInset(edge: .top) {
+									// Joined to the title in the same zero-spacing VStack (rather than
+									// living in the List's Section header) so there's no gap between
+									// them — List/Section header insets otherwise leave a visible band.
 									VStack(spacing: 0) {
 										PageTitle_Col2_NoPhoto(label: "CHECKLIST ITEMS")
-										tipsView
-											.frame(maxWidth: .infinity, alignment: .leading)
+										headerView(count: filteredItems().count)
 									}
 								}
 
@@ -183,11 +219,31 @@ struct LiveCheckListView: View {
         }
     }
 
+    // Condensed to two lines (name; vehicle + actions) with tips tucked behind an info
+    // button, rather than the six-line header this used to be — on iPhone that header was
+    // eating the space that belongs to the actual checklist items below it.
     private func headerView(count: Int) -> some View {
-		return VStack(alignment: .leading) {
-			tipRowChecklist(icon: "checklist", text: "\(checklist.checklistName) Checklist")
-			tipRowVehicle(icon: "car", text: "\(checklist.vehicleId)")
-			HStack {
+		return VStack(alignment: .leading, spacing: 4) {
+			HStack(spacing: 6) {
+				tipRowChecklist(icon: "checklist", text: checklist.checklistName)
+				Spacer(minLength: 8)
+				Button {
+					showingTips = true
+				} label: {
+					Image(systemName: "info.circle.fill")
+						.font(.title3)
+						.foregroundStyle(.blue)
+				}
+				.buttonStyle(.plain)
+				.popover(isPresented: $showingTips) {
+					tipsView
+						.padding()
+						.frame(minWidth: 260, idealWidth: 300)
+				}
+			}
+			HStack(spacing: 12) {
+				tipRowVehicle(icon: Vertical.current.assetIcon, text: checklist.vehicleId)
+				Spacer(minLength: 8)
 				Button(role: .none) {
 					markAllComplete(false)
 				} label: {
@@ -199,7 +255,13 @@ struct LiveCheckListView: View {
 					Label("Complete All", systemImage: "checkmark.circle")
 				}
 			}
+			.font(.subheadline)
 		}
+		.padding(.horizontal)
+		.padding(.vertical, 6)
+		.frame(maxWidth: .infinity, alignment: .leading)
+		.background(.ultraThinMaterial)
+		.overlay(Divider(), alignment: .bottom)
     }
 
 
@@ -231,23 +293,27 @@ struct LiveCheckListView: View {
 			}
     }
 	private func tipRowVehicle(icon: String, text: String, color: Color = .blue) -> some View {
-		HStack(spacing: 2) {
+		HStack(spacing: 4) {
 			Image(systemName: icon)
-				.font(.title2)
-				.frame(width: 40)
+				.font(.subheadline)
+				.frame(width: 20)
 			Text(text)
-				.font(.headline)
+				.font(.subheadline)
+				.fontWeight(.semibold)
+				.lineLimit(1)
 		}
 		.foregroundStyle(color)
 	}
 	private func tipRowChecklist(icon: String, text: String, color: Color = .blue) -> some View {
-		HStack(spacing: 2) {
+		HStack(spacing: 4) {
 			Image(systemName: icon)
-				.font(.title2)
-				.frame(width: 40)
+				.font(.subheadline)
+				.frame(width: 20)
 			Text(text)
-				.font(.headline)
-				.bold()
+				.font(.subheadline)
+				.fontWeight(.bold)
+				.lineLimit(1)
+				.truncationMode(.tail)
 		}
 		.foregroundStyle(color)
 	}
@@ -1207,8 +1273,9 @@ struct LiveCheckListView: View {
     }
 
     private func newItem() {
+        guard entitlements.requestCreate(CheckListItem.self, in: modelContext) else { return }
         let now = Date()
-        
+
         // Calculate the next orderIndex - place new items at the bottom
         let currentItems = filteredItems()
         let maxOrderIndex = currentItems.map { $0.orderIndex }.max() ?? -1
@@ -1262,8 +1329,9 @@ struct LiveCheckListView: View {
     // MARK: - Sub-Item Management
     
     private func newSubItem(for parent: CheckListItem) {
+        guard entitlements.requestCreate(CheckListItem.self, in: modelContext) else { return }
         let now = Date()
-        
+
         // Calculate the next orderIndex for sub-items
         let currentSubItems = getSubItems(for: parent)
         let maxOrderIndex = currentSubItems.map { $0.orderIndex }.max() ?? -1

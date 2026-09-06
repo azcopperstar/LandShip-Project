@@ -51,6 +51,8 @@ struct pdfReportAdditions: View {
 	@State private var scope: String
 	@State private var pdfDocument: PDFDocument?
 	@State private var zoomAction: ZoomAction?
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 
 	let functions = Functions()
 
@@ -119,7 +121,38 @@ struct pdfReportAdditions: View {
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
+			}
 		}
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: "Additions") { _ in }
+	}
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let items = fetchAdditions()
+		let headers = [
+			"Inactive", "Created At", "Updated At", Vertical.current.assetSingular, "\(Vertical.current.assetSingular) Display Name",
+			Vertical.current.primaryMeterLabel, "Engine Hours", "Item Name", "Description", "Notes", "Vendor",
+			"Category", "Sub-Category", "Cost", "Linked Service Record ID",
+			"Image 1 Description", "Image 2 Description", "Image 3 Description", "Image 4 Description", "Image 5 Description"
+		]
+		let rows: [[String]] = items.map { a in
+			let vehicleName = a.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: a.vehicleId, context: modelContext)
+			return [
+				CSVField.bool(a.inactive), CSVField.date(a.createdAt), CSVField.date(a.updatedAt), a.vehicleId, vehicleName,
+				CSVField.int(a.miles), CSVField.float(a.engHours), a.itemName, a.itemDescription, a.itemNotes, a.itemVendor,
+				a.category, a.subCategory, CSVField.float(a.itemCost), a.serviceRecordLinkId,
+				a.image1Description, a.image2Description, a.image3Description, a.image4Description, a.image5Description
+			]
+		}
+		return CSVBuilder.build(headers: headers, rows: rows)
 	}
 
 	// MARK: - Generation
@@ -169,12 +202,23 @@ struct pdfReportAdditions: View {
 			]
 		}
 
-		let scopeTitle = (scope == "All Vehicles" || scope.isEmpty) ? "All Vehicles" : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
+		let scopeTitle = FleetScope.isAll(scope) ? FleetScope.allDisplayLabel : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
 		let itemWord = items.count == 1 ? "improvement" : "improvements"
 		let subtitle = "\(scopeTitle) • \(functions.formatDate_DDMMMyy(date: Date())) • \(items.count) \(itemWord)"
 
-		let costSummary = PDFCostSummaryBuilder.build(scope: scope, context: modelContext)
-		return PDFReportRenderer.render(title: "Improvements Report", subtitle: subtitle, columns: columns, rows: rows, costSummary: costSummary, style: .standard)
+		let summary = additionsSummary(items)
+		return PDFReportRenderer.render(title: "Improvements Report", subtitle: subtitle, columns: columns, rows: rows, summary: summary, style: .standard)
+	}
+
+	private func additionsSummary(_ items: [Additions]) -> PDFReportSummary {
+		let groups = pdfVehicleScopedSummaryGroups(scope: scope, records: items, vehicleId: \.vehicleId, context: modelContext) { subset in
+			let totalCost = subset.reduce(Float(0)) { $0 + $1.itemCost }
+			return [
+				("Total Improvements", subset.isEmpty ? nil : "\(subset.count)"),
+				("Total Cost", totalCost != 0 ? pdfCurrencyString(totalCost) : nil)
+			]
+		}
+		return PDFReportSummary(title: "IMPROVEMENTS SUMMARY", groups: groups)
 	}
 
 	// MARK: - Field-group builders
@@ -202,7 +246,7 @@ struct pdfReportAdditions: View {
 
 		var groups: [PDFFieldGroup] = []
 		if let identity = fieldGroup(nil, [
-			("Vehicle", vehicleName),
+			(Vertical.current.assetSingular, vehicleName),
 			("Item", text(item.itemName)),
 			("Category", text(item.category)),
 			("Sub-Category", text(item.subCategory))

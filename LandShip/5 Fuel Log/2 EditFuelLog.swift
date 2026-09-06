@@ -239,7 +239,7 @@ struct EditFuelLog: View {
 						LabeledContent {
 							ModelPicker(
 								selection: $selectedVehicle,
-								title: "Vehicle",
+								title: Vertical.current.assetSingular,
 								includeEmptyChoice: false,
 								emptyChoiceLabel: "—",
 								autoSelectFirst: false,
@@ -264,7 +264,7 @@ struct EditFuelLog: View {
 							}
 							.fixedSize(horizontal: true, vertical: true)
 						} label: {
-							Text("Vehicle")
+							Text(Vertical.current.assetSingular)
 								.textLabelModified()
 						}
 
@@ -292,7 +292,7 @@ struct EditFuelLog: View {
 						
 						HStack{LabelLocationTextview(label: "Location", data: $location)}
 						
-						HStack{LabelDataTextview_Numberpad_Int(label: "Odometer", data: $odometer)}
+						HStack{LabelDataTextview_Numberpad_Int(label: Vertical.current.primaryMeterLabel, data: $odometer)}
 						// Keep distance/economy up to date when odometer changes.
 							.onChange(of: odometer) { _, _ in
 								computeFuelStats()
@@ -489,14 +489,14 @@ struct EditFuelLog: View {
 				VStack{CreatedUpdatedText(created: createdAt, updated: updatedAt)}
 				CardView {
 					VStack {
-						SectionText(label: "VEHICLE / LOCATION DETAILS")
+						SectionText(label: "\(Vertical.current.assetSingular.uppercased()) / LOCATION DETAILS")
 							.onAppear {
 								loadUnitsIfNeeded()
 								refreshVehicleDetails()
 								computeFuelStats()
 								linkedTravelLog = linkedTravelLogSummary()
 							}
-						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
+						HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						HStack{LabelDataText(label: "Date/Time", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.fuelDateTime))")}
 						if let exit = dataSet.fuelExitTime, exit > dataSet.fuelDateTime {
 							HStack{LabelDataText(label: "Exit Time", data: "\(functions.formatDate_DDMMMyy_HHmm(date: exit))")}
@@ -508,7 +508,7 @@ struct EditFuelLog: View {
 						if dataSet.location != "" {
 							HStack{LabelDataText(label: "Location", data: "\(dataSet.location)")}
 						}
-						HStack{LabelDataText(label: "Odometer", data: "\(dataSet.odometer) \(unit(UnitIndex.distance))")}
+						HStack{LabelDataText(label: Vertical.current.primaryMeterLabel, data: "\(dataSet.odometer) \(unit(UnitIndex.distance))")}
 						if dataSet.engHours > 0 {
 							HStack{LabelDataNumber(label: "Engine Hours:", data: dataSet.engHours, fractionalLength: 1)}
 						}
@@ -605,8 +605,8 @@ struct EditFuelLog: View {
 						}
 
 						// Totals up to this record for this vehicle
-						SectionText(label: "VEHICLE TOTALS")
-						Text("Totals are calculated from all fuel logs that have been created for this vehicle up to and including the current fuel log.")
+						SectionText(label: "\(Vertical.current.assetSingular.uppercased()) TOTALS")
+						Text("Totals are calculated from all fuel logs that have been created for this \(Vertical.current.assetSingular.lowercased()) up to and including the current fuel log.")
 							.font(.caption)
 							.foregroundStyle(.secondary)
 							.frame(maxWidth: .infinity, alignment: .center)

@@ -15,6 +15,7 @@ import SwiftData
 import CloudKit
 import CoreData
 import OSLog
+import StoreKit
 
 #if os(macOS)
 import AppKit
@@ -22,6 +23,14 @@ import AppKit
 
 // Unified logging for CloudKit diagnostics
 fileprivate let logger = Logger(subsystem: "com.aeronauticaltrax.LandShip", category: "CloudKitSync")
+
+extension Notification.Name {
+	/// Posted by the macOS "Debug Tools…" menu item to open ContentView's hidden
+	/// debug sheet. The .principal toolbar item's long-press gesture that opens it
+	/// on iOS is unreliable on macOS, where the toolbar's Liquid Glass chrome can
+	/// intercept the mouse-down before SwiftUI's gesture recognizer sees it.
+	static let openDebugToolsRequested = Notification.Name("openDebugToolsRequested")
+}
 
 @main
 struct LandShipApp: App {
@@ -36,7 +45,13 @@ struct LandShipApp: App {
 	private static var syncMonitor: CloudKitSyncMonitor?
 	
 	// Diagnostics
-	private static let cloudKitContainerID = "iCloud.com.aeronauticaltrax.LandShip"
+	// Derived (not hardcoded) so each vertical target's own bundle ID maps to its own
+	// CloudKit container. For VehicleTrax, Bundle.main.bundleIdentifier is already
+	// "com.aeronauticaltrax.LandShip", so this resolves to the identical value existing
+	// users already sync against — this change is a no-op for VehicleTrax.
+	private static var cloudKitContainerID: String {
+		"iCloud." + (Bundle.main.bundleIdentifier ?? "com.aeronauticaltrax.LandShip")
+	}
 	
 #if DEBUG
 	private let buildConfiguration = "DEBUG"
@@ -44,14 +59,15 @@ struct LandShipApp: App {
 	private let buildConfiguration = "RELEASE"
 #endif
 
+	// Reads the App Store environment cached by EntitlementStore's AppTransaction check
+	// (see StorageKey.appStoreEnvironment), which is accurate on both platforms — unlike
+	// the old iOS-only receipt-filename heuristic that mislabeled macOS TestFlight builds.
+	// Unset on the very first launch, before the first receipt check completes.
 	private static func isTestFlightBuild() -> Bool {
-#if os(iOS)
-		// Heuristic: TestFlight builds usually have a "sandboxReceipt".
-		if let url = Bundle.main.appStoreReceiptURL {
-			return url.lastPathComponent.lowercased() == "sandboxreceipt"
+		guard let raw = UserDefaults.standard.string(forKey: StorageKey.appStoreEnvironment) else {
+			return false
 		}
-#endif
-		return false
+		return raw == String(describing: AppStore.Environment.sandbox)
 	}
 	
 	init() {
@@ -181,15 +197,19 @@ struct LandShipApp: App {
 	var body: some Scene {
 		WindowGroup {
 			RootStartupView(modelContainer: modelContainer, isLocalOnly: isLocalOnly, startupError: startupError)
+				.environment(\.entitlements, EntitlementStore.shared)
 		}
 #if os(macOS)
 		Window("\(AppInfo.displayName) Help", id: "help") {
 			HelpView()
 				.frame(minWidth: 600, minHeight: 500)
 				.windowFrameAutosave("HelpWindow")
+				.environment(\.entitlements, EntitlementStore.shared)
 		}
 		.commands {
 			HelpCommands()
+			StoreCommands()
+			DebugCommands()
 		}
 #endif
 	}
@@ -208,6 +228,36 @@ private struct HelpCommands: Commands {
 				openWindow(id: "help")
 			}
 			.keyboardShortcut("?", modifiers: [.command, .shift])
+		}
+	}
+}
+
+private struct StoreCommands: Commands {
+	var body: some Commands {
+		// Commands can't present sheets themselves — writing to the shared
+		// store's paywallContext and letting ContentView's .sheet(item:) react
+		// is why EntitlementStore.shared exists.
+		CommandGroup(after: .appInfo) {
+			Button("Unlock Full Version…") {
+				EntitlementStore.shared.paywallContext = .menu
+			}
+			Button("Restore Purchases") {
+				Task { _ = await EntitlementStore.shared.restorePurchases() }
+			}
+			Divider()
+		}
+	}
+}
+
+private struct DebugCommands: Commands {
+	var body: some Commands {
+		// The .principal toolbar long-press that opens Debug Tools on iOS doesn't
+		// reliably register on macOS, so this menu item is the macOS entry point.
+		CommandGroup(after: .appInfo) {
+			Button("Debug Tools…") {
+				NotificationCenter.default.post(name: .openDebugToolsRequested, object: nil)
+			}
+			.keyboardShortcut("d", modifiers: [.command, .shift, .option])
 		}
 	}
 }
@@ -374,6 +424,7 @@ private struct RootStartupView: View {
 	let isLocalOnly: Bool
 	let startupError: Error?
 	@State private var showChangelog = false
+	@Environment(\.entitlements) private var entitlements
 
 	private let lastShownKey = "LastShownChangelogVersion"
 
@@ -399,6 +450,12 @@ private struct RootStartupView: View {
 			}
 		}
 		.onAppear { evaluateChangelogPresentation() }
+		.task {
+			await entitlements.start()
+			if let modelContainer {
+				entitlements.evaluateOverCapNet(in: modelContainer.mainContext)
+			}
+		}
 		.sheet(isPresented: $showChangelog) {
 			ChangelogSheet { markChangelogShown() }
 #if os(iOS)

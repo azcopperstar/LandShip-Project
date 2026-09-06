@@ -70,6 +70,10 @@ struct EditSystems: View {
 	@State private var isPresentingConfirm: Bool = false
 	@State private var isEditing: Bool = false
 
+	// Controls presentation of the rename-cascade confirmation dialog, shown when saving
+	// a system name change that would otherwise orphan records that reference it by name.
+	@State private var showingRenameChoice: Bool = false
+
 	// MARK: - Save error feedback
 	@State private var showSystemSaveError = false
 	@State private var systemSaveErrorMessage: String?
@@ -167,7 +171,7 @@ struct EditSystems: View {
 						// Associate this system to a Vehicle8 by selecting its name; stored in `vehicleId`.
 						ModelPicker(
 							selection: $selectedVehicle,
-							title: "Vehicle",
+							title: Vertical.current.assetSingular,
 							includeEmptyChoice: false,
 							emptyChoiceLabel: "—",
 							autoSelectFirst: false,
@@ -182,11 +186,15 @@ struct EditSystems: View {
 							dataSet.vehicleId = name
 						}
 					} label: {
-						Text("Vehicle")
+						Text(Vertical.current.assetSingular)
 							.textLabelModified()
 					}
 
 					HStack{LabelDataTextview(label: "System Name", data: $systemName)}
+					Text("Renaming this system offers to update any records that reference it by name.")
+						.font(.caption)
+						.foregroundStyle(.secondary)
+						.frame(maxWidth: .infinity, alignment: .trailing)
 					HStack{LabelDataTextview(label: "Description", data: $systemDescription)}
 					HStack{LabelDataText(label: "Status", data: inactive ? "Inactive" : "Active")}
 				}
@@ -212,9 +220,9 @@ struct EditSystems: View {
 			CardView {
 				VStack {
 #if os(macOS)
-					SectionText(label: "VEHICLE SYSTEMS GRAPHICS")
+					SectionText(label: "\(Vertical.current.assetSingular.uppercased()) SYSTEMS GRAPHICS")
 #elseif os(iOS)
-					SectionText(label: "  VEHICLE SYSTEMS GRAPHICS\n(Click Image to Change)")
+					SectionText(label: "  \(Vertical.current.assetSingular.uppercased()) SYSTEMS GRAPHICS\n(Click Image to Change)")
 #endif
 					HStack {Image_Edit(label: "1", imageData: $image1, imageDescription: $image1Description)}
 					HStack {Image_Edit(label: "2", imageData: $image2, imageDescription: $image2Description)}
@@ -266,7 +274,7 @@ struct EditSystems: View {
 			CardView {
 				VStack{
 					SectionText(label: "GENERAL")
-					HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
+					HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 					HStack{LabelDataText(label: "System Name", data: "\(dataSet.systemName)")}
 					HStack{LabelDataText(label: "Status", data: inactive ? "Inactive" : "Active")}
 					if dataSet.systemDescription != "" {
@@ -313,7 +321,7 @@ struct EditSystems: View {
 			if hasGraphics {
 				CardView {
 				VStack {
-					SectionText(label: "VEHICLE SYSTEMS GRAPHICS")
+					SectionText(label: "\(Vertical.current.assetSingular.uppercased()) SYSTEMS GRAPHICS")
 					Image_View_Details(label:"1", imageData: dataSet.image1, imageDescription: dataSet.image1Description)
 					Image_View_Details(label:"2", imageData: dataSet.image2, imageDescription: dataSet.image2Description)
 					Image_View_Details(label:"3", imageData: dataSet.image3, imageDescription: dataSet.image3Description)
@@ -358,7 +366,7 @@ struct EditSystems: View {
 				CardView {
 					VStack(alignment: .leading, spacing: 8) {
 						SectionText(label: "HIDDEN BY FILTER")
-						Text("This system is marked inactive and is hidden because 'Show Inactive Vehicles' is turned off.")
+						Text("This system is marked inactive and is hidden because 'Show Inactive \(Vertical.current.assetPlural)' is turned off.")
 							.foregroundStyle(.secondary)
 					}
 				}
@@ -392,11 +400,35 @@ struct EditSystems: View {
 			}
 			ToolbarItem(placement: .automatic) {
 				Button("Save") {
-					isEditing = false
-					updateItem()
+					let trimmedName = trimmed(systemName)
+					let oldName = dataSet.systemName
+					if oldName != trimmedName && hasLinkedRecords(oldName) {
+						showingRenameChoice = true
+					} else {
+						updateItem()
+						isEditing = false
+					}
 				}
 				.buttonStyle(GrowingButton(buttonColor: Color.red))
 				.disabled(isSaveDisabled)
+				.confirmationDialog(
+					"System Name Changed",
+					isPresented: $showingRenameChoice,
+					titleVisibility: .visible
+				) {
+					Button("Update Linked Records") {
+						renameLinkedRecords(from: dataSet.systemName, to: trimmed(systemName))
+						updateItem()
+						isEditing = false
+					}
+					Button("Save Without Updating Links", role: .destructive) {
+						updateItem()
+						isEditing = false
+					}
+					Button("Cancel", role: .cancel) { }
+				} message: {
+					Text("Renaming \"\(dataSet.systemName)\" to \"\(trimmed(systemName))\" will break its links to other records unless they're updated to the new name. Update them now?")
+				}
 			}
 		} else {
 			ToolbarItem(placement: .automatic) {
@@ -495,7 +527,7 @@ struct EditSystems: View {
 		dataSet.createdAt = createdAt
 		dataSet.updatedAt = Date()
 		dataSet.vehicleId = vehicleId
-		dataSet.systemName = systemName
+		dataSet.systemName = trimmed(systemName)
 		dataSet.systemDescription = systemDescription
 		dataSet.systemType = systemType
 		dataSet.systemManufacturer = systemManufacturer
@@ -557,6 +589,50 @@ struct EditSystems: View {
 		// after a destructive or terminal action. Adjust if you prefer to remain on screen
 		// when persistence fails.
 		dismiss()
+	}
+
+	/// True if any `MxParts1` or `MxItems3` references `name` by system name. Used to decide
+	/// whether the rename-cascade dialog is worth showing — a brand-new or never-referenced
+	/// system has nothing to break, so saving proceeds silently.
+	private func hasLinkedRecords(_ name: String) -> Bool {
+		guard !name.isEmpty else { return false }
+		func exists<T: PersistentModel>(_ descriptor: FetchDescriptor<T>) -> Bool {
+			var fd = descriptor
+			fd.fetchLimit = 1
+			return ((try? modelContext.fetch(fd)) ?? []).isEmpty == false
+		}
+		if exists(FetchDescriptor<MxParts1>(predicate: #Predicate { $0.vehicleSystem == name })) { return true }
+		if exists(FetchDescriptor<MxItems3>(predicate: #Predicate { $0.vehicleSystem == name })) { return true }
+		return false
+	}
+
+	/// Updates every other record type that references this system by name (LandShip's
+	/// string-based linking convention — the same one used for vendor, part, and item renames),
+	/// so existing links survive a system rename instead of silently orphaning.
+	private func renameLinkedRecords(from oldName: String, to newName: String) {
+		guard !oldName.isEmpty, oldName != newName else { return }
+
+		func rename<T: PersistentModel>(_ descriptor: FetchDescriptor<T>, _ apply: (T) -> Void) {
+			guard let records = try? modelContext.fetch(descriptor), !records.isEmpty else { return }
+			records.forEach(apply)
+		}
+
+		rename(FetchDescriptor<MxParts1>(predicate: #Predicate { $0.vehicleSystem == oldName })) { $0.vehicleSystem = newName }
+		rename(FetchDescriptor<MxItems3>(predicate: #Predicate { $0.vehicleSystem == oldName })) { $0.vehicleSystem = newName }
+
+		do {
+			try modelContext.save()
+		} catch {
+			print("Failed to update linked records after system rename: \(error.localizedDescription)")
+		}
+	}
+}
+
+// MARK: - Normalization helpers
+private extension EditSystems {
+	/// Trims leading and trailing whitespace/newlines from the provided string.
+	func trimmed(_ s: String) -> String {
+		s.trimmingCharacters(in: .whitespacesAndNewlines)
 	}
 }
 

@@ -17,8 +17,9 @@
 //  - Notify a caller via a callback when the selection changes.
 //
 //  Key Behaviors and Notes:
-//  - Filtering: If a vehicleId is supplied, the picker only shows parts whose
-//    MxParts1.vehicleId matches that value. If vehicleId is empty, all parts are shown.
+//  - Filtering: If a vehicleId is supplied, the picker shows parts whose
+//    MxParts1.vehicleId matches that value, plus parts marked "All Vehicles".
+//    If vehicleId is empty, all parts are shown.
 //  - Sorting: Results are sorted by partName ascending.
 //  - Seeding: On first appearance, if no selection exists and a seedPartName is provided,
 //    the view will attempt a one-time lookup by partName and set the selection if found.
@@ -71,8 +72,8 @@ struct PartPickerRow: View {
     /// Title displayed by the picker (e.g., the row label).
     let title: String
 
-    /// If non-empty, restricts the picker to parts whose vehicleId matches this value.
-    /// If empty, no filtering by vehicleId is applied.
+    /// If non-empty, restricts the picker to parts whose vehicleId matches this value or
+    /// are marked "All Vehicles". If empty, no filtering by vehicleId is applied.
     let vehicleId: String
 
     /// The current selection binding. This allows the picker to read and update the
@@ -122,8 +123,9 @@ struct PartPickerRow: View {
 
     var body: some View {
         // Build an optional SwiftData predicate. If vehicleId is empty, we skip filtering.
-        // Otherwise, only include parts matching the provided vehicleId.
-        let partsFilter: Predicate<MxParts1>? = vehicleId.isEmpty ? nil : #Predicate<MxParts1> { $0.vehicleId == vehicleId }
+        // Otherwise, include parts matching the provided vehicleId as well as parts
+        // marked "All Vehicles", since those apply to every vehicle.
+        let partsFilter: Predicate<MxParts1>? = vehicleId.isEmpty ? nil : #Predicate<MxParts1> { $0.vehicleId == vehicleId || $0.vehicleId == "All Vehicles" }
 
         // Delegate most of the UI and data management to a generic ModelPicker.
         // We pass:

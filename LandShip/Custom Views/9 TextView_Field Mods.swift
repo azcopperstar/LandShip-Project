@@ -40,14 +40,8 @@ struct PageTitle_Col2_NoPhoto: View {
 
 	let label: String
 	var body: some View {
-		HStack(alignment: .firstTextBaseline, spacing: 6) {
-			Text(label)
-			Text("\(VersionStrings.fullVersionStringWithAppName)")
-				.font(.caption2)
-				.foregroundStyle(.secondary)
-				.baselineOffset(6)
-		}
-		.safeArea_TitleNoGraphic_Modifier()
+		Text(label)
+			.safeArea_TitleNoGraphic_Modifier()
 	}
 }
 // MARK: photo + title of page + app name
@@ -67,17 +61,13 @@ struct PageTitle_Col3_Photo: View {
 	var body: some View {
 		/// Look up display name if dbRecord is a vehicle UUID
 		let displayText = Functions().getVehicleDisplayName(vehicleId: dbRecord, context: modelContext)
-		
-		HStack(alignment: .firstTextBaseline, spacing: 6) {
+
+		Group {
 			if action == "edit" {
 				Text("EDIT \(displayText)".uppercased())
 			} else {
 				Text("\(displayText) DETAILS".uppercased())
 			}
-			Text("\(VersionStrings.fullVersionStringWithAppName)")
-				.font(.caption2)
-				.foregroundStyle(.secondary)
-				.baselineOffset(6)
 		}
 		.safeArea_TitleNoGraphic_Modifier()
 	}
@@ -205,6 +195,25 @@ struct LabelDataTextview: View {
 			.selectAllTextOnBeginEditing()
 #endif
 
+	}
+}
+
+/// A multi-line variant of `LabelDataTextview`, for a free-form field that lives as one more
+/// row inside an existing card section rather than in its own `TextFieldNote_FullWidth_3lines`
+/// card with its own header.
+struct LabelDataTextview_MultiLine: View {
+	let label: String
+	@Binding var data: String
+	var prompt: String? = nil
+	var body: some View {
+		VStack(alignment: .leading, spacing: 4) {
+			Text(label)
+				.textLabelModified()
+			TextField(prompt ?? label, text: $data, axis: .vertical)
+				.textFieldStyle(.roundedBorder)
+				.lineLimit(3...)
+				.frame(maxWidth: .infinity, alignment: .leading)
+		}
 	}
 }
 
@@ -882,12 +891,15 @@ struct SafeArea_TitleNoGraphic_Modifier: ViewModifier {
 	func body(content: Content) -> some View {
 		content
 			.font(.title2.bold())
-			.foregroundStyle(.secondary)
-			.shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 2)
+			.foregroundStyle(.primary)
 			.padding(.vertical, 2)
 			.frame(maxWidth: .infinity, alignment: .leading)
 			.background(.ultraThinMaterial)
-			.overlay(Divider(), alignment: .bottom)
+			.overlay(alignment: .bottom) {
+				Rectangle()
+					.fill(Color.accentColor)
+					.frame(height: 2)
+			}
 	}
 }
 

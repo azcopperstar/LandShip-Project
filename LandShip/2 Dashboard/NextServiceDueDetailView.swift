@@ -32,7 +32,7 @@ struct NextServiceDueDetailView: View {
                             Text("SERVICE DUE SUMMARY")
                                 .font(.headline)
                             Spacer()
-                            Text(vehicleScope.isEmpty ? "All Vehicles" : vehicleScope)
+                            Text(vehicleScope.isEmpty ? FleetScope.allDisplayLabel : vehicleScope)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

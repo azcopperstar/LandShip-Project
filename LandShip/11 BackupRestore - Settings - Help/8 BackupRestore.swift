@@ -36,7 +36,16 @@ enum AppSchema {
 		CheckListItem.self,
 		VehicleWarranty.self,
 		VehicleSerialItem.self,
-		VehicleScaleTicket.self
+		VehicleScaleTicket.self,
+		AirworthinessDirective.self,
+		InspectionCycle.self,
+		ComponentTimes.self,
+		HaulOutRecord.self,
+		SurveyRecord.self,
+		PilotLogbookEntry.self,
+		PilotCertification.self,
+		SeaServiceEntry.self,
+		MarinerCredential.self
 	]
 }
 
@@ -151,7 +160,7 @@ enum BackupBuilder {
 				("image3", v.image3, v.image3Description),
 			])
 			guard !imgs.isEmpty else { return nil }
-			return MediaRecordSnapshot(displayName: v.name.isEmpty ? "Vehicle" : v.name, images: imgs)
+			return MediaRecordSnapshot(displayName: v.name.isEmpty ? Vertical.current.assetSingular : v.name, images: imgs)
 		}
 
 		let systemRecords: [MediaRecordSnapshot] = systems.compactMap { s in
@@ -247,7 +256,7 @@ enum BackupBuilder {
 		}
 
 		let categories: [MediaCategorySnapshot] = [
-			MediaCategorySnapshot(folderName: "Vehicles", records: vehicleRecords),
+			MediaCategorySnapshot(folderName: Vertical.current.assetPlural, records: vehicleRecords),
 			MediaCategorySnapshot(folderName: "Systems", records: systemRecords),
 			MediaCategorySnapshot(folderName: "Vendors", records: vendorRecords),
 			MediaCategorySnapshot(folderName: "ServiceRecords", records: serviceRecordRecords),
@@ -635,12 +644,12 @@ enum BackupService {
 		switch supportAction {
 			case .reimport:
 				lines.append("")
-				lines.append("Database (vehicles, records, photos, settings):")
+				lines.append("Database (\(Vertical.current.assetPlural.lowercased()), records, photos, settings):")
 				let supportLines = describeFolder(url: pending.appendingPathComponent("Application Support", isDirectory: true), depth: 0, maxDepth: 2, maxItems: 50)
 				lines.append(contentsOf: supportLines.isEmpty ? ["  (empty)"] : supportLines)
 			case .clearForCloudRepopulation:
 				lines.append("")
-				lines.append("Database (vehicles, records, photos, settings): will re-download fresh from iCloud.")
+				lines.append("Database (\(Vertical.current.assetPlural.lowercased()), records, photos, settings): will re-download fresh from iCloud.")
 			case .none:
 				break
 		}
@@ -1025,6 +1034,7 @@ enum AutoBackupService {
 	/// automatic backup has ever been made (and a non-Off interval is chosen),
 	/// this is due immediately, creating the first one on the next check.
 	static func isDue() -> Bool {
+		guard Entitlement.cachedIsFullVersion else { return false }
 		guard let minimumElapsed = currentInterval().minimumElapsed else { return false }
 		let last = UserDefaults.standard.double(forKey: StorageKey.lastAutoBackupDate)
 		guard last > 0 else { return true }

@@ -77,7 +77,7 @@ struct EditScaleTicket: View {
 
 				CardView {
 					VStack {
-						SectionText(label: "VEHICLE IDENTIFIERS")
+						SectionText(label: "\(Vertical.current.assetSingular.uppercased()) IDENTIFIERS")
 						HStack { LabelDataTextview(label: "Tractor License #", data: $tractorLicensePlate) }
 						HStack { LabelDataTextview(label: "Trailer License #", data: $trailerLicensePlate) }
 						HStack { LabelDataTextview(label: "Tractor #", data: $tractorNumber) }
@@ -95,14 +95,14 @@ struct EditScaleTicket: View {
 							HStack { LabelDataText(label: "Gross Weight", data: "\(grossWeight) lbs") }
 						}
 						if steerAxleWeight > 0 || driveAxleWeight > 0 {
-							Button("Transfer Weights to Vehicle Record") {
+							Button("Transfer Weights to \(Vertical.current.assetSingular) Record") {
 								isPresentingTransferConfirm = true
 							}
 							.buttonStyle(GrowingButton(buttonColor: Color.blue))
-							.confirmationDialog("Transfer weights to vehicle?", isPresented: $isPresentingTransferConfirm) {
+							.confirmationDialog("Transfer weights to \(Vertical.current.assetSingular.lowercased())?", isPresented: $isPresentingTransferConfirm) {
 								Button("Transfer") { transferToVehicle() }
 							} message: {
-								Text("This will overwrite the vehicle's front and rear Scale Weight Readings with the steer and drive axle values from this ticket.")
+								Text("This will overwrite the \(Vertical.current.assetSingular.lowercased())'s front and rear Scale Weight Readings with the steer and drive axle values from this ticket.")
 							}
 						}
 					}

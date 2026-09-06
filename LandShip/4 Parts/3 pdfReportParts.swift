@@ -49,6 +49,8 @@ struct pdfReportParts: View {
 	@State private var scope: String
 	@State private var pdfDocument: PDFDocument?
 	@State private var zoomAction: ZoomAction?
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 
 	let functions = Functions()
 
@@ -117,7 +119,40 @@ struct pdfReportParts: View {
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
+			}
 		}
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: "Parts Inventory") { _ in }
+	}
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let parts = fetchParts()
+		let headers = [
+			"Inactive", "Created At", "Updated At", Vertical.current.assetSingular, "\(Vertical.current.assetSingular) Display Name",
+			"System", "Part Name", "Part Number", "Manufacturer", "Description", "Notes",
+			"Cost Per Unit", "Unit", "Source", "Quantity", "Location", "Status", "Supplier",
+			"Inventory Tracked", "Qty On Hand", "Reorder Point", "Reorder Quantity",
+			"Image 1 Description", "Image 2 Description", "Image 3 Description"
+		]
+		let rows: [[String]] = parts.map { p in
+			let vehicleName = p.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: p.vehicleId, context: modelContext)
+			return [
+				CSVField.bool(p.inactive), CSVField.date(p.createdAt), CSVField.date(p.updatedAt), p.vehicleId, vehicleName,
+				p.vehicleSystem, p.partName, p.partNumber, p.partManufacture, p.partDescription, p.Notes,
+				CSVField.float(p.costPerUnit), p.partUnit, p.partSource, CSVField.int(p.partQuantity), p.partLocation, p.partStatus, p.partSupplier,
+				CSVField.bool(p.inventoryTracked), CSVField.float(p.inventoryQuantityOnHand), CSVField.float(p.inventoryReorderPoint), CSVField.float(p.inventoryReorderQuantity),
+				p.image1Description, p.image2Description, p.image3Description
+			]
+		}
+		return CSVBuilder.build(headers: headers, rows: rows)
 	}
 
 	// MARK: - Generation
@@ -168,11 +203,25 @@ struct pdfReportParts: View {
 			]
 		}
 
-		let scopeTitle = (scope == "All Vehicles" || scope.isEmpty) ? "All Vehicles" : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
+		let scopeTitle = FleetScope.isAll(scope) ? FleetScope.allDisplayLabel : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
 		let partWord = parts.count == 1 ? "part" : "parts"
 		let subtitle = "\(scopeTitle) • \(functions.formatDate_DDMMMyy(date: Date())) • \(parts.count) \(partWord)"
 
-		return PDFReportRenderer.render(title: "Parts Inventory Report", subtitle: subtitle, columns: columns, rows: rows, style: .standard)
+		let summary = partsSummary(parts)
+		return PDFReportRenderer.render(title: "Parts Inventory Report", subtitle: subtitle, columns: columns, rows: rows, summary: summary, style: .standard)
+	}
+
+	private func partsSummary(_ parts: [MxParts1]) -> PDFReportSummary {
+		let groups = pdfVehicleScopedSummaryGroups(scope: scope, records: parts, vehicleId: \.vehicleId, context: modelContext) { subset in
+			let totalQuantity = subset.reduce(0) { $0 + $1.partQuantity }
+			let totalValue = subset.reduce(Float(0)) { $0 + $1.costPerUnit * Float($1.partQuantity) }
+			return [
+				("Total Parts", subset.isEmpty ? nil : "\(subset.count)"),
+				("Total Quantity", totalQuantity != 0 ? NumberFormatter.localizedString(from: NSNumber(value: totalQuantity), number: .decimal) : nil),
+				("Total Inventory Value", totalValue != 0 ? pdfCurrencyString(totalValue) : nil)
+			]
+		}
+		return PDFReportSummary(title: "PARTS SUMMARY", groups: groups)
 	}
 
 	// MARK: - Field-group builders
@@ -204,7 +253,7 @@ struct pdfReportParts: View {
 			("Part #", text(part.partNumber)),
 			("Manufacturer", text(part.partManufacture)),
 			("System", text(part.vehicleSystem)),
-			("Vehicle", vehicleName)
+			(Vertical.current.assetSingular, vehicleName)
 		]) {
 			groups.append(identity)
 		}

@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		01B60D29304CBC4A004DBCD6 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E8EFE4462E6737BE004C2789 /* CloudKit.framework */; };
+		01B60D34304CBF6F004DBCD6 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E8EFE4462E6737BE004C2789 /* CloudKit.framework */; };
+		01B60E4E304CCB39004DBCD6 /* Assets-Aero.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 01B60E4D304CCB39004DBCD6 /* Assets-Aero.xcassets */; };
+		01B60E71304CE35B004DBCD6 /* Assets-Nautical.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 01B60E70304CE35B004DBCD6 /* Assets-Nautical.xcassets */; };
 		E8EFE4472E6737BE004C2789 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E8EFE4462E6737BE004C2789 /* CloudKit.framework */; };
 /* End PBXBuildFile section */
 
@@ -22,12 +26,36 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0135F0AE30488C9600A28AC5 /* VehicleTrax.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; name = VehicleTrax.storekit; path = StoreKitTesting/VehicleTrax.storekit; sourceTree = "<group>"; };
+		0135F0AF30488FED00A28AC5 /* VehicleTrax.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; name = VehicleTrax.storekit; path = StoreKitTesting/VehicleTrax.storekit; sourceTree = "<group>"; };
+		01B60D2E304CBC4A004DBCD6 /* AeroTrax.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AeroTrax.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		01B60D39304CBF6F004DBCD6 /* NauticalTrax.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NauticalTrax.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		01B60D3C304CC038004DBCD6 /* AeroTrax.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = AeroTrax.storekit; sourceTree = "<group>"; };
+		01B60E4D304CCB39004DBCD6 /* Assets-Aero.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets-Aero.xcassets"; sourceTree = "<group>"; };
+		01B60E67304CE2F0004DBCD6 /* NauticalTrax.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = NauticalTrax.storekit; sourceTree = "<group>"; };
+		01B60E70304CE35B004DBCD6 /* Assets-Nautical.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets-Nautical.xcassets"; sourceTree = "<group>"; };
 		E8965F1B2F6CAABA00C9FAED /* Import app store photos */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "Import app store photos"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E89F2A492E2BF9C800EE079C /* VehicleTrax.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VehicleTrax.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8EFE4462E6737BE004C2789 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/CloudKit.framework; sourceTree = DEVELOPER_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		01B60E7A304CF9B7004DBCD6 /* Exceptions for "LandShip" folder in "AeroTrax" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Assets.xcassets,
+				Info.plist,
+			);
+			target = 01B60D26304CBC4A004DBCD6 /* AeroTrax */;
+		};
+		01B60E7B304CF9B9004DBCD6 /* Exceptions for "LandShip" folder in "NauticalTrax" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Assets.xcassets,
+				Info.plist,
+			);
+			target = 01B60D31304CBF6F004DBCD6 /* NauticalTrax */;
+		};
 		E88D71D52E55E2A300BF2ACF /* Exceptions for "LandShip" folder in "VehicleTrax" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -47,6 +75,8 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				E88D71D52E55E2A300BF2ACF /* Exceptions for "LandShip" folder in "VehicleTrax" target */,
+				01B60E7A304CF9B7004DBCD6 /* Exceptions for "LandShip" folder in "AeroTrax" target */,
+				01B60E7B304CF9B9004DBCD6 /* Exceptions for "LandShip" folder in "NauticalTrax" target */,
 			);
 			path = LandShip;
 			sourceTree = "<group>";
@@ -54,6 +84,18 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		01B60D28304CBC4A004DBCD6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				01B60D29304CBC4A004DBCD6 /* CloudKit.framework in Frameworks */,
+			);
+		};
+		01B60D33304CBF6F004DBCD6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				01B60D34304CBF6F004DBCD6 /* CloudKit.framework in Frameworks */,
+			);
+		};
 		E8965F182F6CAABA00C9FAED /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
@@ -71,9 +113,15 @@
 		E89F2A402E2BF9C800EE079C = {
 			isa = PBXGroup;
 			children = (
+				01B60E70304CE35B004DBCD6 /* Assets-Nautical.xcassets */,
+				01B60E4D304CCB39004DBCD6 /* Assets-Aero.xcassets */,
+				0135F0AE30488C9600A28AC5 /* VehicleTrax.storekit */,
+				0135F0AF30488FED00A28AC5 /* VehicleTrax.storekit */,
 				E89F2A4B2E2BF9C800EE079C /* LandShip */,
 				E8965F1C2F6CAABA00C9FAED /* Import app store photos */,
 				E8EFE4452E6737BD004C2789 /* Frameworks */,
+				01B60D3C304CC038004DBCD6 /* AeroTrax.storekit */,
+				01B60E67304CE2F0004DBCD6 /* NauticalTrax.storekit */,
 				E89F2A4A2E2BF9C800EE079C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -83,6 +131,8 @@
 			children = (
 				E89F2A492E2BF9C800EE079C /* VehicleTrax.app */,
 				E8965F1B2F6CAABA00C9FAED /* Import app store photos */,
+				01B60D2E304CBC4A004DBCD6 /* AeroTrax.app */,
+				01B60D39304CBF6F004DBCD6 /* NauticalTrax.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -98,6 +148,42 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		01B60D26304CBC4A004DBCD6 /* AeroTrax */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 01B60D2B304CBC4A004DBCD6 /* Build configuration list for PBXNativeTarget "AeroTrax" */;
+			buildPhases = (
+				01B60D27304CBC4A004DBCD6 /* Sources */,
+				01B60D28304CBC4A004DBCD6 /* Frameworks */,
+				01B60D2A304CBC4A004DBCD6 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				E89F2A4B2E2BF9C800EE079C /* LandShip */,
+			);
+			name = AeroTrax;
+			productName = LandShip;
+			productReference = 01B60D2E304CBC4A004DBCD6 /* AeroTrax.app */;
+			productType = "com.apple.product-type.application";
+		};
+		01B60D31304CBF6F004DBCD6 /* NauticalTrax */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 01B60D36304CBF6F004DBCD6 /* Build configuration list for PBXNativeTarget "NauticalTrax" */;
+			buildPhases = (
+				01B60D32304CBF6F004DBCD6 /* Sources */,
+				01B60D33304CBF6F004DBCD6 /* Frameworks */,
+				01B60D35304CBF6F004DBCD6 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				E89F2A4B2E2BF9C800EE079C /* LandShip */,
+			);
+			name = NauticalTrax;
+			productName = LandShip;
+			productReference = 01B60D39304CBF6F004DBCD6 /* NauticalTrax.app */;
+			productType = "com.apple.product-type.application";
+		};
 		E8965F1A2F6CAABA00C9FAED /* Import app store photos */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = E8965F1F2F6CAABA00C9FAED /* Build configuration list for PBXNativeTarget "Import app store photos" */;
@@ -168,11 +254,25 @@
 			targets = (
 				E89F2A482E2BF9C800EE079C /* VehicleTrax */,
 				E8965F1A2F6CAABA00C9FAED /* Import app store photos */,
+				01B60D26304CBC4A004DBCD6 /* AeroTrax */,
+				01B60D31304CBF6F004DBCD6 /* NauticalTrax */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		01B60D2A304CBC4A004DBCD6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				01B60E4E304CCB39004DBCD6 /* Assets-Aero.xcassets in Resources */,
+			);
+		};
+		01B60D35304CBF6F004DBCD6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				01B60E71304CE35B004DBCD6 /* Assets-Nautical.xcassets in Resources */,
+			);
+		};
 		E89F2A472E2BF9C800EE079C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
@@ -181,6 +281,16 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		01B60D27304CBC4A004DBCD6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		01B60D32304CBF6F004DBCD6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 		E8965F172F6CAABA00C9FAED /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
@@ -194,6 +304,290 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		01B60D2C304CBC4A004DBCD6 /* Debug configuration for PBXNativeTarget "AeroTrax" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=iphoneos*]" = AppIcon;
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=macosx*]" = AppIconX;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				AUTOMATION_APPLE_EVENTS = NO;
+				CODE_SIGN_ENTITLEMENTS = "LandShip/LandShip-$(CONFIGURATION).entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 97;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = KBZXZT5NSJ;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = YES;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LandShip/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = AeroTrax;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Approve use of the camera in AeroTrax for images in forms.  Data is saved locally and to users iCloud but is not used for marketing, and is not transmitted outside the users personal account.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Approve use of location services in AeroTrax to auto-fill location fields in forms...";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = NO;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDarkContent;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 2026.09.02;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aeronauticaltrax.aerotraxapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) VERTICAL_AVIATION";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				XROS_DEPLOYMENT_TARGET = 2.5;
+			};
+			name = Debug;
+		};
+		01B60D2D304CBC4A004DBCD6 /* Release configuration for PBXNativeTarget "AeroTrax" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=iphoneos*]" = AppIcon;
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=macosx*]" = AppIconX;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				AUTOMATION_APPLE_EVENTS = NO;
+				CODE_SIGN_ENTITLEMENTS = "LandShip/LandShip-$(CONFIGURATION).entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 97;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = KBZXZT5NSJ;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = YES;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LandShip/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = AeroTrax;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Approve use of the camera in AeroTrax for images in forms.  Data is saved locally and to users iCloud but is not used for marketing, and is not transmitted outside the users personal account.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Approve use of location services in AeroTrax to auto-fill location fields in forms...";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = NO;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDarkContent;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 2026.09.02;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aeronauticaltrax.aerotraxapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) VERTICAL_AVIATION";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				XROS_DEPLOYMENT_TARGET = 2.5;
+			};
+			name = Release;
+		};
+		01B60D37304CBF6F004DBCD6 /* Debug configuration for PBXNativeTarget "NauticalTrax" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=iphoneos*]" = AppIcon;
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=macosx*]" = AppIconX;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				AUTOMATION_APPLE_EVENTS = NO;
+				CODE_SIGN_ENTITLEMENTS = "LandShip/LandShip-$(CONFIGURATION).entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 97;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = KBZXZT5NSJ;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = YES;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LandShip/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = NauticalTrax;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Approve use of the camera in NauticalTrax for images in forms.  Data is saved locally and to users iCloud but is not used for marketing, and is not transmitted outside the users personal account.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Approve use of location services in NauticalTrax to auto-fill location fields in forms...";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = NO;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDarkContent;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 2026.09.02;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aeronauticaltrax.nauticaltrax;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) VERTICAL_MARINE";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				XROS_DEPLOYMENT_TARGET = 2.5;
+			};
+			name = Debug;
+		};
+		01B60D38304CBF6F004DBCD6 /* Release configuration for PBXNativeTarget "NauticalTrax" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=iphoneos*]" = AppIcon;
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=macosx*]" = AppIconX;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				AUTOMATION_APPLE_EVENTS = NO;
+				CODE_SIGN_ENTITLEMENTS = "LandShip/LandShip-$(CONFIGURATION).entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 97;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = KBZXZT5NSJ;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = YES;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LandShip/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = NauticalTrax;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Approve use of the camera in NauticalTrax for images in forms.  Data is saved locally and to users iCloud but is not used for marketing, and is not transmitted outside the users personal account.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Approve use of location services in NauticalTrax to auto-fill location fields in forms...";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = NO;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDarkContent;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 2026.09.02;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aeronauticaltrax.nauticaltrax;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) VERTICAL_MARINE";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				XROS_DEPLOYMENT_TARGET = 2.5;
+			};
+			name = Release;
+		};
 		E8965F202F6CAABA00C9FAED /* Debug configuration for PBXNativeTarget "Import app store photos" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -383,7 +777,7 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = "LandShip/LandShip-$(CONFIGURATION).entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 88;
+				CURRENT_PROJECT_VERSION = 97;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = KBZXZT5NSJ;
 				ENABLE_APP_SANDBOX = YES;
@@ -422,7 +816,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 2026.09.01;
+				MARKETING_VERSION = 2026.09.02;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aeronauticaltrax.LandShip;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -453,7 +847,7 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = "LandShip/LandShip-$(CONFIGURATION).entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 88;
+				CURRENT_PROJECT_VERSION = 97;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = KBZXZT5NSJ;
 				ENABLE_APP_SANDBOX = YES;
@@ -492,7 +886,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 2026.09.01;
+				MARKETING_VERSION = 2026.09.02;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aeronauticaltrax.LandShip;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -515,6 +909,22 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		01B60D2B304CBC4A004DBCD6 /* Build configuration list for PBXNativeTarget "AeroTrax" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				01B60D2C304CBC4A004DBCD6 /* Debug configuration for PBXNativeTarget "AeroTrax" */,
+				01B60D2D304CBC4A004DBCD6 /* Release configuration for PBXNativeTarget "AeroTrax" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		01B60D36304CBF6F004DBCD6 /* Build configuration list for PBXNativeTarget "NauticalTrax" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				01B60D37304CBF6F004DBCD6 /* Debug configuration for PBXNativeTarget "NauticalTrax" */,
+				01B60D38304CBF6F004DBCD6 /* Release configuration for PBXNativeTarget "NauticalTrax" */,
+			);
+			defaultConfigurationName = Release;
+		};
 		E8965F1F2F6CAABA00C9FAED /* Build configuration list for PBXNativeTarget "Import app store photos" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

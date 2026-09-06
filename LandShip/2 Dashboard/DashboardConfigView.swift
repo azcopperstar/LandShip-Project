@@ -181,9 +181,9 @@ struct DashboardConfigView: View {
 					.buttonStyle(.plain)
 				}
 			} header: {
-				Text("Vehicles in Dashboard Totals")
+				Text("\(Vertical.current.assetPlural) in Dashboard Totals")
 			} footer: {
-				Text("Unchecked vehicles are excluded from \"All Vehicles\" totals across every card. Picking a specific vehicle from the dashboard's Vehicle picker always shows that vehicle's data regardless of this list.")
+				Text("Unchecked \(Vertical.current.assetPlural.lowercased()) are excluded from \"\(FleetScope.allDisplayLabel)\" totals across every card. Picking a specific \(Vertical.current.assetSingular.lowercased()) from the dashboard's \(Vertical.current.assetSingular) picker always shows that \(Vertical.current.assetSingular.lowercased())'s data regardless of this list.")
 			}
 
 			Section {

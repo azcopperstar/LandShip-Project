@@ -134,7 +134,7 @@ struct Image_View_Details: View {
 		VStack(alignment: .leading) {
 #if os(macOS)
 			if let imageData = imageData, let uiImage = NSImage(data: imageData) {
-				HStack { LabelDataText(label: "Vehicle Graphic \(label): ", data: "\(imageDescription)") }
+				HStack { LabelDataText(label: "\(Vertical.current.assetSingular) Graphic \(label): ", data: "\(imageDescription)") }
 				Image(nsImage: uiImage)
 					.resizable()
 					.imageViewModifier_Details()
@@ -146,7 +146,7 @@ struct Image_View_Details: View {
 			}
 #elseif os(iOS)
 			if let imageData = imageData, let uiImage = UIImage(data: imageData) {
-				HStack { LabelDataText(label: "Vehicle Graphic \(label)", data: "\(imageDescription)") }
+				HStack { LabelDataText(label: "\(Vertical.current.assetSingular) Graphic \(label)", data: "\(imageDescription)") }
 				Image(uiImage: uiImage)
 					.resizable()
 					.imageViewModifier_Details()
@@ -552,7 +552,7 @@ final class PickerThumbnailCache: @unchecked Sendable {
 struct PickerRowThumbnail: View {
 	var data: Data?
 	var cacheKey: String
-	var placeholderSystemImage: String = "car.fill"
+	var placeholderSystemImage: String = Vertical.current.assetIcon
 
 	var body: some View {
 		Group {

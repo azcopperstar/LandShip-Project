@@ -27,23 +27,31 @@ extension TrialCapped {
 	static var trialUsageKey: String { String(describing: Self.self) }
 }
 
-extension Vehicle8:           TrialCapped { static let trialLimit = 3;  static let trialDisplayName = "Vehicles" }
-extension MxParts1:           TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Parts" }
-extension FuelLog1:           TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Fuel Log entries" }
-extension TripLog2:           TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Travel Log entries" }
-extension ServiceRecords1:    TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Service Records" }
-extension MxItems3:           TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Service Items" }
-extension VehicleSystems1:    TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Systems" }
-extension Vendors1:           TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Vendors" }
-extension Additions:          TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Improvements" }
-extension Subscriptions:      TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Expenditures" }
-extension ProjectList:        TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Project items" }
-extension CheckList:          TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Checklists" }
-extension CheckListItem:      TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Checklist items" }
-extension VehicleWarranty:    TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Warranties" }
-extension VehicleScaleTicket: TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Scale Tickets" }
-extension VehicleSerialItem:  TrialCapped { static let trialLimit = 30; static let trialDisplayName = "Serial Numbers" }
-// Settings1 deliberately does NOT conform — exempt from trial caps by construction.
+extension Vehicle8:           TrialCapped { static let trialLimit = 2;  static var trialDisplayName: String { Vertical.current.assetPlural } }
+extension MxParts1:           TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Parts" }
+extension FuelLog1:           TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Fuel Log entries" }
+extension TripLog2:           TrialCapped { static let trialLimit = 10; static var trialDisplayName: String { "\(Vertical.current.travelLogLabel) entries" } }
+extension ServiceRecords1:    TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Service Records" }
+extension MxItems3:           TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Service Items" }
+extension VehicleSystems1:    TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Systems" }
+extension Vendors1:           TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Vendors" }
+extension Additions:          TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Improvements" }
+extension Subscriptions:      TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Expenditures" }
+extension ProjectList:        TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Project items" }
+extension CheckList:          TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Checklists" }
+extension CheckListItem:      TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Checklist items" }
+extension VehicleWarranty:    TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Warranties" }
+extension VehicleScaleTicket: TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Scale Tickets" }
+extension VehicleSerialItem:  TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Serial Numbers" }
+extension AirworthinessDirective: TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Airworthiness Directives" }
+extension InspectionCycle:    TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Inspections" }
+extension ComponentTimes:     TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Component Times" }
+extension HaulOutRecord:      TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Haul-Out Records" }
+extension SurveyRecord:       TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Survey Records" }
+extension PilotLogbookEntry:  TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Logbook Entries" }
+extension SeaServiceEntry:    TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Sea Service Entries" }
+// Settings1, PilotCertification, MarinerCredential deliberately do NOT conform — singleton
+// profile records, exempt from trial caps by construction.
 
 /// Drives the paywall's usage table and the over-cap safety net. Mirrors
 /// AppSchema.modelTypes (8 BackupRestore.swift) minus Settings1 — keep the two
@@ -53,6 +61,9 @@ enum TrialCaps {
 		Vehicle8.self, MxParts1.self, FuelLog1.self, TripLog2.self, ServiceRecords1.self,
 		MxItems3.self, VehicleSystems1.self, Vendors1.self, Additions.self, Subscriptions.self,
 		ProjectList.self, CheckList.self, CheckListItem.self,
-		VehicleWarranty.self, VehicleScaleTicket.self, VehicleSerialItem.self
+		VehicleWarranty.self, VehicleScaleTicket.self, VehicleSerialItem.self,
+		AirworthinessDirective.self, InspectionCycle.self, ComponentTimes.self,
+		HaulOutRecord.self, SurveyRecord.self,
+		PilotLogbookEntry.self, SeaServiceEntry.self
 	]
 }

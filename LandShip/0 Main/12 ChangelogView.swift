@@ -121,7 +121,7 @@ struct ChangelogList: View {
 					.foregroundStyle(.secondary)
 			} else {
 				ForEach(displayedSections) { section in
-					versionCard(section)
+					VersionCardView(version: section)
 				}
 			}
 		}
@@ -137,37 +137,78 @@ struct ChangelogList: View {
 		sections = ChangelogParser.parseBundledChangelog()
 	}
 
-	@ViewBuilder private func versionCard(_ v: ChangelogVersionBlock) -> some View {
+}
+
+/// One version's card: header, notes callout, change-count chips, a quick "at a
+/// glance" list of the areas touched, and the full Added/Fixed/Changed text tucked
+/// behind a disclosure — so scanning the whole history stays short, and the detail
+/// is one tap away instead of always taking up space.
+private struct VersionCardView: View {
+	let version: ChangelogVersionBlock
+
+	@State private var isExpanded = false
+
+	var body: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			HStack(alignment: .firstTextBaseline) {
-				Text("Version \(v.label)")
+				Text("Version \(version.label)")
 					.font(.subheadline.bold())
 				Spacer()
-				if !v.date.isEmpty {
-					Text(v.date)
+				if !version.date.isEmpty {
+					Text(version.date)
 						.font(.caption2)
 						.foregroundStyle(.secondary)
 						.monospacedDigit()
 				}
 			}
-			if !v.notes.isEmpty   { notesCallout(v.notes) }
-			changeTally(v)
-			if !v.added.isEmpty   { itemGroup("Added",   groups: v.added,   color: .green)  }
-			if !v.fixed.isEmpty   { itemGroup("Fixed",   groups: v.fixed,   color: .orange) }
-			if !v.changed.isEmpty { itemGroup("Changed", groups: v.changed, color: .blue)   }
+			if !version.notes.isEmpty { notesCallout }
+			changeTally
+			if !touchedAreas.isEmpty { areasQuickList }
+			if hasDetails {
+				DisclosureGroup(isExpanded: $isExpanded) {
+					VStack(alignment: .leading, spacing: 4) {
+						if !version.added.isEmpty   { itemGroup("Added",   groups: version.added,   color: .green)  }
+						if !version.fixed.isEmpty   { itemGroup("Fixed",   groups: version.fixed,   color: .orange) }
+						if !version.changed.isEmpty { itemGroup("Changed", groups: version.changed, color: .blue)   }
+					}
+					.padding(.top, 4)
+				} label: {
+					Text(isExpanded ? "Hide full details" : "Show full details")
+						.font(.caption.bold())
+				}
+			}
 		}
 		.padding()
 		.background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
 	}
 
+	private var hasDetails: Bool {
+		!version.added.isEmpty || !version.fixed.isEmpty || !version.changed.isEmpty
+	}
+
+	/// Distinct "## Area" headings touched by this version, in first-seen order,
+	/// across Added/Fixed/Changed alike — these are already short and curated,
+	/// so they double as the release's quick-glance summary without any new
+	/// authoring format in changelog.md.
+	private var touchedAreas: [String] {
+		var seen = Set<String>()
+		var result: [String] = []
+		for group in version.added + version.fixed + version.changed {
+			guard !group.title.isEmpty, !seen.contains(group.title) else { continue }
+			seen.insert(group.title)
+			result.append(group.title)
+		}
+		return result
+	}
+
 	/// Small capsule chips tallying the version's entries ("Added: 10 · Fixed: 5 …"),
 	/// shown below the notes so the size of a release can be taken in at a glance.
 	/// Each chip wears its section's color. Versions with no entries show nothing.
-	@ViewBuilder private func changeTally(_ v: ChangelogVersionBlock) -> some View {
+	@ViewBuilder private var changeTally: some View {
 		let counts: [(label: String, count: Int, color: Color)] = [
-			("Added",   v.added.reduce(0)   { $0 + $1.items.count }, .green),
-			("Fixed",   v.fixed.reduce(0)   { $0 + $1.items.count }, .orange),
-			("Changed", v.changed.reduce(0) { $0 + $1.items.count }, .blue)
+			("Added",   version.added.reduce(0)   { $0 + $1.items.count }, .green),
+			("Fixed",   version.fixed.reduce(0)   { $0 + $1.items.count }, .orange),
+			("Changed", version.changed.reduce(0) { $0 + $1.items.count }, .blue)
 		].filter { $0.1 > 0 }
 		if !counts.isEmpty {
 			HStack(spacing: 6) {
@@ -191,12 +232,12 @@ struct ChangelogList: View {
 
 	/// Notes lead the version card inside a tinted callout so release-critical
 	/// information is read before the Added/Fixed/Changed lists.
-	@ViewBuilder private func notesCallout(_ groups: [ChangelogItemGroup]) -> some View {
+	@ViewBuilder private var notesCallout: some View {
 		VStack(alignment: .leading, spacing: 4) {
 			Label("NOTES", systemImage: "exclamationmark.circle.fill")
 				.font(.caption2.bold())
 				.foregroundStyle(.yellow)
-			ForEach(groups) { group in
+			ForEach(version.notes) { group in
 				if !group.title.isEmpty {
 					Text(group.title)
 						.font(.caption.bold())
@@ -208,16 +249,9 @@ struct ChangelogList: View {
 							.fill(.yellow.opacity(0.7))
 							.frame(width: 5, height: 5)
 							.padding(.top, 5)
-						Group {
-							if let attr = try? AttributedString(markdown: item,
-								options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-								Text(attr)
-							} else {
-								Text(item)
-							}
-						}
-						.font(.caption.weight(.medium))
-						.fixedSize(horizontal: false, vertical: true)
+						markdownText(item)
+							.font(.caption.weight(.medium))
+							.fixedSize(horizontal: false, vertical: true)
 					}
 				}
 			}
@@ -226,6 +260,102 @@ struct ChangelogList: View {
 		.frame(maxWidth: .infinity, alignment: .leading)
 		.background(.yellow.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
 		.overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.yellow.opacity(0.35)))
+	}
+
+	/// Quick-glance box listing just the areas this version touched (e.g. "Dashboard",
+	/// "Fuel Log"), with a 5-word-max summary of each change indented underneath —
+	/// so the gist of a release reads in seconds; the full bullet text lives behind
+	/// "Show full details" below.
+	private var areasQuickList: some View {
+		VStack(alignment: .leading, spacing: 6) {
+			HStack(spacing: 4) {
+				Label("AT A GLANCE", systemImage: "list.bullet.rectangle.portrait.fill")
+					.font(.caption2.bold())
+					.foregroundStyle(.indigo)
+				Text("— tap Show full details below for more")
+					.font(.caption2)
+					.foregroundStyle(.secondary)
+			}
+			ForEach(touchedAreas, id: \.self) { area in
+				VStack(alignment: .leading, spacing: 2) {
+					HStack(alignment: .top, spacing: 6) {
+						Circle()
+							.fill(.indigo.opacity(0.5))
+							.frame(width: 5, height: 5)
+							.padding(.top, 5)
+						Text(area)
+							.font(.caption.weight(.medium))
+					}
+					ForEach(Array(shortSummaries(for: area).enumerated()), id: \.offset) { _, summary in
+						Text("– \(summary)")
+							.font(.caption2)
+							.foregroundStyle(.secondary)
+							.padding(.leading, 16)
+					}
+				}
+			}
+		}
+		.padding(8)
+		.frame(maxWidth: .infinity, alignment: .leading)
+		.background(.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+		.overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.indigo.opacity(0.25)))
+	}
+
+	/// Every item filed under the given "## Area" heading (across Added/Fixed/Changed,
+	/// in that order), each reduced to its quick-glance summary.
+	private func shortSummaries(for area: String) -> [String] {
+		(version.added + version.fixed + version.changed)
+			.filter { $0.title == area }
+			.flatMap { $0.items }
+			.map { quickSummary($0) }
+	}
+
+	/// The quick-glance form of one bullet. The changelog authoring convention (from
+	/// build 92 onward) is to write bullets as "Lead-in phrase: rest of the detail" —
+	/// everything before the first ":" is the intended summary, so that's used as-is
+	/// when present. Older bullets written without a colon fall back to the previous
+	/// auto-truncation heuristic.
+	private func quickSummary(_ text: String) -> String {
+		let cleaned = text.replacingOccurrences(of: "**", with: "")
+		if let colonIndex = cleaned.firstIndex(of: ":") {
+			let head = String(cleaned[cleaned.startIndex..<colonIndex]).trimmingCharacters(in: .whitespaces)
+			let tail = cleaned[cleaned.index(after: colonIndex)...].trimmingCharacters(in: .whitespaces)
+			return tail.isEmpty || head.isEmpty ? (head.isEmpty ? tail : head) : head + "…"
+		}
+		return shortSummary(cleaned, maxWords: 5)
+	}
+
+	/// Trims a bullet down to a short, clean phrase: drops any parenthetical aside,
+	/// caps the result at `maxWords`, and then trims trailing connector words ("in",
+	/// "the", "to"…) a hard word-count cut can land on — so "New customization sheet
+	/// (slider icon in the toolbar) lets…" reads as "New customization sheet…"
+	/// instead of "New customization sheet (slider icon…". Used only as a fallback
+	/// for bullets with no ":" lead-in (see `quickSummary`).
+	private func shortSummary(_ text: String, maxWords: Int) -> String {
+		var cleaned = text.replacingOccurrences(of: "**", with: "")
+		var wasTruncated = false
+
+		if let parenIndex = cleaned.firstIndex(of: "(") {
+			cleaned = String(cleaned[cleaned.startIndex..<parenIndex])
+			wasTruncated = true
+		}
+
+		var words = cleaned.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+		if words.count > maxWords {
+			words = Array(words.prefix(maxWords))
+			wasTruncated = true
+		}
+
+		let stopWords: Set<String> = ["the", "a", "an", "in", "of", "to", "for", "on",
+									   "and", "with", "at", "by", "from", "is", "are"]
+		while words.count > 1, stopWords.contains(words.last!.lowercased()) {
+			words.removeLast()
+			wasTruncated = true
+		}
+
+		let summary = words.joined(separator: " ")
+		guard wasTruncated, !summary.isEmpty else { return summary }
+		return summary + "…"
 	}
 
 	@ViewBuilder private func itemGroup(_ label: String, groups: [ChangelogItemGroup], color: Color) -> some View {
@@ -253,20 +383,21 @@ struct ChangelogList: View {
 							.fill(color.opacity(0.5))
 							.frame(width: 5, height: 5)
 							.padding(.top, 5)
-						Group {
-							if let attr = try? AttributedString(markdown: item,
-								options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-								Text(attr)
-							} else {
-								Text(item)
-							}
-						}
-						.font(.caption)
-						.fixedSize(horizontal: false, vertical: true)
+						markdownText(item)
+							.font(.caption)
+							.fixedSize(horizontal: false, vertical: true)
 					}
 				}
 			}
 		}
+	}
+
+	private func markdownText(_ item: String) -> Text {
+		if let attr = try? AttributedString(markdown: item,
+			options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+			return Text(attr)
+		}
+		return Text(item)
 	}
 }
 
@@ -318,7 +449,7 @@ struct ChangelogSheet: View {
 							LinearGradient(colors: [.white, .yellow.opacity(0.85)],
 										   startPoint: .leading, endPoint: .trailing)
 						)
-					Text("VehicleTrax Release Notes")
+					Text("\(AppInfo.displayName) Release Notes")
 						.font(.subheadline.weight(.semibold))
 						.foregroundStyle(.white.opacity(0.9))
 				}

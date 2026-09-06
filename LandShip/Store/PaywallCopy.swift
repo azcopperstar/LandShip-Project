@@ -11,7 +11,7 @@ enum PaywallCopy {
 
 	static var whatsIncludedTitle: String { "What's included" }
 	static var whatsIncludedMessage: String {
-		"A single, one-time purchase — no subscription. Unlimited vehicles and records in every table, PDF export and printing for every report, and automatic scheduled backups."
+		"A single, one-time purchase — no subscription. Unlimited \(Vertical.current.assetPlural.lowercased()) and records in every table, PDF export and printing for every report, and automatic scheduled backups."
 	}
 
 	static func headline(for context: PaywallContext) -> String {
@@ -36,7 +36,7 @@ enum PaywallCopy {
 	enum Sidebar {
 		static var sectionTitle: String { "Full Version" }
 		static var rowTitle: String { "Unlock Full Version" }
-		static var trialCaption: String { "Free trial — 3 vehicles, 30 records each" }
+		static var trialCaption: String { "Free trial — 2 \(Vertical.current.assetPlural.lowercased()), 10 records each" }
 	}
 
 	enum Settings {

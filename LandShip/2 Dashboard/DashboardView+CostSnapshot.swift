@@ -38,6 +38,11 @@ extension DashboardView {
 			return parts.reduce(0.0) { $0 + ($1.0 * $1.1) }
 		}
 
+		func subItemsLabor(for r: ServiceRecords1) -> Double {
+			Double(r.subItem1LaborCost) + Double(r.subItem2LaborCost) + Double(r.subItem3LaborCost)
+				+ Double(r.subItem4LaborCost) + Double(r.subItem5LaborCost)
+		}
+
 		func totalForRange(_ start: Date, _ end: Date, ids: [String]?) -> Double {
 			var predicate: Predicate<ServiceRecords1>
 			if let ids = ids {
@@ -51,7 +56,7 @@ extension DashboardView {
 				return recs.reduce(0.0) { sum, r in
 					let labor = Double(r.laborCost)
 					let parts = partsTotal(for: r)
-					return sum + labor + parts
+					return sum + labor + parts + subItemsLabor(for: r)
 				}
 			} catch {
 				return 0.0
@@ -79,7 +84,7 @@ extension DashboardView {
 			for r in recs {
 				let labor = Double(r.laborCost)
 				let parts = partsTotal(for: r)
-				let total = labor + parts
+				let total = labor + parts + subItemsLabor(for: r)
 				buckets[r.mxName, default: 0.0] += total
 			}
 			top = buckets

@@ -56,6 +56,8 @@ struct pdfReportSubscriptions: View {
 	@State private var scope: String
 	@State private var pdfDocument: PDFDocument?
 	@State private var zoomAction: ZoomAction?
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 
 	let functions = Functions()
 
@@ -124,7 +126,38 @@ struct pdfReportSubscriptions: View {
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
+			}
 		}
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: "Expenditures") { _ in }
+	}
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let items = fetchSubscriptions()
+		let headers = [
+			"Inactive", "Created At", "Updated At", "Last Payment", Vertical.current.assetSingular, "\(Vertical.current.assetSingular) Display Name",
+			Vertical.current.primaryMeterLabel, "Engine Hours", "Item Name", "Description", "Notes", "Vendor", "Account Number",
+			"Category", "Sub-Category", "Recurring", "Recurring Interval", "Recurring Days", "Cost",
+			"Image 1 Description", "Image 2 Description", "Image 3 Description", "Image 4 Description", "Image 5 Description"
+		]
+		let rows: [[String]] = items.map { s in
+			let vehicleName = s.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: s.vehicleId, context: modelContext)
+			return [
+				CSVField.bool(s.inactive), CSVField.date(s.createdAt), CSVField.date(s.updatedAt), CSVField.date(s.lastPayment), s.vehicleId, vehicleName,
+				CSVField.int(s.miles), CSVField.float(s.engHours), s.itemName, s.itemDescription, s.itemNotes, s.itemVendor, s.accountNumber,
+				s.category, s.subCategory, CSVField.bool(s.itemRecurring), s.itemRecurringInterval, CSVField.int(s.itemRecurringDays), CSVField.float(s.itemCost),
+				s.image1Description, s.image2Description, s.image3Description, s.image4Description, s.image5Description
+			]
+		}
+		return CSVBuilder.build(headers: headers, rows: rows)
 	}
 
 	// MARK: - Generation
@@ -174,11 +207,27 @@ struct pdfReportSubscriptions: View {
 			]
 		}
 
-		let scopeTitle = (scope == "All Vehicles" || scope.isEmpty) ? "All Vehicles" : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
+		let scopeTitle = FleetScope.isAll(scope) ? FleetScope.allDisplayLabel : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
 		let itemWord = items.count == 1 ? "subscription" : "subscriptions"
 		let subtitle = "\(scopeTitle) • \(functions.formatDate_DDMMMyy(date: Date())) • \(items.count) \(itemWord)"
 
-		return PDFReportRenderer.render(title: "Expenditures, Subscriptions and Recurring Payments", subtitle: subtitle, columns: columns, rows: rows, style: .standard)
+		let summary = subscriptionsSummary(items)
+		return PDFReportRenderer.render(title: "Expenditures, Subscriptions and Recurring Payments", subtitle: subtitle, columns: columns, rows: rows, summary: summary, style: .standard)
+	}
+
+	private func subscriptionsSummary(_ items: [Subscriptions]) -> PDFReportSummary {
+		let groups = pdfVehicleScopedSummaryGroups(scope: scope, records: items, vehicleId: \.vehicleId, context: modelContext) { subset in
+			let recurringCount = subset.filter(\.itemRecurring).count
+			let oneTimeCount = subset.count - recurringCount
+			let totalBilled = subset.reduce(Float(0)) { $0 + $1.itemCost }
+			return [
+				("Total Subscriptions", subset.isEmpty ? nil : "\(subset.count)"),
+				("Recurring", recurringCount != 0 ? "\(recurringCount)" : nil),
+				("One-Time", oneTimeCount != 0 ? "\(oneTimeCount)" : nil),
+				("Total Billed", totalBilled != 0 ? pdfCurrencyString(totalBilled) : nil)
+			]
+		}
+		return PDFReportSummary(title: "SUBSCRIPTIONS SUMMARY", groups: groups)
 	}
 
 	// MARK: - Field-group builders
@@ -217,7 +266,7 @@ struct pdfReportSubscriptions: View {
 
 		var groups: [PDFFieldGroup] = []
 		if let identity = fieldGroup(nil, [
-			("Vehicle", vehicleName),
+			(Vertical.current.assetSingular, vehicleName),
 			("Item", text(item.itemName)),
 			("Category", text(item.category)),
 			("Sub-Category", text(item.subCategory))
@@ -277,7 +326,7 @@ private struct SubscriptionsReportPreviewHost: View {
 		context.insert(vehicle)
 
 		let samples: [Subscriptions] = [
-			Subscriptions(lastPayment: Date(), vehicleId: "Vehicle A", itemName: "Satellite Radio", itemDescription: "SiriusXM All Access", itemVendor: "SiriusXM", accountNumber: "SXM-1234", category: "Entertainment", itemRecurring: true, itemRecurringInterval: "Month", itemRecurringDays: 1, itemCost: 21.99),
+			Subscriptions(lastPayment: Date(), vehicleId: "Vehicle A", itemName: "Satellite Radio", itemDescription: "SiriusXM All Access", itemVendor: "SiriusXM", category: "Entertainment", itemRecurring: true, itemRecurringInterval: "Month", itemRecurringDays: 1, itemCost: 21.99),
 			Subscriptions(vehicleId: "Vehicle A", itemName: "Roadside Assistance")
 		]
 		samples.forEach { context.insert($0) }

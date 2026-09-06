@@ -21,6 +21,10 @@ struct pdfReportPunchList: View {
 	@State private var debugLayout: Bool = false
 	@State private var pdfDocument: PDFDocument?
 	@State private var diagStatus: String = "idle"
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
+
+	let functions = Functions()
 	
 	// Init to configure @Query with simpler, explicit pieces to help the type-checker
 	init(trackVehicleSelected: String, projectSubcategory: String) {
@@ -69,7 +73,7 @@ struct pdfReportPunchList: View {
 	var body: some View {
 		Group {
 			if let doc = pdfDocument {
-				PDFKitView(showing: doc)
+				PunchListPDFKitView(showing: doc)
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
 					.ignoresSafeArea()
 			} else {
@@ -92,7 +96,7 @@ struct pdfReportPunchList: View {
 				Button { dismiss() } label: {
 					Label("Punch List", systemImage: "list.bullet")
 				}
-				vehiclePicker
+				VehicleScopePicker(scope: $trackVehicleSelected)
 				subcategoryPicker
 				Button {
 					printPDF()
@@ -101,13 +105,19 @@ struct pdfReportPunchList: View {
 				}
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
 			}
 #else
 			ToolbarItemGroup(placement: .topBarTrailing) {
 				Button { dismiss() } label: {
 					Label("Punch List", systemImage: "list.bullet")
 				}
-				vehiclePicker
+				VehicleScopePicker(scope: $trackVehicleSelected)
 				subcategoryPicker
 				Button {
 					printPDF()
@@ -115,9 +125,16 @@ struct pdfReportPunchList: View {
 					Label("Print", systemImage: "printer")
 				}
 				.disabled(pdfDocument == nil)
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
 			}
 #endif
 		}
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: "Punch List") { _ in }
 		.onAppear {
 			generate()
 		}
@@ -134,8 +151,10 @@ struct pdfReportPunchList: View {
 		DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
 			self.diagStatus = "rendering"
 			let title = "PUNCH LIST — \(self.projectSubcategory.uppercased())"
-			let rows = self.fetchFilteredData().map { PunchListRow(from: $0) }
-			guard let data = Self.renderPDFData(title: title, rows: rows, vehicle: self.trackVehicleSelected, subcat: self.projectSubcategory, debug: self.debugLayout) else {
+			let items = self.fetchFilteredData()
+			let rows = items.map { PunchListRow(from: $0) }
+			let summary = self.punchListSummary(items)
+			guard let data = Self.renderPDFData(title: title, rows: rows, vehicle: self.trackVehicleSelected, subcat: self.projectSubcategory, debug: self.debugLayout, summary: summary) else {
 				print("[PunchListPDF] FAIL: renderPDFData returned nil")
 				self.diagStatus = "Couldn't generate PDF. Please try again."
 				return
@@ -146,23 +165,50 @@ struct pdfReportPunchList: View {
 				return
 			}
 			self.pdfDocument = doc
+			PDFReportFile.save(data: data, fileName: "Punch List")
 		}
 	}
-	
-	// MARK: Picker Views
-	private var vehiclePicker: some View {
-		let vehicles = uniqueVehicles()
-		return Menu {
-			Button("All Vehicles") { trackVehicleSelected = "All Vehicles" }
-			ForEach(vehicles, id: \.self) { v in
-				Button(v) { trackVehicleSelected = v }
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let items = dataSet
+		let partCount = 5
+		var headers = [
+			"Inactive", "Created At", "Updated At", Vertical.current.assetSingular, "\(Vertical.current.assetSingular) Display Name",
+			Vertical.current.primaryMeterLabel, "Engine Hours", "Item Name", "Description", "Notes", "Vendor",
+			"Category", "Category Order", "Sub-Category", "Sub-Category Order", "Project Order", "Priority",
+			"Completed", "Completed At", "Save In Logbook", "Saved To Logbook", "Linked Addition ID", "Item Cost", "Labor Cost",
+			"Image 1 Description", "Image 2 Description", "Image 3 Description", "Image 4 Description", "Image 5 Description"
+		]
+		for i in 1...partCount {
+			headers.append(contentsOf: ["Part \(i)", "Part \(i) Cost", "Part \(i) Unit", "Part \(i) Quantity"])
+		}
+		let rows: [[String]] = items.map { p in
+			let vehicleName = p.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: p.vehicleId, context: modelContext)
+			var row = [
+				CSVField.bool(p.inactive), CSVField.date(p.createdAt), CSVField.date(p.updatedAt), p.vehicleId, vehicleName,
+				CSVField.int(p.miles), CSVField.float(p.engHours), p.itemName, p.itemDescription, p.itemNotes, p.itemVendor,
+				p.category, CSVField.int(p.categoryOrder), p.subCategory, CSVField.int(p.subcategoryOrder), CSVField.int(p.projectOrder), CSVField.int(p.priority),
+				CSVField.bool(p.itemCompleted), CSVField.date(p.completedAt), CSVField.bool(p.saveInLogbook), CSVField.bool(p.savedToLogbook), p.additionsLinkId, CSVField.float(p.itemCost), CSVField.float(p.laborCost),
+				p.image1Description, p.image2Description, p.image3Description, p.image4Description, p.image5Description
+			]
+			let parts: [(name: String, cost: Float, unit: String, quantity: Int)] = [
+				(p.part1, p.part1cost, p.part1Unit, p.part1Quantity),
+				(p.part2, p.part2cost, p.part2Unit, p.part2Quantity),
+				(p.part3, p.part3cost, p.part3Unit, p.part3Quantity),
+				(p.part4, p.part4cost, p.part4Unit, p.part4Quantity),
+				(p.part5, p.part5cost, p.part5Unit, p.part5Quantity)
+			]
+			for part in parts {
+				row.append(contentsOf: [part.name, CSVField.float(part.cost), part.unit, CSVField.int(part.quantity)])
 			}
-		} label: {
-			Label(trackVehicleSelected, systemImage: "car")
+			return row
 		}
-		.accessibilityLabel("Vehicle Filter")
+		return CSVBuilder.build(headers: headers, rows: rows)
 	}
-	
+
+	// MARK: Picker Views
 	private var subcategoryPicker: some View {
 		let subs = uniqueSubcategories()
 		return Menu {
@@ -218,14 +264,33 @@ struct pdfReportPunchList: View {
 		let withoutPriority = items.filter { $0.priority == 0 }
 		return withPriority + withoutPriority
 	}
-	
-	private func uniqueVehicles() -> [String] {
-		let descriptor = FetchDescriptor<ProjectList>()
-		let allItems = (try? modelContext.fetch(descriptor)) ?? []
-		let vehicles = Set(allItems.map { $0.vehicleId }).sorted()
-		return vehicles
+
+	/// Breaks down totals for just this punch list's own filtered items (vehicle + sub-category),
+	/// not a cross-report/cross-category summary. `items` is already filtered to the current
+	/// sub-category, so when `trackVehicleSelected` is "All Vehicles" this still breaks down per
+	/// vehicle within that sub-category, same as every other report.
+	private func punchListSummary(_ items: [ProjectList]) -> PDFReportSummary {
+		let groups = pdfVehicleScopedSummaryGroups(scope: trackVehicleSelected, records: items, vehicleId: \.vehicleId, context: modelContext) { subset in
+			let completedCount = subset.filter(\.itemCompleted).count
+			let totalLabor = subset.reduce(Float(0)) { $0 + $1.laborCost }
+			let totalParts = subset.reduce(Float(0)) { total, item in
+				total + item.part1cost * Float(item.part1Quantity)
+					+ item.part2cost * Float(item.part2Quantity)
+					+ item.part3cost * Float(item.part3Quantity)
+					+ item.part4cost * Float(item.part4Quantity)
+					+ item.part5cost * Float(item.part5Quantity)
+			}
+			return [
+				("Total Items", subset.isEmpty ? nil : "\(subset.count)"),
+				("Completed", completedCount != 0 ? "\(completedCount)" : nil),
+				("Total Labor", totalLabor != 0 ? pdfCurrencyString(totalLabor) : nil),
+				("Total Parts", totalParts != 0 ? pdfCurrencyString(totalParts) : nil),
+				("Total Cost", (totalLabor + totalParts) != 0 ? pdfCurrencyString(totalLabor + totalParts) : nil)
+			]
+		}
+		return PDFReportSummary(title: "PUNCH LIST SUMMARY", groups: groups)
 	}
-	
+
 	private func uniqueSubcategories() -> [String] {
 		let descriptor = FetchDescriptor<ProjectList>()
 		let allItems = (try? modelContext.fetch(descriptor)) ?? []
@@ -236,22 +301,11 @@ struct pdfReportPunchList: View {
 	// MARK: Print PDF
 	private func printPDF() {
 		guard let doc = pdfDocument else { return }
-#if os(macOS)
-		let printOp = doc.printOperation(for: NSPrintInfo.shared, scalingMode: .pageScaleToFit, autoRotate: true)
-		printOp?.runModal(for: NSApp.keyWindow ?? NSWindow(), delegate: nil, didRun: nil, contextInfo: nil)
-#else
-		let printController = UIPrintInteractionController.shared
-		let printInfo = UIPrintInfo.printInfo()
-		printInfo.outputType = .general
-		printInfo.jobName = "Punch List"
-		printController.printInfo = printInfo
-		printController.printingItem = doc.dataRepresentation()
-		printController.present(animated: true)
-#endif
+		PDFReportFile.printDocument(doc, jobName: "Punch List")
 	}
-	
+
 	// MARK: PDF Generation
-	private nonisolated static func renderPDFData(title: String, rows: [PunchListRow], vehicle: String, subcat: String, debug: Bool) -> Data? {
+	private nonisolated static func renderPDFData(title: String, rows: [PunchListRow], vehicle: String, subcat: String, debug: Bool, summary: PDFReportSummary) -> Data? {
 		// Page metrics (portrait Letter)
 		let pageWidth: CGFloat = 612
 		let pageHeight: CGFloat = 792
@@ -297,7 +351,18 @@ struct pdfReportPunchList: View {
 			}
 			y += Self.drawPunchRow(record: record, at: CGPoint(x: margin, y: y), contentWidth: pageWidth - 2*margin, rowHeight: rowHeight, pageHeight: pageHeight, debug: debug)
 		}
-		
+
+		if !summary.groups.isEmpty {
+			let summaryHeight = Self.measureSummaryHeight(summary)
+			if y + summaryHeight > maxBottom {
+				endPage()
+				pageNumber += 1
+				beginPage(pageNumber: pageNumber)
+				y = margin + headerHeight
+			}
+			_ = Self.drawSummaryMac(summary, at: CGPoint(x: margin, y: y), width: pageWidth - 2 * margin, pageHeight: pageHeight)
+		}
+
 		endPage()
 		cg.closePDF()
 		return data as Data
@@ -328,11 +393,115 @@ struct pdfReportPunchList: View {
 				}
 				y += Self.drawPunchRow_iOS(record: record, at: CGPoint(x: margin, y: y), contentWidth: pageWidth - 2*margin, rowHeight: rowHeight, debug: debug)
 			}
+
+			if !summary.groups.isEmpty {
+				let summaryHeight = Self.measureSummaryHeight(summary)
+				if y + summaryHeight > maxBottom {
+					pageNumber += 1
+					beginPage()
+					y = margin + headerHeight
+				}
+				_ = Self.drawSummaryIOS(summary, at: CGPoint(x: margin, y: y), width: pageWidth - 2 * margin)
+			}
 		}
 		return data
 #endif
 	}
-	
+
+	// MARK: Summary block (drawn after the last row, matching this file's existing per-platform
+	// drawing style rather than the shared engine's — see the file-level note above
+	// PunchListPDFKitView on why this report predates that engine). `summary.groups` is one
+	// unheaded group when a specific vehicle is selected, or one heading-per-vehicle group plus a
+	// trailing "ALL VEHICLES" group when scope is "All Vehicles" — see
+	// `pdfVehicleScopedSummaryGroups` in PDFReportStyle.swift.
+	private nonisolated static func measureSummaryHeight(_ summary: PDFReportSummary) -> CGFloat {
+		let titleHeight: CGFloat = 24
+		let lineHeight: CGFloat = 16
+		let headingHeight: CGFloat = 18
+		var contentHeight: CGFloat = 0
+		for (index, group) in summary.groups.enumerated() {
+			if let heading = group.heading, !heading.isEmpty {
+				contentHeight += (index == 0 ? 0 : 6) + headingHeight
+			}
+			contentHeight += CGFloat(group.fields.count) * lineHeight
+		}
+		return titleHeight + contentHeight + 16
+	}
+
+#if os(macOS)
+	@discardableResult
+	private nonisolated static func drawSummaryMac(_ summary: PDFReportSummary, at origin: CGPoint, width: CGFloat, pageHeight: CGFloat) -> CGFloat {
+		let height = measureSummaryHeight(summary)
+		func flip(_ r: CGRect) -> CGRect { CGRect(x: r.minX, y: pageHeight - r.maxY, width: r.width, height: r.height) }
+
+		NSColor.separatorColor.setStroke()
+		NSBezierPath(rect: flip(CGRect(x: origin.x, y: origin.y, width: width, height: height))).stroke()
+
+		let innerX = origin.x + 12
+		let innerWidth = width - 24
+		var y = origin.y + 8
+		let rightPara = NSMutableParagraphStyle(); rightPara.alignment = .right
+
+		NSAttributedString(string: summary.title, attributes: [.font: NSFont.boldSystemFont(ofSize: 12)])
+			.draw(in: flip(CGRect(x: innerX, y: y, width: innerWidth, height: 16)))
+		y += 24
+
+		let headingFont = NSFont.boldSystemFont(ofSize: 10)
+		let lineFont = NSFont.systemFont(ofSize: 10)
+		for (index, group) in summary.groups.enumerated() {
+			if let heading = group.heading, !heading.isEmpty {
+				if index > 0 { y += 6 }
+				NSAttributedString(string: heading.uppercased(), attributes: [.font: headingFont])
+					.draw(in: flip(CGRect(x: innerX, y: y, width: innerWidth, height: 14)))
+				y += 18
+			}
+			for field in group.fields {
+				NSAttributedString(string: field.label, attributes: [.font: lineFont]).draw(in: flip(CGRect(x: innerX, y: y, width: innerWidth * 0.6, height: 14)))
+				NSAttributedString(string: field.value, attributes: [.font: lineFont, .paragraphStyle: rightPara])
+					.draw(in: flip(CGRect(x: innerX, y: y, width: innerWidth, height: 14)))
+				y += 16
+			}
+		}
+
+		return height
+	}
+#else
+	@discardableResult
+	private nonisolated static func drawSummaryIOS(_ summary: PDFReportSummary, at origin: CGPoint, width: CGFloat) -> CGFloat {
+		let height = measureSummaryHeight(summary)
+		UIColor.separator.setStroke()
+		UIBezierPath(rect: CGRect(x: origin.x, y: origin.y, width: width, height: height)).stroke()
+
+		let innerX = origin.x + 12
+		let innerWidth = width - 24
+		var y = origin.y + 8
+		let rightPara = NSMutableParagraphStyle(); rightPara.alignment = .right
+
+		NSAttributedString(string: summary.title, attributes: [.font: UIFont.boldSystemFont(ofSize: 12)])
+			.draw(in: CGRect(x: innerX, y: y, width: innerWidth, height: 16))
+		y += 24
+
+		let headingFont = UIFont.boldSystemFont(ofSize: 10)
+		let lineFont = UIFont.systemFont(ofSize: 10)
+		for (index, group) in summary.groups.enumerated() {
+			if let heading = group.heading, !heading.isEmpty {
+				if index > 0 { y += 6 }
+				NSAttributedString(string: heading.uppercased(), attributes: [.font: headingFont])
+					.draw(in: CGRect(x: innerX, y: y, width: innerWidth, height: 14))
+				y += 18
+			}
+			for field in group.fields {
+				NSAttributedString(string: field.label, attributes: [.font: lineFont]).draw(in: CGRect(x: innerX, y: y, width: innerWidth * 0.6, height: 14))
+				NSAttributedString(string: field.value, attributes: [.font: lineFont, .paragraphStyle: rightPara])
+					.draw(in: CGRect(x: innerX, y: y, width: innerWidth, height: 14))
+				y += 16
+			}
+		}
+
+		return height
+	}
+#endif
+
 	// MARK: Layout helpers
 	private nonisolated static func measureRow(record: PunchListRow, contentWidth: CGFloat) -> CGFloat {
 		// Layout: [Checkbox 24] [Name | Description] [Notes] and Parts box below
@@ -366,7 +535,7 @@ struct pdfReportPunchList: View {
 		let left = NSMutableParagraphStyle(); left.alignment = .left
 		let right = NSMutableParagraphStyle(); right.alignment = .right
 		let subcatDisplay = subcat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "General" : subcat.trimmingCharacters(in: .whitespacesAndNewlines)
-		let vehicleDisplay = (vehicle == "All Vehicles") ? "All Vehicles" : vehicle
+		let vehicleDisplay = FleetScope.isAll(vehicle) ? FleetScope.allDisplayLabel : vehicle
 		let subtitle = "\(vehicleDisplay) • \(subcatDisplay)"
 		let titleRectTop = CGRect(x: margin, y: margin, width: pageWidth - 2*margin, height: headerHeight/2)
 		let subRectTop = CGRect(x: margin, y: margin + headerHeight/2 - 2, width: pageWidth - 2*margin, height: headerHeight/2)
@@ -572,7 +741,7 @@ struct pdfReportPunchList: View {
 		let left = NSMutableParagraphStyle(); left.alignment = .left
 		let right = NSMutableParagraphStyle(); right.alignment = .right
 		let subcatDisplay = subcat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "General" : subcat.trimmingCharacters(in: .whitespacesAndNewlines)
-		let vehicleDisplay = (vehicle == "All Vehicles") ? "All Vehicles" : vehicle
+		let vehicleDisplay = FleetScope.isAll(vehicle) ? FleetScope.allDisplayLabel : vehicle
 		let subtitle = "\(vehicleDisplay) • \(subcatDisplay)"
 		let titleRect = CGRect(x: margin, y: margin, width: pageWidth - 2*margin, height: headerHeight/2)
 		let subRect = CGRect(x: margin, y: margin + headerHeight/2 - 2, width: pageWidth - 2*margin, height: headerHeight/2)
@@ -828,8 +997,10 @@ struct pdfReportPunchList: View {
 	}
 
 // MARK: - PDFKitView wrappers
+// Named distinctly from the shared PDFKitView in PDFReportStyle.swift (this report predates the
+// shared engine and doesn't take a zoomAction binding) to avoid a top-level redeclaration.
 #if os(macOS)
-private struct PDFKitView: NSViewRepresentable {
+private struct PunchListPDFKitView: NSViewRepresentable {
 	let pdfDocument: PDFDocument
 	init(showing doc: PDFDocument) { self.pdfDocument = doc }
 	func makeNSView(context: Context) -> PDFView {
@@ -862,7 +1033,7 @@ private final class AutoScalePDFView: PDFView {
 	}
 }
 
-private struct PDFKitView: UIViewRepresentable {
+private struct PunchListPDFKitView: UIViewRepresentable {
 	let pdfDocument: PDFDocument
 	init(showing doc: PDFDocument) { self.pdfDocument = doc }
 	func makeUIView(context: Context) -> PDFView {

@@ -14,6 +14,7 @@ struct DisplaySubscriptions: View {
 	
 	// SwiftData context used to insert, save, and fetch data
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 	
 	@Query var vehicles: [Vehicle8]
 	
@@ -62,7 +63,11 @@ struct DisplaySubscriptions: View {
 		case nameDesc = "Expenses Z–A"
 		case updatedDesc = "Recently Updated"
 		var id: String { rawValue }
-		
+
+		/// Vertical-aware display text — the persisted rawValue stays "Vehicle ..." so
+		/// existing AppStorage selections keep decoding correctly.
+		var displayName: String { rawValue.replacingOccurrences(of: "Vehicle", with: Vertical.current.assetSingular) }
+
 		// Translate each sort mode into SwiftData SortDescriptors on Subscriptions
 		var descriptors: [SortDescriptor<Subscriptions>] {
 			switch self {
@@ -97,7 +102,7 @@ struct DisplaySubscriptions: View {
 			selection: $selectedVehicle,
 			title: "",
 			includeEmptyChoice: true,
-			emptyChoiceLabel: "All Vehicles",
+			emptyChoiceLabel: FleetScope.allDisplayLabel,
 			autoSelectFirst: false,
 			filter: nil,
 			sort: [SortDescriptor(\.displayName, order: .forward)],
@@ -158,7 +163,7 @@ struct DisplaySubscriptions: View {
 				Menu {
 					Picker("Sort by", selection: $selectedSort) {
 						ForEach(PartsSort.allCases) { sortCase in
-							Text(sortCase.rawValue).tag(sortCase)
+							Text(sortCase.displayName).tag(sortCase)
 						}
 					}
 				} label: {
@@ -309,7 +314,7 @@ struct DisplaySubscriptions: View {
 								}
 							}
 							// Vehicle totals
-							Section(header: Text("Vehicle Totals").font(.caption).foregroundStyle(.secondary)) {
+							Section(header: Text("\(Vertical.current.assetSingular) Totals").font(.caption).foregroundStyle(.secondary)) {
 								ForEach(byVehicle.keys.sorted(), id: \.self) { vehicleKey in
 									let subtotal = (byVehicle[vehicleKey] ?? []).reduce(0 as Float) { $0 + $1.itemCost }
 									HStack {
@@ -347,7 +352,7 @@ struct DisplaySubscriptions: View {
 					} header: {
 						HStack(spacing: 6) {
 							Image(systemName: "arrow.up.arrow.down")
-							Text("Sort: \(selectedSort.rawValue)")
+							Text("Sort: \(selectedSort.displayName)")
 						}
 						.font(.caption)
 						.foregroundStyle(.secondary)
@@ -488,7 +493,7 @@ struct DisplaySubscriptions: View {
 					} header: {
 						HStack(spacing: 6) {
 							Image(systemName: "arrow.up.arrow.down")
-							Text("Sort: \(selectedSort.rawValue)")
+							Text("Sort: \(selectedSort.displayName)")
 						}
 						.font(.caption)
 						.foregroundStyle(.secondary)
@@ -514,6 +519,7 @@ struct DisplaySubscriptions: View {
 	/// - Inserts and saves the record in the SwiftData modelContext.
 	/// - Triggers programmatic navigation to EditSubscriptions in editing mode.
 	private func addNewRecord() {
+		guard entitlements.requestCreate(Subscriptions.self, in: modelContext) else { return }
 		let newRecord = Subscriptions(
 			inactive: false,
 			createdAt: Date(),
@@ -560,7 +566,7 @@ struct DisplaySubscriptions: View {
 struct SubscriptionsTips: Tip {
 	var title: Text { Text("Subscriptions & Expenses") }
 	var message: Text? {
-		Text("Track recurring charges, subscriptions, and one-time expenses for your vehicles to monitor ongoing costs.")
+		Text("Track recurring charges, subscriptions, and one-time expenses for your \(Vertical.current.assetPlural.lowercased()) to monitor ongoing costs.")
 	}
 	var image: Image? { Image(systemName: "square.grid.3x1.folder.badge.plus") }
 }

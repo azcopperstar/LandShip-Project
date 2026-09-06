@@ -25,6 +25,10 @@ struct GrowingButton: ButtonStyle {
 			.fixedSize(horizontal: true, vertical: false)
 			.scaleEffect(configuration.isPressed ? 1.2 : 1)
 			.animation(.easeOut(duration: 0.5), value: configuration.isPressed)
+			// macOS 27 packs adjacent toolbar buttons with no gap between them, which fuses
+			// two of these pills (e.g. Edit + Delete) and their shadows into one cramped
+			// shape. Outer padding keeps a visible gap regardless of toolbar chrome.
+			.padding(.horizontal, 4)
 	}
 }
 

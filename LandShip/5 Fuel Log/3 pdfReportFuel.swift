@@ -56,6 +56,8 @@ struct pdfReportFuel: View {
 	@State private var scope: String
 	@State private var pdfDocument: PDFDocument?
 	@State private var zoomAction: ZoomAction?
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 
 	let functions = Functions()
 	let prefsFunctions = PrefsFunctions()
@@ -125,7 +127,50 @@ struct pdfReportFuel: View {
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
+			}
 		}
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: "Fuel Log") { _ in }
+	}
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let logs = fetchFuelLogs()
+		let headers = [
+			"Inactive", "Log ID", Vertical.current.assetSingular, "\(Vertical.current.assetSingular) Display Name", "Log Name", "Notes",
+			"Created At", "Updated At", "Date/Time", "Exit Time", Vertical.current.primaryMeterLabel, "Location", "Engine Hours",
+			"Fuel Qty Start", "Fuel Qty End", "Fuel Added", "DEF Added", "DEF Price",
+			"DEF Level Start", "DEF Level Start Fraction", "DEF Qty Start", "DEF Level End", "DEF Level End Fraction", "DEF Qty End",
+			"Oil Added", "Oil Checked", "Engine Coolant Checked", "Secondary Coolant Checked", "Power Steering Checked",
+			"Brake Fluid Checked", "Transmission Fluid Checked", "Rear Axle Checked", "Front Axle Checked",
+			"Fuel Water Separator Checked", "Air System Water Bleed Checked",
+			"Fuel Level Start", "Fuel Level End", "Fuel Level Start Fraction", "Fuel Level End Fraction",
+			"Fuel Price", "Fuel Cost", "Fuel Type",
+			"Image 1 Description", "Image 2 Description", "Image 3 Description"
+		]
+		let rows: [[String]] = logs.map { log in
+			let vehicleName = log.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: log.vehicleId, context: modelContext)
+			return [
+				CSVField.bool(log.inactive), log.logId, log.vehicleId, vehicleName, log.logName, log.fuelNotes,
+				CSVField.date(log.createdAt), CSVField.date(log.updatedAt), CSVField.date(log.fuelDateTime), log.fuelExitTime.map(CSVField.date) ?? "", CSVField.int(log.odometer), log.location, CSVField.float(log.engHours),
+				CSVField.float(log.fuelQuantityStart), CSVField.float(log.fuelQuantityEnd), CSVField.float(log.fuelAdded), CSVField.float(log.defAdded), CSVField.float(log.defPrice),
+				CSVField.float(log.defLevelStart1), log.defLevelStartFraction, CSVField.float(log.defQuantityStart), CSVField.float(log.defLevel1), log.defLevelFraction, CSVField.float(log.defQuantity),
+				CSVField.float(log.oilAdded), CSVField.bool(log.oilChecked), CSVField.bool(log.engineCoolantChecked), CSVField.bool(log.secondaryCoolantChecked), CSVField.bool(log.powerSteeringChecked),
+				CSVField.bool(log.brakeFluidChecked), CSVField.bool(log.transmissionFluidChecked), CSVField.bool(log.rearAxleChecked), CSVField.bool(log.frontAxleChecked),
+				CSVField.bool(log.fuelWaterSeparatorChecked), CSVField.bool(log.airSystemWaterBleedChecked),
+				CSVField.float(log.fuelLevelStart1), CSVField.float(log.fuelLevelEnd1), log.fuelLevelStartFraction, log.fuelLevelEndFraction,
+				CSVField.float(log.fuelPrice), CSVField.float(log.fuelCost), log.fuelType,
+				log.image1Description, log.image2Description, log.image3Description
+			]
+		}
+		return CSVBuilder.build(headers: headers, rows: rows)
 	}
 
 	// MARK: - Generation
@@ -162,7 +207,7 @@ struct pdfReportFuel: View {
 		let units = prefsFunctions.loadSettingsArray(context: modelContext, userName: "primary1") ?? Array(repeating: "", count: 13)
 
 		let columns: [PDFTableColumn] = [
-			PDFTableColumn("VEHICLE &\nLOCATION", weight: 0.28),
+			PDFTableColumn("\(Vertical.current.assetSingular.uppercased()) &\nLOCATION", weight: 0.28),
 			PDFTableColumn("FUELING &\nDEF", weight: 0.42),
 			PDFTableColumn("CHECKS &\nNOTES", weight: 0.30)
 		]
@@ -175,11 +220,46 @@ struct pdfReportFuel: View {
 			]
 		}
 
-		let scopeTitle = (scope == "All Vehicles" || scope.isEmpty) ? "All Vehicles" : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
+		let scopeTitle = FleetScope.isAll(scope) ? FleetScope.allDisplayLabel : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
 		let logWord = logs.count == 1 ? "entry" : "entries"
 		let subtitle = "\(scopeTitle) • \(functions.formatDate_DDMMMyy(date: Date())) • \(logs.count) \(logWord)"
 
-		return PDFReportRenderer.render(title: "Fuel Log Report", subtitle: subtitle, columns: columns, rows: rows, style: .standard)
+		let summary = fuelSummary(logs, units: units)
+		return PDFReportRenderer.render(title: "Fuel Log Report", subtitle: subtitle, columns: columns, rows: rows, summary: summary, style: .standard)
+	}
+
+	/// Total/average fuel and DEF added and cost — per vehicle, plus an "ALL VEHICLES" total, when
+	/// scope is "All Vehicles".
+	private func fuelSummary(_ logs: [FuelLog1], units: [String]) -> PDFReportSummary {
+		let fuelUnit = units[safe: UnitIndex.fuel] ?? ""
+		let defUnit = units[safe: UnitIndex.def] ?? ""
+
+		let groups = pdfVehicleScopedSummaryGroups(scope: scope, records: logs, vehicleId: \.vehicleId, context: modelContext) { subset in
+			let totalFuelAdded = subset.reduce(Float(0)) { $0 + $1.fuelAdded }
+			let totalFuelCost = subset.reduce(Float(0)) { $0 + $1.fuelCost }
+			let fuelCostEntries = subset.filter { $0.fuelCost != 0 }
+			let averageFuelCost = fuelCostEntries.isEmpty ? 0 : totalFuelCost / Float(fuelCostEntries.count)
+
+			// DEF only applies to diesel engines — non-diesel entries are excluded entirely
+			// rather than relying on their DEF values already being zero.
+			let dieselEntries = subset.filter { $0.fuelType.caseInsensitiveCompare("Diesel") == .orderedSame }
+			let totalDefAdded = dieselEntries.reduce(Float(0)) { $0 + $1.defAdded }
+			let totalDefCost = dieselEntries.reduce(Float(0)) { $0 + $1.defAdded * $1.defPrice }
+			let defEntries = dieselEntries.filter { $0.defAdded != 0 }
+			let averageDefCost = defEntries.isEmpty ? 0 : totalDefCost / Float(defEntries.count)
+
+			return [
+				("Total Fuel Added", totalFuelAdded != 0 ? "\(String(format: "%.1f", totalFuelAdded)) \(fuelUnit)" : nil),
+				("Total Fuel Cost", totalFuelCost != 0 ? pdfCurrencyString(totalFuelCost) : nil),
+				("Average Fuel Cost", averageFuelCost != 0 ? pdfCurrencyString(averageFuelCost) : nil),
+				// Non-diesel vehicles never add DEF — omit the whole DEF block for them rather
+				// than showing a row of $0.00s.
+				("Total DEF Added", totalDefAdded != 0 ? "\(String(format: "%.1f", totalDefAdded)) \(defUnit)" : nil),
+				("Total DEF Cost", totalDefCost != 0 ? pdfCurrencyString(totalDefCost) : nil),
+				("Average DEF Cost", averageDefCost != 0 ? pdfCurrencyString(averageDefCost) : nil)
+			]
+		}
+		return PDFReportSummary(title: "FUEL LOG SUMMARY", groups: groups)
 	}
 
 	// MARK: - Field-group builders
@@ -215,12 +295,12 @@ struct pdfReportFuel: View {
 
 		var groups: [PDFFieldGroup] = []
 		if let identity = fieldGroup(nil, [
-			("Vehicle", vehicleName),
+			(Vertical.current.assetSingular, vehicleName),
 			("Log Name", text(log.logName)),
 			("Date/Time", functions.formatDate_DDMMMyy_HHmm(date: log.fuelDateTime)),
 			("Exit Time", exitTime),
 			("Location", text(log.location)),
-			("Odometer", log.odometer != 0 ? "\(NumberFormatter.localizedString(from: NSNumber(value: log.odometer), number: .decimal)) \(distanceUnit)" : nil),
+			(Vertical.current.primaryMeterLabel, log.odometer != 0 ? "\(NumberFormatter.localizedString(from: NSNumber(value: log.odometer), number: .decimal)) \(distanceUnit)" : nil),
 			("Engine Hours", log.engHours != 0 ? String(format: "%.1f hrs", log.engHours) : nil)
 		]) {
 			groups.append(identity)
@@ -248,7 +328,10 @@ struct pdfReportFuel: View {
 			groups.append(fueling)
 		}
 
-		if let def = fieldGroup("DEF", [
+		// DEF only applies to diesel engines — non-diesel entries never show the DEF group,
+		// regardless of whether any DEF values happen to be present.
+		if log.fuelType.caseInsensitiveCompare("Diesel") == .orderedSame,
+		   let def = fieldGroup("DEF", [
 			("Added", log.defAdded != 0 ? "\(String(format: "%.1f", log.defAdded)) \(defUnit)" : nil),
 			("Price", log.defPrice != 0 ? functions.formatCurrency(dollars: log.defPrice) : nil),
 			("Cost", (log.defAdded != 0 && log.defPrice != 0) ? functions.formatCurrency(dollars: log.defAdded * log.defPrice) : nil),
@@ -309,7 +392,7 @@ private struct FuelReportPreviewHost: View {
 		context.insert(vehicle)
 
 		let samples: [FuelLog1] = [
-			FuelLog1(vehicleId: "Vehicle A", logName: "Morning fill-up", fuelNotes: "Topped off before the trip.", fuelDateTime: Date(), odometer: 42150, location: "Pilot Travel Center", engHours: 812.3, fuelAdded: 62.4, defAdded: 3.0, defPrice: 3.29, fuelLevelStart1: 0.25, fuelLevelEnd1: 1.0, fuelPrice: 3.79, fuelCost: 236.5, fuelType: "Diesel", oilChecked: true, brakeFluidChecked: true),
+			FuelLog1(vehicleId: "Vehicle A", logName: "Morning fill-up", fuelNotes: "Topped off before the trip.", fuelDateTime: Date(), odometer: 42150, location: "Pilot Travel Center", engHours: 812.3, fuelAdded: 62.4, defAdded: 3.0, defPrice: 3.29, oilChecked: true, brakeFluidChecked: true, fuelLevelStart1: 0.25, fuelLevelEnd1: 1.0, fuelPrice: 3.79, fuelCost: 236.5, fuelType: "Diesel"),
 			FuelLog1(vehicleId: "Vehicle A", logName: "", fuelNotes: "", fuelDateTime: Date().addingTimeInterval(-86400), odometer: 41820, location: "", fuelType: "Diesel")
 		]
 		samples.forEach { context.insert($0) }

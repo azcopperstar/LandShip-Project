@@ -23,10 +23,10 @@ struct PaywallView: View {
 				VStack(alignment: .leading, spacing: 16) {
 					headlineCard
 					includedCard
+					purchaseSection
 					if !entitlements.usage.isEmpty {
 						usageCard
 					}
-					purchaseSection
 				}
 				.padding()
 			}
@@ -45,7 +45,16 @@ struct PaywallView: View {
 			} message: {
 				Text(restoreAlertMessage)
 			}
+			.alert("Purchase Failed", isPresented: purchaseErrorBinding) {
+				Button("OK") { entitlements.clearLastError() }
+			} message: {
+				Text(entitlements.lastError?.localizedDescription ?? "")
+			}
 		}
+	}
+
+	private var purchaseErrorBinding: Binding<Bool> {
+		Binding(get: { entitlements.lastError != nil }, set: { if !$0 { entitlements.clearLastError() } })
 	}
 
 	private var headlineCard: some View {
@@ -74,7 +83,7 @@ struct PaywallView: View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Your Free Trial Usage")
 				.font(.headline)
-			ForEach(TrialCaps.allCapped, id: \.trialUsageKey) { type in
+			ForEach(Array(TrialCaps.allCapped.enumerated()), id: \.offset) { _, type in
 				if let used = entitlements.usage[type.trialUsageKey], used > 0 {
 					HStack {
 						Text(type.trialDisplayName)
@@ -114,7 +123,7 @@ struct PaywallView: View {
 						.foregroundStyle(.secondary)
 						.multilineTextAlignment(.center)
 					Button(PaywallCopy.retryButtonLabel) {
-						Task { await entitlements.start() }
+						Task { await entitlements.retryLoadingProduct() }
 					}
 					.buttonStyle(.bordered)
 				}
@@ -164,5 +173,5 @@ struct PaywallView: View {
 }
 
 #Preview {
-	PaywallView(context: .capReached(feature: "Parts", used: 30, limit: 30, requested: 1))
+	PaywallView(context: .capReached(feature: "Parts", used: 10, limit: 10, requested: 1))
 }

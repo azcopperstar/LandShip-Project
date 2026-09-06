@@ -39,6 +39,7 @@ struct DisplayItems: View {
 	// MARK: - Data sources & environment
 	@Query var vehicles: [Vehicle8]
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 	
 	// MARK: - Selection & preferences
 	@State private var selectedRecord: MxItems3?
@@ -69,7 +70,11 @@ struct DisplayItems: View {
 		case nameDesc = "Items Z–A"
 		case updatedDesc = "Recently Updated"
 		var id: String { rawValue }
-		
+
+		/// Vertical-aware display text — the persisted rawValue stays "Vehicle ..." so
+		/// existing AppStorage selections keep decoding correctly.
+		var displayName: String { rawValue.replacingOccurrences(of: "Vehicle", with: Vertical.current.assetSingular) }
+
 		var descriptors: [SortDescriptor<MxItems3>] {
 			switch self {
 				case .dateDesc:
@@ -99,6 +104,17 @@ struct DisplayItems: View {
 	// MARK: - Active sort selection
 	@AppStorage("sort_items") private var selectedSort: PartsSort = .dateDesc
 
+	// When true, items flagged `isSubItem` are grouped after all standalone items. `Bool`
+	// isn't `Comparable`, so this can't be a `SortDescriptor` key — instead it's applied as a
+	// stable partition on the already-sorted fetch results, which preserves the chosen sort's
+	// order within each group.
+	@AppStorage("listSubItemsLast") private var listSubItemsLast: Bool = false
+
+	private func orderedRecords(_ records: [MxItems3]) -> [MxItems3] {
+		guard listSubItemsLast else { return records }
+		return records.filter { !$0.isSubItem } + records.filter { $0.isSubItem }
+	}
+
 	var body: some View {
 
 		// Vehicle scope picker. Selecting a vehicle scopes the items list; "All Vehicles" shows all.
@@ -106,7 +122,7 @@ struct DisplayItems: View {
             selection: $selectedVehicle,
             title: "",
             includeEmptyChoice: true,
-            emptyChoiceLabel: "All Vehicles",
+            emptyChoiceLabel: FleetScope.allDisplayLabel,
             autoSelectFirst: false,
             sort: [SortDescriptor(\.displayName, order: .forward)],
             labelProvider: { v in "\(v.year) \(v.displayName)"},
@@ -136,9 +152,12 @@ struct DisplayItems: View {
 					PageTitle_Col2_NoPhoto(label: "ITEMS")
 				}
 
+		Toggle("List Sub-Items Last", isOn: $listSubItemsLast)
+			.padding(.horizontal)
 
 		// Main list of items, driven by QueryView with the selected sort order.
-		QueryView(for: MxItems3.self, sort: selectedSort.descriptors) { records in
+		QueryView(for: MxItems3.self, sort: selectedSort.descriptors) { fetchedRecords in
+			let records = orderedRecords(fetchedRecords)
 			if records.isEmpty {
 				// Empty state encouraging the user to create their first service item.
 				List {
@@ -163,8 +182,19 @@ struct DisplayItems: View {
 //									let vehicleForImage = vehicles.first { $0.name == record.vehicleId }
 //									Image_View_Thumbnail(imageData: vehicleForImage?.image1 ?? record.image1)
 									VStack(alignment: .leading, spacing: 1) {
-										Text("\(record.mxName)")
-											.font(.headline)
+										HStack(spacing: 6) {
+											Text("\(record.mxName)")
+												.font(.headline)
+											if record.isSubItem {
+												Text("SUB-ITEM")
+													.font(.caption2)
+													.bold()
+													.foregroundStyle(.white)
+													.padding(.horizontal, 6)
+													.padding(.vertical, 2)
+													.background(.orange, in: Capsule())
+											}
+										}
 										if !record.mxDescription.isEmpty {
 											Text("\(record.mxDescription)")
 												.font(.subheadline)
@@ -180,13 +210,40 @@ struct DisplayItems: View {
 												.font(.subheadline)
 												.foregroundStyle(.secondary)
 										}
+										ForEach(Array(partLines(for: record).enumerated()), id: \.offset) { _, line in
+											HStack(spacing: 4) {
+												Text("• \(line.name): \(line.qty.formatted(.number.precision(.fractionLength(0...2)))) \(line.unit)")
+													.font(.caption)
+													.foregroundStyle(.secondary)
+												if let p = fetchPart(named: line.name), p.inventoryTracked {
+													let isLowStock = p.inventoryQuantityOnHand <= p.inventoryReorderPoint
+													Text("· In Stock: \(p.inventoryQuantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")
+														.font(.caption)
+														.foregroundStyle(isLowStock ? .red : .secondary)
+												}
+											}
+										}
+										if !subItemLines(for: record).isEmpty {
+											Text("Sub-Items:")
+												.font(.caption)
+												.foregroundStyle(.secondary)
+											ForEach(Array(subItemLines(for: record).enumerated()), id: \.offset) { _, line in
+												Text("• \(line)")
+													.font(.caption)
+													.foregroundStyle(.secondary)
+											}
+										}
 										if trackVehicleSelected == "All Vehicles" {
 											Text("\(Functions().getVehicleDisplayName(vehicleId: record.vehicleId, context: modelContext))")
 												.font(.subheadline)
 												.foregroundStyle(.secondary)
+										} else if record.vehicleId == "All Vehicles" {
+											Text(FleetScope.allDisplayLabel)
+												.font(.subheadline)
+												.foregroundStyle(.secondary)
 										}
 									}
-									.cardStyle(backgroundColor: .blue.opacity(0.6))
+									.cardStyle(backgroundColor: record.isSubItem ? .orange.opacity(0.5) : .blue.opacity(0.6))
 								}
 							}
 						}
@@ -198,7 +255,7 @@ struct DisplayItems: View {
 							Menu {
 								Picker("Sort by", selection: $selectedSort) {
 									ForEach(PartsSort.allCases) { sortCase in
-										Text(sortCase.rawValue).tag(sortCase)
+										Text(sortCase.displayName).tag(sortCase)
 									}
 								}
 							} label: {
@@ -240,7 +297,7 @@ struct DisplayItems: View {
 				header: {
 					HStack(spacing: 6) {
 						Image(systemName: "arrow.up.arrow.down")
-						Text("Sort: \(selectedSort.rawValue)")
+						Text("Sort: \(selectedSort.displayName)")
 					}
 					.font(.caption)
 					.foregroundStyle(.secondary)
@@ -248,9 +305,11 @@ struct DisplayItems: View {
 				}
 			}
 		} filter: {
-			// Filter by vehicle (or all) and optionally include inactive items based on settings.
+			// Filter by vehicle (or all), always including generic "All Vehicles" items
+			// alongside a specific vehicle's own items, and optionally include inactive
+			// items based on settings.
 			#Predicate { item in
-				((trackVehicleSelected == "All Vehicles") || (item.vehicleId == trackVehicleSelected)) && (showInactiveVehicles || (item.inactive == false))
+				((trackVehicleSelected == "All Vehicles") || (item.vehicleId == trackVehicleSelected) || (item.vehicleId == "All Vehicles")) && (showInactiveVehicles || (item.inactive == false))
 			}
 		}
 		// Navigate to the newly-created item in edit mode as soon as it is saved.
@@ -258,6 +317,42 @@ struct DisplayItems: View {
 			EditItems(mxItems: record, startEditing: true)
 				.id(record.id)
 		}
+	}
+
+	/// Returns the non-empty part lines (name, quantity, unit) used by this service item template.
+	private func partLines(for record: MxItems3) -> [(name: String, qty: Float, unit: String)] {
+		let raw: [(String, Float, String)] = [
+			(record.part1, record.part1Qty, record.part1Unit),
+			(record.part2, record.part2Qty, record.part2Unit),
+			(record.part3, record.part3Qty, record.part3Unit),
+			(record.part4, record.part4Qty, record.part4Unit),
+			(record.part5, record.part5Qty, record.part5Unit),
+		]
+		return raw.filter { !$0.0.isEmpty }.map { (name: $0.0, qty: $0.1, unit: $0.2) }
+	}
+
+	/// Returns a display line per non-empty bundled sub-item this template covers, so a
+	/// master item's row shows what it includes at a glance.
+	private func subItemLines(for record: MxItems3) -> [String] {
+		let raw: [(String, Float)] = [
+			(record.subItem1, record.subItem1LaborCost),
+			(record.subItem2, record.subItem2LaborCost),
+			(record.subItem3, record.subItem3LaborCost),
+			(record.subItem4, record.subItem4LaborCost),
+			(record.subItem5, record.subItem5LaborCost),
+		]
+		return raw.filter { !$0.0.isEmpty }.map { name, laborCost in
+			laborCost != 0 ? "\(name) — \(functions.formatCurrency(dollars: laborCost))" : name
+		}
+	}
+
+	/// Fetches the `MxParts1` record matching `name`, if any — used to surface live on-hand
+	/// inventory next to a part line without duplicating that data on the item template.
+	private func fetchPart(named name: String) -> MxParts1? {
+		guard !name.isEmpty else { return nil }
+		var fd = FetchDescriptor<MxParts1>(predicate: #Predicate<MxParts1> { $0.partName == name })
+		fd.fetchLimit = 1
+		return try? modelContext.fetch(fd).first
 	}
 
 	/// Builds a compact "6 mo / 5,000 mi / 200 hrs" style summary of the item's service interval,
@@ -273,14 +368,13 @@ struct DisplayItems: View {
 	/// Creates a new `MxItems3` for the currently selected vehicle and saves it.
 	/// On success, selects it in the list and navigates to `EditItems` in edit mode.
 	private func addNewRecord() {
-		// Only allow when a specific vehicle is selected
-		guard !trackVehicleSelected.isEmpty, trackVehicleSelected != "All Vehicles" else { return }
-		
+		guard entitlements.requestCreate(MxItems3.self, in: modelContext) else { return }
+
 		let newRecord = MxItems3(
 			inactive: false,
 			createdAt: Date(),
 			updatedAt: Date(),
-			vehicleId: trackVehicleSelected,
+			vehicleId: trackVehicleSelected.isEmpty ? "All Vehicles" : trackVehicleSelected,
 			vehicleSystem: "",
 			mxName: "(New service item)",
 			mxDescription: "",

@@ -14,6 +14,8 @@ enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
 	case parts
 	case fuelLog
 	case tripLog
+	case pilotLogbook
+	case seaService
 	case records
 	case items
 	case systems
@@ -63,8 +65,8 @@ enum LinkableVehicleField: String, CaseIterable, Identifiable, Hashable {
 		switch self {
 			case .odometer: return "Mirrors odometer and virtual odometer readings."
 			case .engineHours: return "Mirrors current engine hours."
-			case .location: return "Mirrors the vehicle's location."
-			case .owner: return "Mirrors the vehicle's owner."
+			case .location: return "Mirrors the \(Vertical.current.assetSingular.lowercased())'s location."
+			case .owner: return "Mirrors the \(Vertical.current.assetSingular.lowercased())'s owner."
 			case .insurance: return "Mirrors insurance provider, policy #, holder, and expiration."
 			case .vin: return "Mirrors the VIN."
 			case .licensePlate: return "Mirrors the license plate number."
@@ -89,15 +91,22 @@ enum DashboardCard: String, CaseIterable, Identifiable, Hashable {
 	case systemHotlist
 	case costSnapshot
 	case additionsCost
+	case inventoryStatus
 
 	var id: String { rawValue }
 
+	/// "Fleet" reads naturally for land vehicles even with one owner; other verticals
+	/// read better with their own asset word ("Aircraft Snapshot", not "Fleet Snapshot").
+	private static var fleetWord: String {
+		Vertical.current.id == .land ? "Fleet" : Vertical.current.assetPlural
+	}
+
 	var displayName: String {
 		switch self {
-			case .maintenanceStatus: return "Fleet Maintenance Status"
+			case .maintenanceStatus: return "\(Self.fleetWord) Maintenance Status"
 			case .nextServiceDue: return "Next Service Due"
 			case .tripGroups: return "Trip Groups"
-			case .fleetSnapshot: return "Fleet Snapshot"
+			case .fleetSnapshot: return "\(Self.fleetWord) Snapshot"
 			case .insurance: return "Insurance & Recurring Costs"
 			case .warranty: return "Warranties"
 			case .quickActions: return "Quick Actions"
@@ -106,23 +115,29 @@ enum DashboardCard: String, CaseIterable, Identifiable, Hashable {
 			case .systemHotlist: return "System Hotlist"
 			case .costSnapshot: return "Maintenance Cost Snapshot"
 			case .additionsCost: return "Additions Cost by Category"
+			case .inventoryStatus: return "Inventory Status"
 		}
 	}
 
 	var summary: String {
 		switch self {
-			case .maintenanceStatus: return "Overdue/due-soon status per vehicle."
+			case .maintenanceStatus: return "Overdue/due-soon status per \(Vertical.current.assetSingular.lowercased())."
 			case .nextServiceDue: return "Most urgent upcoming service items."
 			case .tripGroups: return "Trips grouped by trip name/tag."
-			case .fleetSnapshot: return "Fleet counts, mileage, and maintenance cost totals."
+			case .fleetSnapshot: return Vertical.current.id == .land
+				? "Fleet counts, mileage, and maintenance cost totals."
+				: "\(Self.fleetWord) counts, \(Vertical.current.primaryMeterLabel.lowercased()), and maintenance cost totals."
 			case .insurance: return "Recurring subscription costs and insurance expirations."
-			case .warranty: return "Warranty expiration and mileage-limit status."
+			case .warranty: return Vertical.current.id == .land
+				? "Warranty expiration and mileage-limit status."
+				: "Warranty expiration and usage-limit status."
 			case .quickActions: return "Shortcuts to add records."
 			case .recentService: return "Most recently completed service records."
-			case .usageSinceLast: return "Miles/hours accumulated since each vehicle's last service."
-			case .systemHotlist: return "Vehicle systems with the most overdue/due-soon items."
+			case .usageSinceLast: return "Miles/hours accumulated since each \(Vertical.current.assetSingular.lowercased())'s last service."
+			case .systemHotlist: return "\(Vertical.current.assetSingular) systems with the most overdue/due-soon items."
 			case .costSnapshot: return "Month-to-date, 90-day, and year-to-date maintenance costs."
 			case .additionsCost: return "Improvement/addition spending by category."
+			case .inventoryStatus: return "Inventory-tracked parts that are low or out of stock."
 		}
 	}
 
@@ -131,7 +146,7 @@ enum DashboardCard: String, CaseIterable, Identifiable, Hashable {
 			case .maintenanceStatus: return "wrench.and.screwdriver.fill"
 			case .nextServiceDue: return "wrench.and.screwdriver.fill"
 			case .tripGroups: return "map.fill"
-			case .fleetSnapshot: return "car.2.fill"
+			case .fleetSnapshot: return Vertical.current.assetGroupIcon
 			case .insurance: return "shield.lefthalf.filled"
 			case .warranty: return "checkmark.seal.fill"
 			case .quickActions: return "plus.circle.fill"
@@ -140,6 +155,7 @@ enum DashboardCard: String, CaseIterable, Identifiable, Hashable {
 			case .systemHotlist: return "flame.fill"
 			case .costSnapshot: return "dollarsign.circle.fill"
 			case .additionsCost: return "plus.square.on.square"
+			case .inventoryStatus: return "shippingbox.fill"
 		}
 	}
 
@@ -165,6 +181,21 @@ enum StorageKey {
 	static let lastAutoBackupDate = "lastAutoBackupDate"
 	static let autoBackupInterval = "autoBackupInterval"
 	static let autoBackupRetentionCount = "autoBackupRetentionCount"
+
+	// Trial / full-version entitlement. Persisted so a cold launch while offline
+	// keeps the user unlocked (fail open) — see EntitlementStore. Exactly one
+	// code path may ever write fullVersionUnlocked = false: a successful,
+	// verified currentEntitlements read that also fails the grandfathering checks.
+	static let fullVersionUnlocked = "fullVersionUnlocked"
+	static let fullVersionSource = "fullVersionSource"
+	static let entitlementCheckedAt = "entitlementCheckedAt"
+	static let originalAppVersionCached = "originalAppVersionCached"
+	static let appStoreEnvironment = "appStoreEnvironment"
+	static let firstFreeLaunchDate = "firstFreeLaunchDate"
+	static let priorInstallDetected = "priorInstallDetected"
+#if DEBUG
+	static let debugForcedEntitlement = "debugForcedEntitlement"
+#endif
 }
 
 // How often automatic backups should be created. rawValue is persisted via

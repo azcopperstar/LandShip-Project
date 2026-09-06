@@ -64,7 +64,7 @@ struct UsageSinceLastCard: View {
 					Chart(rows.prefix(5)) { row in
 						BarMark(
 							x: .value("Miles", row.milesSince),
-							y: .value("Vehicle", row.vehicleName)
+							y: .value(Vertical.current.assetSingular, row.vehicleName)
 						)
 						.foregroundStyle(.mint.gradient)
 						.annotation(position: .overlay, alignment: .trailing) {

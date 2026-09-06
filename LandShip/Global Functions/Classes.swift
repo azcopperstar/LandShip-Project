@@ -20,6 +20,7 @@ import PDFKit
 final class PrintablePDFView: PDFView {
 	override func printView(_ sender: Any?) {
 		guard let doc = self.document else { return }
+		guard EntitlementStore.shared.requestExport(.pdfPrint) else { return }
 		let printInfo = NSPrintInfo.shared
 		if let op = doc.printOperation(for: printInfo, scalingMode: .pageScaleDownToFit, autoRotate: true) {
 			op.showsPrintPanel = true

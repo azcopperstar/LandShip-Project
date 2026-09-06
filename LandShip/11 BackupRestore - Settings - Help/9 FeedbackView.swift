@@ -177,7 +177,7 @@ struct FeedbackView: View {
 				Text("Include app & device details")
 					.font(.system(size: 15, weight: .semibold))
 			}
-			Text("Attaches the version, platform and model below. These make a problem far easier to reproduce, and no personal data or vehicle records are included.")
+			Text("Attaches the version, platform and model below. These make a problem far easier to reproduce, and no personal data or \(Vertical.current.assetSingular.lowercased()) records are included.")
 				.font(.caption2)
 				.foregroundStyle(.secondary)
 			if includeAppDetails {

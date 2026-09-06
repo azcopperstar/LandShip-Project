@@ -18,6 +18,9 @@ struct SettingsEditorView: View {
 
 	@Environment(\.modelContext) private var modelContext
 	@Environment(\.dismiss) private var dismiss
+	@Environment(\.entitlements) private var entitlements
+	@State private var restoreOutcome: RestoreOutcome?
+	@State private var restoreInFlight = false
 
 	// Fetch the primary settings if it exists
 	@Query(filter: #Predicate<Settings1> { $0.userName == "primary1" })
@@ -101,12 +104,12 @@ struct SettingsEditorView: View {
 	// Reusable content so we can present it in Form (iOS) or ScrollView/VStack (macOS)
 	@ViewBuilder
 	private var formContent: some View {
-		Section("Vehicles") {
+		Section(Vertical.current.assetPlural) {
 			Toggle(isOn: $showInactiveVehicles) {
 				Label("Show Inactive in Lists", systemImage: showInactiveVehicles ? "eye" : "eye.slash")
 			}
 			.toggleStyle(.switch)
-			.accessibilityLabel("Show inactive vehicles in lists")
+			.accessibilityLabel("Show inactive \(Vertical.current.assetPlural.lowercased()) in lists")
 		}
 
 		Section("Units of Measure") {
@@ -128,7 +131,7 @@ struct SettingsEditorView: View {
 		Section("App Behaviour") {
 			Picker("Launch Screen", selection: $launchScreen) {
 				Text("Dashboard").tag("dashboard")
-				Text("Vehicles").tag("vehicles")
+				Text(Vertical.current.assetPlural).tag("vehicles")
 				Text("Fuel Log").tag("fuelLog")
 				Text("Travel Log").tag("tripLog")
 				Text("Service Records").tag("records")
@@ -141,6 +144,41 @@ struct SettingsEditorView: View {
 		}
 
 		Section {
+			LabeledContent("Status", value: entitlements.isFullVersion ? PaywallCopy.Settings.unlockedCaption : PaywallCopy.Settings.trialCaption)
+			if !entitlements.isFullVersion {
+				Button(PaywallCopy.Settings.unlockButtonLabel) {
+					entitlements.paywallContext = .sidebar
+				}
+			}
+			Button {
+				restoreInFlight = true
+				Task {
+					restoreOutcome = await entitlements.restorePurchases()
+					restoreInFlight = false
+				}
+			} label: {
+				if restoreInFlight {
+					ProgressView()
+				} else {
+					Text(PaywallCopy.Settings.restoreButtonLabel)
+				}
+			}
+			.disabled(restoreInFlight)
+		} header: {
+			Text(PaywallCopy.Settings.sectionTitle)
+		}
+
+		Section {
+			if !entitlements.isFullVersion {
+				Button {
+					entitlements.paywallContext = .autoBackup
+				} label: {
+					Label("Full version required for automatic backups", systemImage: "lock.fill")
+						.font(.caption)
+						.foregroundStyle(.orange)
+				}
+				.buttonStyle(.plain)
+			}
 			Picker("Frequency", selection: $autoBackupIntervalRaw) {
 				ForEach(AutoBackupInterval.allCases) { interval in
 					Text(interval.label).tag(interval.rawValue)
@@ -233,6 +271,32 @@ struct SettingsEditorView: View {
 			Text("This will mark onboarding as incomplete so it shows again on next launch.")
 		}
 		.onAppear { ensureSettings() }
+		.alert(restoreAlertTitle, isPresented: Binding(
+			get: { restoreOutcome != nil },
+			set: { if !$0 { restoreOutcome = nil } }
+		)) {
+			Button("OK") { restoreOutcome = nil }
+		} message: {
+			Text(restoreAlertMessage)
+		}
+	}
+
+	private var restoreAlertTitle: String {
+		switch restoreOutcome {
+			case .restored: return PaywallCopy.Restore.restoredTitle
+			case .nothingToRestore: return PaywallCopy.Restore.nothingTitle
+			case .failed: return PaywallCopy.Restore.failedTitle
+			case nil: return ""
+		}
+	}
+
+	private var restoreAlertMessage: String {
+		switch restoreOutcome {
+			case .restored: return PaywallCopy.Restore.restoredMessage
+			case .nothingToRestore: return PaywallCopy.Restore.nothingMessage
+			case .failed(let message): return message
+			case nil: return ""
+		}
 	}
 }
 

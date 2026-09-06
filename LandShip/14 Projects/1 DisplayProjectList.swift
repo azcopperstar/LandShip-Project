@@ -13,6 +13,7 @@ struct DisplayProjectList: View {
 	
 	@Query var vehicles: [Vehicle8]
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 	
 	@State private var selectedRecord: ProjectList?
 	@AppStorage("showInactiveVehicles") private var showInactiveVehicles: Bool = false
@@ -66,12 +67,15 @@ struct DisplayProjectList: View {
 	// MARK: - Body
 	
 	var body: some View {
-		Group {
+		// A `Group` here is "transparent" for preference-based modifiers like `.toolbar` — with
+		// two children, SwiftUI applies the toolbar content once per child, duplicating every
+		// item. `VStack` produces the same vertical layout without that duplication.
+		VStack(spacing: 0) {
 			ModelPicker(
 				selection: $selectedVehicle,
 				title: "",
 				includeEmptyChoice: true,
-				emptyChoiceLabel: "All Vehicles",
+				emptyChoiceLabel: FleetScope.allDisplayLabel,
 				autoSelectFirst: false,
 				filter: showInactiveVehicles ? nil : #Predicate<Vehicle8> { $0.inactive == false },
 				sort: [SortDescriptor(\.displayName, order: .forward)],
@@ -151,10 +155,10 @@ struct DisplayProjectList: View {
 			pdfReportProjectList(trackVehicleSelected: dest.scope)
 				.ignoresSafeArea()
 		}
-		.alert("Select a Specific Vehicle", isPresented: $showVehicleSelectionAlert) {
+		.alert("Select a Specific \(Vertical.current.assetSingular)", isPresented: $showVehicleSelectionAlert) {
 			Button("OK", role: .cancel) {}
 		} message: {
-			Text("A project can only be created when a specific vehicle is selected. Please choose a vehicle — 'All Vehicles' is not allowed.")
+			Text("A project can only be created when a specific \(Vertical.current.assetSingular.lowercased()) is selected. Please choose a \(Vertical.current.assetSingular.lowercased()) — '\(FleetScope.allDisplayLabel)' is not allowed.")
 		}
 		.alert("Delete Project", isPresented: $showDeleteConfirmation) {
 			Button("Cancel", role: .cancel) {
@@ -344,7 +348,7 @@ struct DisplayProjectList: View {
 				}
 				
 				HStack(spacing: 12) {
-					Label(record.vehicleId.isEmpty ? "—" : record.vehicleId, systemImage: "car")
+					Label(record.vehicleId.isEmpty ? "—" : record.vehicleId, systemImage: Vertical.current.assetIcon)
 						.font(.caption2)
 						.foregroundStyle(.tertiary)
 					
@@ -599,7 +603,7 @@ struct DisplayProjectList: View {
 		VStack(alignment: .leading, spacing: 1) {
 			tipRow(icon: "hand.tap", text: "Long-press either category or checklist for edit options")
 			tipRow(icon: "pencil", text: "Edit Mode: reorder categories and checklists by dragging/dropping handles")
-			tipRowVehicle(icon: "car", text: "\(trackVehicleSelected)")
+			tipRowVehicle(icon: Vertical.current.assetIcon, text: "\(trackVehicleSelected)")
 		}
 
 //		VStack(alignment: .leading, spacing: 1) {
@@ -866,7 +870,8 @@ struct DisplayProjectList: View {
 			showVehicleSelectionAlert = true
 			return
 		}
-		
+		guard entitlements.requestCreate(ProjectList.self, in: modelContext) else { return }
+
 		editingProject = nil
 		projectCategory = ""
 		projectSubcategory = ""
@@ -1110,7 +1115,7 @@ struct DisplayProjectList: View {
 						HStack {
 							Image(systemName: "car")
 								.foregroundStyle(.secondary)
-							Text("Vehicle: \(trackVehicleSelected)")
+							Text("\(Vertical.current.assetSingular): \(trackVehicleSelected)")
 								.foregroundStyle(.secondary)
 						}
 						.font(.caption)

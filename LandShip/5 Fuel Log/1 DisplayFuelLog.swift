@@ -45,6 +45,7 @@ struct DisplayFuelLog: View {
 	@Query var vehicles: [Vehicle8]
 	/// SwiftData context used for fetching, inserting, and saving records.
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 	/// Tracks the selection in the list for highlighting and navigation purposes.
 	@State private var selectedRecord: FuelLog1?
 	/// User preference persisted in App Storage to include or exclude inactive vehicles from pickers and lists.
@@ -100,7 +101,11 @@ struct DisplayFuelLog: View {
 		case nameDesc = "Fuel Log Z–A"
 		case updatedDesc = "Recently Updated"
 		var id: String { rawValue }
-		
+
+		/// Vertical-aware display text — the persisted rawValue stays "Vehicle ..." so
+		/// existing AppStorage selections keep decoding correctly.
+		var displayName: String { rawValue.replacingOccurrences(of: "Vehicle", with: Vertical.current.assetSingular) }
+
 		var descriptors: [SortDescriptor<FuelLog1>] {
 			switch self {
 				case .dateDesc:
@@ -135,7 +140,7 @@ struct DisplayFuelLog: View {
 				selection: $selectedVehicle,
 				title: "",
 				includeEmptyChoice: true,
-				emptyChoiceLabel: "All Vehicles",
+				emptyChoiceLabel: FleetScope.allDisplayLabel,
 				autoSelectFirst: false,
 				filter: showInactiveVehicles ? nil : #Predicate { !$0.inactive },
 				sort: [SortDescriptor(\.displayName, order: .forward)],
@@ -300,7 +305,7 @@ struct DisplayFuelLog: View {
 								Menu {
 									Picker("Sort by", selection: $selectedSort) {
 										ForEach(PartsSort.allCases) { sortCase in
-											Text(sortCase.rawValue).tag(sortCase)
+											Text(sortCase.displayName).tag(sortCase)
 										}
 									}
 								} label: {
@@ -354,7 +359,7 @@ struct DisplayFuelLog: View {
 						VStack(alignment: .leading, spacing: 2) {
 							HStack(spacing: 6) {
 								Image(systemName: "arrow.up.arrow.down")
-								Text("Sort: \(selectedSort.rawValue)")
+								Text("Sort: \(selectedSort.displayName)")
 							}
 							if totalFuel > 0 {
 								Text("Total Fuel: \(totalFuel.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.fuel)) · Total Cost: \(totalCost.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD"))) · Avg: \(avgPrice.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")))/\(unit(UnitIndex.fuel))")
@@ -380,9 +385,10 @@ struct DisplayFuelLog: View {
 			}
 		}
 		// Presents the PDF report in the detail column when requested.
+		// The report owns and re-fetches its own scope via an in-report vehicle picker,
+		// so no .id() here — that would reset the user's picker selection on navigation.
 		.navigationDestination(item: $reportDestination) { dest in
-			pdfReportFuel(trackVehicleSelected: .constant(dest.scope))
-				.id("FuelReport-\(dest.scope)") // ensure refresh if vehicle changes
+			pdfReportFuel(trackVehicleSelected: dest.scope)
 				.ignoresSafeArea()
 		}
 		// After creating a new record, navigate directly to its edit screen in editing mode.
@@ -402,6 +408,7 @@ struct DisplayFuelLog: View {
 	private func addNewRecord() {
 		// Ensure a specific vehicle is selected before allowing creation.
 		guard !trackVehicleSelected.isEmpty, !allVehiclesSelected else { return }
+		guard entitlements.requestCreate(FuelLog1.self, in: modelContext) else { return }
 
 		// Fetch the selected vehicle's properties to prefill the new log with sensible defaults.
 		var odometerVehicle: Int = 0

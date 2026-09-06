@@ -81,6 +81,7 @@ struct EditTripLog: View {
 	@State private var dataSet: TripLog2
 	@Environment(\.modelContext) var modelContext
 	@Environment(\.dismiss) private var dismiss
+	@Environment(\.colorScheme) private var colorScheme
     @AppStorage("showInactiveVehicles") private var showInactiveVehicles: Bool = false
 	let functions: Functions = Functions()
 	let prefsFunc: PrefsFunctions = PrefsFunctions()
@@ -577,7 +578,7 @@ struct EditTripLog: View {
 						LabeledContent {
 							ModelPicker(
 								selection: $selectedVehicle,
-								title: "Vehicle",
+								title: Vertical.current.assetSingular,
 								includeEmptyChoice: false,
 								emptyChoiceLabel: "—",
 								filter: showInactiveVehicles ? nil : #Predicate<Vehicle8> { $0.inactive == false },
@@ -600,7 +601,7 @@ struct EditTripLog: View {
 							}
 							.fixedSize(horizontal: true, vertical: true)
 						} label: {
-							Text("Vehicle")
+							Text(Vertical.current.assetSingular)
 								.textLabelModified()
 						}
 
@@ -629,7 +630,7 @@ struct EditTripLog: View {
 						if tripGroupSelection == "__new__" {
 							HStack{LabelDataTextview(label: "Group Name", data: $tripGroup)}
 						}
-						HStack{LabelDataToggle(label: "Towed Vehicle", data: $vehicleTowed)}
+						HStack{LabelDataToggle(label: "Towed \(Vertical.current.assetSingular)", data: $vehicleTowed)}
 
 						if vehicleTowed {
 							// Replaced VehiclePickerTripLog_Towed with ModelPicker<Vehicle8>
@@ -662,7 +663,7 @@ struct EditTripLog: View {
 								}
 								.fixedSize(horizontal: true, vertical: true)
 							} label: {
-								Text("Towed Vehicle")
+								Text("Towed \(Vertical.current.assetSingular)")
 									.textLabelModified()
 							}
 							.frame(maxWidth: .infinity, alignment: .trailing)
@@ -674,7 +675,7 @@ struct EditTripLog: View {
 					VStack {
 						SectionText(label: "TRAVEL START")
 						HStack{LabelDataPicker_DateTime(label: "Date/Time                    ", data: $tripDateTimeStart)}
-						HStack{LabelDataTextview_Numberpad_Int(label: "Odometer", data: $odometerStart)}
+						HStack{LabelDataTextview_Numberpad_Int(label: Vertical.current.primaryMeterLabel, data: $odometerStart)}
 						HStack{LabelDataTextview_Numberpad_Float(label: "Engine Hours:", data: $engHoursStart)}
 						HStack{LabelLocationTextview(label: "Location", data: $locationStart)}
 						HStack{
@@ -1049,7 +1050,7 @@ struct EditTripLog: View {
 					VStack {
 						SectionText(label: "TRAVEL END")
 						HStack{LabelDataPicker_DateTime(label: "Date/Time                    ", data: $tripDateTimeEnd)}
-						HStack{LabelDataTextview_Numberpad_Int(label: "Odometer", data: $odometerEnd)}
+						HStack{LabelDataTextview_Numberpad_Int(label: Vertical.current.primaryMeterLabel, data: $odometerEnd)}
 						HStack{LabelDataTextview_Numberpad_Float(label: "Engine Hours:", data: $engHoursEnd)}
 						HStack{LabelLocationTextview(label: "Location", data: $locationEnd)}
 						HStack{
@@ -1116,7 +1117,7 @@ struct EditTripLog: View {
 				CardView {
 					VStack {
 						SectionText(label: "STATUS")
-						HStack{LabelDataToggle(label: "Deactivate Travel Log Record", data: $inactive)}
+						HStack{LabelDataToggle(label: "Deactivate \(Vertical.current.travelLogLabel) Record", data: $inactive)}
 						Text("When selected, this record is marked as inactive. It will be hidden in lists and pickers, but its data remains available for viewing and editing, and can be un-hidden by selecting 'View Inactive' on the 'Settings' screen.")
 							.font(.caption)
 							.foregroundStyle(.secondary)
@@ -1442,9 +1443,9 @@ struct EditTripLog: View {
 						if !tripGroup.isEmpty {
 							HStack{LabelDataText(label: "Trip Group", data: tripGroup)}
 						}
-						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
+						HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						if dataSet.vehicleTowed {
-							HStack{LabelDataText(label: "Towed Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleIdTowed, context: modelContext))}
+							HStack{LabelDataText(label: "Towed \(Vertical.current.assetSingular)", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleIdTowed, context: modelContext))}
 						}
 							HStack{ LabelDataText(label: "Status", data: dataSet.inactive ? "Inactive" : "Active") }
 					}
@@ -1454,7 +1455,7 @@ struct EditTripLog: View {
 					VStack {
 						SectionText(label: "TRAVEL START")
 						HStack{LabelDataText(label: "Departure", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.tripDateTimeStart))")}
-						HStack{LabelDataText(label: "Odometer", data: "\(dataSet.odometerStart) \(unit(UnitIndex.distance))")}
+						HStack{LabelDataText(label: Vertical.current.primaryMeterLabel, data: "\(dataSet.odometerStart) \(unit(UnitIndex.distance))")}
 						if dataSet.engHoursStart > 0 {
 							HStack{LabelDataNumber(label: "Engine Hours:", data: dataSet.engHoursStart, fractionalLength: 1)}
 						}
@@ -1493,9 +1494,10 @@ struct EditTripLog: View {
 				if hasStopsEnroute {
 					CardView {
 					VStack {
-						SectionText(label: "STOPS ENROUTE")
+						SectionText(label: "ENROUTE STOPS")
 						if dataSet.fuelAdded1 > 0 || !stopReason1.isEmpty {
-							HStack{LabelDataText(label: "(1) \(fuelLocation1)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime1))")}
+						VStack(alignment: .leading, spacing: 4) {
+							HStack{LabelDataText(label: "\(fuelLocation1)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime1))")}
 							if !stopReason1.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason1)} }
 							if !stopComment1.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment1)} }
 							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded1, fractionalLength: 1)}
@@ -1528,9 +1530,19 @@ struct EditTripLog: View {
 								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime1))")}
 							}
 						}
+						.cardStyle(backgroundColor: .blue.opacity(0.5))
+						// .ultraThinMaterial reads as barely-there against a dark background —
+						// add a visible tinted border in dark mode only so the card still reads
+						// as its own surface; light mode already has enough contrast.
+						.overlay(
+							RoundedRectangle(cornerRadius: 14, style: .continuous)
+								.stroke(colorScheme == .dark ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1.5)
+						)
+						.overlay(alignment: .topLeading) { stopNumberBadge(1) }
+						}
 						if dataSet.fuelAdded2 > 0 || !stopReason2.isEmpty {
-							Divider()
-							HStack{LabelDataText(label: "(2) \(fuelLocation2)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime2))")}
+						VStack(alignment: .leading, spacing: 4) {
+							HStack{LabelDataText(label: "\(fuelLocation2)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime2))")}
 							if !stopReason2.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason2)} }
 							if !stopComment2.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment2)} }
 							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded2, fractionalLength: 1)}
@@ -1563,9 +1575,19 @@ struct EditTripLog: View {
 								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime2))")}
 							}
 						}
+						.cardStyle(backgroundColor: .blue.opacity(0.5))
+						// .ultraThinMaterial reads as barely-there against a dark background —
+						// add a visible tinted border in dark mode only so the card still reads
+						// as its own surface; light mode already has enough contrast.
+						.overlay(
+							RoundedRectangle(cornerRadius: 14, style: .continuous)
+								.stroke(colorScheme == .dark ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1.5)
+						)
+						.overlay(alignment: .topLeading) { stopNumberBadge(2) }
+						}
 						if dataSet.fuelAdded3 > 0 || !stopReason3.isEmpty {
-							Divider()
-							HStack{LabelDataText(label: "(3) \(fuelLocation3)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime3))")}
+						VStack(alignment: .leading, spacing: 4) {
+							HStack{LabelDataText(label: "\(fuelLocation3)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime3))")}
 							if !stopReason3.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason3)} }
 							if !stopComment3.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment3)} }
 							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded3, fractionalLength: 1)}
@@ -1598,9 +1620,19 @@ struct EditTripLog: View {
 								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime3))")}
 							}
 						}
+						.cardStyle(backgroundColor: .blue.opacity(0.5))
+						// .ultraThinMaterial reads as barely-there against a dark background —
+						// add a visible tinted border in dark mode only so the card still reads
+						// as its own surface; light mode already has enough contrast.
+						.overlay(
+							RoundedRectangle(cornerRadius: 14, style: .continuous)
+								.stroke(colorScheme == .dark ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1.5)
+						)
+						.overlay(alignment: .topLeading) { stopNumberBadge(3) }
+						}
 						if dataSet.fuelAdded4 > 0 || !stopReason4.isEmpty {
-							Divider()
-							HStack{LabelDataText(label: "(4) \(fuelLocation4)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime4))")}
+						VStack(alignment: .leading, spacing: 4) {
+							HStack{LabelDataText(label: "\(fuelLocation4)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime4))")}
 							if !stopReason4.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason4)} }
 							if !stopComment4.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment4)} }
 							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded4, fractionalLength: 1)}
@@ -1633,9 +1665,19 @@ struct EditTripLog: View {
 								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime4))")}
 							}
 						}
+						.cardStyle(backgroundColor: .blue.opacity(0.5))
+						// .ultraThinMaterial reads as barely-there against a dark background —
+						// add a visible tinted border in dark mode only so the card still reads
+						// as its own surface; light mode already has enough contrast.
+						.overlay(
+							RoundedRectangle(cornerRadius: 14, style: .continuous)
+								.stroke(colorScheme == .dark ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1.5)
+						)
+						.overlay(alignment: .topLeading) { stopNumberBadge(4) }
+						}
 						if dataSet.fuelAdded5 > 0 || !stopReason5.isEmpty {
-							Divider()
-							HStack{LabelDataText(label: "(5) \(fuelLocation5)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime5))")}
+						VStack(alignment: .leading, spacing: 4) {
+							HStack{LabelDataText(label: "\(fuelLocation5)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime5))")}
 							if !stopReason5.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason5)} }
 							if !stopComment5.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment5)} }
 							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded5, fractionalLength: 1)}
@@ -1668,9 +1710,19 @@ struct EditTripLog: View {
 								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime5))")}
 							}
 						}
+						.cardStyle(backgroundColor: .blue.opacity(0.5))
+						// .ultraThinMaterial reads as barely-there against a dark background —
+						// add a visible tinted border in dark mode only so the card still reads
+						// as its own surface; light mode already has enough contrast.
+						.overlay(
+							RoundedRectangle(cornerRadius: 14, style: .continuous)
+								.stroke(colorScheme == .dark ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1.5)
+						)
+						.overlay(alignment: .topLeading) { stopNumberBadge(5) }
+						}
 						if dataSet.fuelAdded6 > 0 || !stopReason6.isEmpty {
-							Divider()
-							HStack{LabelDataText(label: "(6) \(fuelLocation6)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime6))")}
+						VStack(alignment: .leading, spacing: 4) {
+							HStack{LabelDataText(label: "\(fuelLocation6)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime6))")}
 							if !stopReason6.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason6)} }
 							if !stopComment6.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment6)} }
 							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded6, fractionalLength: 1)}
@@ -1703,6 +1755,16 @@ struct EditTripLog: View {
 								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime6))")}
 							}
 						}
+						.cardStyle(backgroundColor: .blue.opacity(0.5))
+						// .ultraThinMaterial reads as barely-there against a dark background —
+						// add a visible tinted border in dark mode only so the card still reads
+						// as its own surface; light mode already has enough contrast.
+						.overlay(
+							RoundedRectangle(cornerRadius: 14, style: .continuous)
+								.stroke(colorScheme == .dark ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1.5)
+						)
+						.overlay(alignment: .topLeading) { stopNumberBadge(6) }
+						}
 						let tripTotalSecs = dataSet.tripDateTimeEnd.timeIntervalSince(dataSet.tripDateTimeStart)
 						let stopTotalSecs: TimeInterval = {
 							var t: TimeInterval = 0
@@ -1730,7 +1792,7 @@ struct EditTripLog: View {
 					VStack {
 						SectionText(label: "TRAVEL END")
 						HStack{LabelDataText(label: "Arrival", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.tripDateTimeEnd))")}
-						HStack{LabelDataText(label: "Odometer", data: "\(dataSet.odometerEnd) \(unit(UnitIndex.distance))")}
+						HStack{LabelDataText(label: Vertical.current.primaryMeterLabel, data: "\(dataSet.odometerEnd) \(unit(UnitIndex.distance))")}
 						if dataSet.engHoursEnd > 0 {
 							HStack{LabelDataNumber(label: "Engine Hours:", data: dataSet.engHoursEnd, fractionalLength: 1)}
 						}
@@ -1825,8 +1887,8 @@ struct EditTripLog: View {
 				
 				CardView {
 					VStack {
-						SectionText(label: "VEHICLE TOTALS")
-						Text("Totals are calculated from all travel logs that have been created for this vehicle up to and including the current travel log.")
+						SectionText(label: "\(Vertical.current.assetSingular.uppercased()) TOTALS")
+						Text("Totals are calculated from all travel logs that have been created for this \(Vertical.current.assetSingular.lowercased()) up to and including the current travel log.")
 							.font(.caption)
 							.foregroundStyle(.secondary)
 							.frame(maxWidth: .infinity, alignment: .center)
@@ -2854,7 +2916,18 @@ struct EditTripLog: View {
 		let amount = quantity.formatted(.number.precision(.fractionLength(1)))
 		return label.isEmpty ? "\(amount)\(unitLabel)" : "\(label) (\(amount)\(unitLabel))"
 	}
-	
+
+	/// Small numbered badge overlaid on a stop card's top-left corner, replacing the
+	/// "(N)" that used to be inline in the stop's title text.
+	private func stopNumberBadge(_ number: Int) -> some View {
+		Text("\(number)")
+			.font(.caption2.bold())
+			.foregroundStyle(.white)
+			.frame(width: 20, height: 20)
+			.background(Circle().fill(Color.blue))
+			.offset(x: -8, y: -8)
+	}
+
 	/// A stop's DEF quantity, derived from its fraction when the linked log predates the
 	/// quantity field, so a stop never opens showing zero next to "1/2 Tank".
 	private func defQuantityOrDerived(_ data: FuelStopData, capacity: Float) -> Float {

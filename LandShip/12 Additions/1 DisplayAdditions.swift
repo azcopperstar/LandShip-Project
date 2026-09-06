@@ -23,6 +23,7 @@ struct DisplayAdditions: View {
 	
 	// SwiftData context used to insert, save, and fetch data
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 	
 	@Query var vehicles: [Vehicle8]
 	
@@ -71,7 +72,11 @@ struct DisplayAdditions: View {
 		case nameDesc = "Additions Z–A"
 		case updatedDesc = "Recently Updated"
 		var id: String { rawValue }
-		
+
+		/// Vertical-aware display text — the persisted rawValue stays "Vehicle ..." so
+		/// existing AppStorage selections keep decoding correctly.
+		var displayName: String { rawValue.replacingOccurrences(of: "Vehicle", with: Vertical.current.assetSingular) }
+
 		// Translate each sort mode into SwiftData SortDescriptors on Additions
 		var descriptors: [SortDescriptor<Additions>] {
 			switch self {
@@ -107,7 +112,7 @@ struct DisplayAdditions: View {
 			selection: $selectedVehicle,
 			title: "",
 			includeEmptyChoice: true,
-			emptyChoiceLabel: "All Vehicles",
+			emptyChoiceLabel: FleetScope.allDisplayLabel,
 			autoSelectFirst: false,
 			filter: nil,
 			sort: [SortDescriptor(\.displayName, order: .forward)],
@@ -168,7 +173,7 @@ struct DisplayAdditions: View {
 				Menu {
 					Picker("Sort by", selection: $selectedSort) {
 						ForEach(PartsSort.allCases) { sortCase in
-							Text(sortCase.rawValue).tag(sortCase)
+							Text(sortCase.displayName).tag(sortCase)
 						}
 					}
 				} label: {
@@ -222,7 +227,7 @@ struct DisplayAdditions: View {
 					EmptyStateSection(
 						title: "Add your first Improvement/Addition/Upgrade",
 						systemImage: "square.grid.3x1.folder.badge.plus",
-						description: "Create a record to track improvements, upgrades and additions to vehicles.\n\nTo add additional records after this first one, select the '+' button at the top of the form.",
+						description: "Create a record to track improvements, upgrades and additions to \(Vertical.current.assetPlural.lowercased()).\n\nTo add additional records after this first one, select the '+' button at the top of the form.",
 						actionTitle: "Add Improvement/Addition/Upgrade",
 						action: { addNewRecord() }
 					)
@@ -231,7 +236,7 @@ struct DisplayAdditions: View {
 				// Compact descriptor of the active sort order
 				HStack(spacing: 6) {
 					Image(systemName: "arrow.up.arrow.down")
-					Text("Sort: \(selectedSort.rawValue)")
+					Text("Sort: \(selectedSort.displayName)")
 				}
 				.font(.caption)
 				.foregroundStyle(.secondary)
@@ -303,7 +308,7 @@ struct DisplayAdditions: View {
 							}
 						}
 						// Vehicle totals
-						Section(header: Text("Vehicle Totals").font(.caption).foregroundStyle(.secondary)) {
+						Section(header: Text("\(Vertical.current.assetSingular) Totals").font(.caption).foregroundStyle(.secondary)) {
 							ForEach(byVehicle.keys.sorted(), id: \.self) { vehicleKey in
 								let subtotal = (byVehicle[vehicleKey] ?? []).reduce(0 as Float) { $0 + $1.itemCost }
 								HStack {
@@ -465,6 +470,7 @@ struct DisplayAdditions: View {
 	/// - Inserts and saves the record in the SwiftData modelContext.
 	/// - Triggers programmatic navigation to EditAdditions in editing mode.
 	private func addNewRecord() {
+		guard entitlements.requestCreate(Additions.self, in: modelContext) else { return }
 		let newRecord = Additions(
 			inactive: false,
 			createdAt: Date(),
@@ -510,9 +516,9 @@ struct DisplayAdditions: View {
 
 // MARK: - Tips
 struct AdditionsTips: Tip {
-	var title: Text { Text("Vehicle Improvements") }
+	var title: Text { Text("\(Vertical.current.assetSingular) Improvements") }
 	var message: Text? {
-		Text("Track improvements, upgrades, and additions to your vehicles to maintain a complete modification history.")
+		Text("Track improvements, upgrades, and additions to your \(Vertical.current.assetPlural.lowercased()) to maintain a complete modification history.")
 	}
 	var image: Image? { Image(systemName: "square.grid.3x1.folder.badge.plus") }
 }

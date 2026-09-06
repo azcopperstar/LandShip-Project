@@ -29,7 +29,7 @@ struct MaintenanceStatusDetailView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "wrench.and.screwdriver.fill")
                                 .foregroundStyle(.blue)
-                            Text("VEHICLE STATUS")
+                            Text("\(Vertical.current.assetSingular.uppercased()) STATUS")
                                 .font(.headline)
                         }
                         if vehicleStatuses.isEmpty {

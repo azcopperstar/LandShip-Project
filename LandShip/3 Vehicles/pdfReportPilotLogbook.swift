@@ -22,6 +22,8 @@ struct pdfReportPilotLogbook: View {
 
 	@State private var pdfDocument: PDFDocument?
 	@State private var zoomAction: ZoomAction?
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 
 	let functions = Functions()
 
@@ -80,7 +82,42 @@ struct pdfReportPilotLogbook: View {
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
+			}
 		}
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: "Pilot Logbook") { _ in }
+	}
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let entries = fetchEntries()
+		let headers = [
+			"Date", "Aircraft", "Departure", "Arrival", "Total Time", "PIC", "SIC", "Dual Received", "Solo",
+			"Night", "Actual Instrument", "Simulated Instrument", "Cross-Country", "Day Landings", "Night Landings", "Remarks",
+			"Image 1 Description"
+		]
+		let rows: [[String]] = entries.map { entry in
+			[
+				CSVField.date(entry.date), aircraftDisplay(entry), entry.departureLocation, entry.arrivalLocation,
+				CSVField.float(entry.totalTime), CSVField.float(entry.picTime), CSVField.float(entry.sicTime), CSVField.float(entry.dualReceived), CSVField.float(entry.soloTime),
+				CSVField.float(entry.nightTime), CSVField.float(entry.actualInstrumentTime), CSVField.float(entry.simulatedInstrumentTime), CSVField.float(entry.crossCountryTime),
+				CSVField.int(entry.dayLandings), CSVField.int(entry.nightLandings), entry.remarks, entry.image1Description
+			]
+		}
+		var output = CSVBuilder.build(headers: headers, rows: rows)
+		if let cert = fetchCertification() {
+			output += "\r\nCERTIFICATE & CURRENCY\r\n"
+			output += CSVBuilder.build(headers: ["Certificate Type", "Certificate Number", "Ratings", "Medical Class", "Medical Expiration", "Last Flight Review", "Flight Review Due", "Last IPC", "Notes"],
+				rows: [[cert.certificateType, cert.certificateNumber, cert.ratings, cert.medicalClass, CSVField.date(cert.medicalExpirationDate), CSVField.date(cert.lastFlightReviewDate), CSVField.date(cert.flightReviewDueDate), CSVField.date(cert.lastInstrumentProficiencyCheckDate), cert.notes]])
+		}
+		return output
 	}
 
 	// MARK: - Generation

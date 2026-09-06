@@ -55,6 +55,7 @@ struct DisplayRecords: View {
 	
 	// SwiftData context used to insert, save, and fetch data
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 	
 	// For optional list selection (not strictly required for navigation, but useful on macOS)
 	@State private var selectedRecord: ServiceRecords1?
@@ -118,7 +119,11 @@ struct DisplayRecords: View {
 		case nameDesc = "Records Z–A"
 		case updatedDesc = "Recently Updated"
 		var id: String { rawValue }
-		
+
+		/// Vertical-aware display text — the persisted rawValue stays "Vehicle ..." so
+		/// existing AppStorage selections keep decoding correctly.
+		var displayName: String { rawValue.replacingOccurrences(of: "Vehicle", with: Vertical.current.assetSingular) }
+
 		// Translate each sort mode into SwiftData SortDescriptors on ServiceRecords1
 		var descriptors: [SortDescriptor<ServiceRecords1>] {
 			switch self {
@@ -154,7 +159,7 @@ struct DisplayRecords: View {
 			selection: $selectedVehicle,
 			title: "",
 			includeEmptyChoice: true,
-			emptyChoiceLabel: "All Vehicles",
+			emptyChoiceLabel: FleetScope.allDisplayLabel,
 			autoSelectFirst: false,
 			filter: nil,
 			sort: [SortDescriptor(\.displayName, order: .forward)],
@@ -295,7 +300,7 @@ struct DisplayRecords: View {
 							Menu {
 								Picker("Sort by", selection: $selectedSort) {
 									ForEach(PartsSort.allCases) { sortCase in
-										Text(sortCase.rawValue).tag(sortCase)
+										Text(sortCase.displayName).tag(sortCase)
 									}
 								}
 							} label: {
@@ -339,7 +344,7 @@ struct DisplayRecords: View {
 					// Compact descriptor of the active sort order
 					HStack(spacing: 6) {
 						Image(systemName: "arrow.up.arrow.down")
-						Text("Sort: \(selectedSort.rawValue)")
+						Text("Sort: \(selectedSort.displayName)")
 					}
 					.font(.caption)
 					.foregroundStyle(.secondary)
@@ -385,7 +390,8 @@ struct DisplayRecords: View {
 	private func addNewRecord() {
 		// Only allow when a specific vehicle is selected
 		guard !trackVehicleSelected.isEmpty, trackVehicleSelected != "All Vehicles" else { return }
-		
+		guard entitlements.requestCreate(ServiceRecords1.self, in: modelContext) else { return }
+
 		// Prefill current odometer and engine hours from the selected vehicle
 		// loadVehicleDetails looks up a Vehicle8 by name (vehicleId) and returns a lightweight struct.
 		let details = functions.loadVehicleDetails(context: modelContext, vehicleId: trackVehicleSelected)

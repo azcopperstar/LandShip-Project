@@ -23,6 +23,8 @@ struct pdfReportMarineRecords: View {
 	@State private var scope: String
 	@State private var pdfDocument: PDFDocument?
 	@State private var zoomAction: ZoomAction?
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 
 	let functions = Functions()
 
@@ -91,7 +93,49 @@ struct pdfReportMarineRecords: View {
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
+			}
 		}
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: "Haul-Out & Survey Records") { _ in }
+	}
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let haulOuts = fetchHaulOutRecords()
+		let surveys = fetchSurveyRecords()
+
+		let haulOutHeaders = [
+			"Haul-Out Date", "Yard", Vertical.current.assetSingular, "Bottom Paint Type", "Bottom Paint Applied",
+			"Zincs Replaced", "Running Gear Serviced", "Cost", "Next Due Date", "Notes", "Image 1 Description"
+		]
+		let haulOutRows: [[String]] = haulOuts.map { ho in
+			let vehicleName = ho.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: ho.vehicleId, context: modelContext)
+			return [
+				CSVField.date(ho.haulOutDate), ho.yardName, vehicleName.isEmpty ? ho.vehicleId : vehicleName, ho.bottomPaintType, CSVField.bool(ho.bottomPaintApplied),
+				CSVField.bool(ho.zincsReplaced), CSVField.bool(ho.runningGearServiced), CSVField.float(ho.cost), CSVField.date(ho.nextDueDate), ho.notes, ho.image1Description
+			]
+		}
+
+		let surveyHeaders = [
+			"Survey Date", "Surveyor", Vertical.current.assetSingular, "Survey Type", "Findings", "Cost", "Next Due Date", "Notes", "Image 1 Description"
+		]
+		let surveyRows: [[String]] = surveys.map { sv in
+			let vehicleName = sv.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: sv.vehicleId, context: modelContext)
+			return [
+				CSVField.date(sv.surveyDate), sv.surveyorName, vehicleName.isEmpty ? sv.vehicleId : vehicleName, sv.surveyType, sv.findings, CSVField.float(sv.cost), CSVField.date(sv.nextDueDate), sv.notes, sv.image1Description
+			]
+		}
+
+		var output = "HAUL-OUT RECORDS\r\n" + CSVBuilder.build(headers: haulOutHeaders, rows: haulOutRows)
+		output += "\r\nSURVEY RECORDS\r\n" + CSVBuilder.build(headers: surveyHeaders, rows: surveyRows)
+		return output
 	}
 
 	// MARK: - Generation

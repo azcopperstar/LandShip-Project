@@ -15,6 +15,7 @@ struct EditProjectList: View {
 
 	// SwiftData environment context for fetching/saving/deleting.
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 
 	// Dismiss handler for closing the view (e.g., after delete).
 	@Environment(\.dismiss) private var dismiss
@@ -213,11 +214,11 @@ struct EditProjectList: View {
 					VStack {
 //						SectionText(label: "")
 						HStack{
-							Text("Vehicle")
+							Text(Vertical.current.assetSingular)
 								.textLabelModified()
 							ModelPicker(
 								selection: $selectedVehicle,
-								title: "Vehicle",
+								title: Vertical.current.assetSingular,
 								includeEmptyChoice: false,
 								emptyChoiceLabel: "—",
 								autoSelectFirst: false,
@@ -781,7 +782,7 @@ struct EditProjectList: View {
 						
 						CardView {
 							VStack {
-								HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
+								HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 								HStack{LabelDataText(label: "Category", data: dataSet.category)}
 								HStack{LabelDataText(label: "Project Name", data: dataSet.subCategory)}
 								HStack {
@@ -1172,6 +1173,15 @@ struct EditProjectList: View {
 	}
 
 	private func transferToAdditions(category: String, subCategory: String) {
+		let parts: [(String, Float, Int)] = [
+			(part1, part1cost, part1Quantity), (part2, part2cost, part2Quantity),
+			(part3, part3cost, part3Quantity), (part4, part4cost, part4Quantity),
+			(part5, part5cost, part5Quantity)
+		]
+		let willCreate = (laborCost > 0 ? 1 : 0) + parts.filter { !$0.0.isEmpty }.count
+		guard willCreate > 0 else { return }
+		guard entitlements.requestCreate(Additions.self, count: willCreate, in: modelContext) else { return }
+
 		let linkId = UUID().uuidString
 		let vId = vehicleId.isEmpty ? dataSet.vehicleId : vehicleId
 		let projectName = itemName.isEmpty ? dataSet.itemName : itemName
@@ -1184,11 +1194,6 @@ struct EditProjectList: View {
 			entry.serviceRecordLinkId = linkId
 			modelContext.insert(entry); count += 1
 		}
-		let parts: [(String, Float, Int)] = [
-			(part1, part1cost, part1Quantity), (part2, part2cost, part2Quantity),
-			(part3, part3cost, part3Quantity), (part4, part4cost, part4Quantity),
-			(part5, part5cost, part5Quantity)
-		]
 		for (pName, pCost, pQty) in parts where !pName.isEmpty {
 			let entry = Additions(vehicleId: vId, miles: miles, engHours: engHours,
 				itemName: pName, itemDescription: projectName,

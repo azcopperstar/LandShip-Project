@@ -10,9 +10,17 @@ extension DashboardView {
 		let reorderPoint: Float
 		let reorderQuantity: Float
 		let unit: String
+		let supplierName: String
+		let supplierWebsite: String
 
 		var isOutOfStock: Bool { quantityOnHand <= 0 }
 		var isLowStock: Bool { quantityOnHand <= reorderPoint }
+
+		/// The supplier's website as a `URL`, if one is set and well-formed.
+		var supplierWebsiteURL: URL? {
+			guard !supplierWebsite.isEmpty else { return nil }
+			return URL(string: supplierWebsite)
+		}
 	}
 
 	/// Loads every inventory-tracked part in scope and flags those at or below their reorder point.
@@ -23,14 +31,23 @@ extension DashboardView {
 		do {
 			let parts = try modelContext.fetch(fd)
 			let scoped = parts.filter { $0.vehicleId.isEmpty || includesVehicle($0.vehicleId) }
+
+			// Resolve each part's supplier (by name, the app's usual linking convention) once,
+			// so a reorder alert can offer a direct link to that supplier's website.
+			let vendors = (try? modelContext.fetch(FetchDescriptor<Vendors1>())) ?? []
+			let vendorsByName = Dictionary(uniqueKeysWithValues: vendors.map { ($0.vendorName, $0) })
+
 			let alerts = scoped.map { p in
-				InventoryAlert(
+				let vendor = vendorsByName[p.partSupplier]
+				return InventoryAlert(
 					partName: p.partName,
 					vehicleId: p.vehicleId,
 					quantityOnHand: p.inventoryQuantityOnHand,
 					reorderPoint: p.inventoryReorderPoint,
 					reorderQuantity: p.inventoryReorderQuantity,
-					unit: p.partUnit
+					unit: p.partUnit,
+					supplierName: vendor?.vendorName ?? p.partSupplier,
+					supplierWebsite: vendor?.vendorWebsite ?? ""
 				)
 			}
 			.sorted { lhs, rhs in
@@ -93,25 +110,47 @@ struct InventoryAlertRow: View {
 	let vehicleDisplayName: (String) -> String
 
 	var body: some View {
-		HStack(spacing: 8) {
-			Image(systemName: alert.isOutOfStock ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
-				.font(.caption)
-				.foregroundStyle(alert.isOutOfStock ? .red : .orange)
-			VStack(alignment: .leading, spacing: 1) {
-				Text(alert.partName)
-					.font(.subheadline)
-					.lineLimit(1)
-				if !alert.vehicleId.isEmpty {
-					Text(vehicleDisplayName(alert.vehicleId))
+		VStack(alignment: .leading, spacing: 3) {
+			HStack(spacing: 8) {
+				Image(systemName: alert.isOutOfStock ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
+					.font(.caption)
+					.foregroundStyle(alert.isOutOfStock ? .red : .orange)
+				VStack(alignment: .leading, spacing: 1) {
+					Text(alert.partName)
+						.font(.subheadline)
+						.lineLimit(1)
+					if !alert.vehicleId.isEmpty {
+						Text(vehicleDisplayName(alert.vehicleId))
+							.font(.caption2)
+							.foregroundStyle(.secondary)
+					}
+				}
+				Spacer()
+				Text(alert.isOutOfStock ? "OUT OF STOCK" : "\(alert.quantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(alert.unit) left")
+					.font(.caption)
+					.bold()
+					.foregroundStyle(alert.isOutOfStock ? .red : .orange)
+			}
+			// Reorder guidance — how many to order, and a direct link to the supplier's
+			// website when one is on file (resolved from the part's Supplier, by name).
+			if alert.isLowStock && alert.reorderQuantity > 0 {
+				HStack(spacing: 4) {
+					Image(systemName: "cart.fill")
 						.font(.caption2)
 						.foregroundStyle(.secondary)
+					Text("Order \(alert.reorderQuantity.formatted(.number.precision(.fractionLength(0...2)))) \(alert.unit)")
+						.font(.caption2)
+						.foregroundStyle(.secondary)
+					if let url = alert.supplierWebsiteURL {
+						Text("·")
+							.font(.caption2)
+							.foregroundStyle(.secondary)
+						Link("Reorder from \(alert.supplierName)", destination: url)
+							.font(.caption2)
+					}
 				}
+				.padding(.leading, 20)
 			}
-			Spacer()
-			Text(alert.isOutOfStock ? "OUT OF STOCK" : "\(alert.quantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(alert.unit) left")
-				.font(.caption)
-				.bold()
-				.foregroundStyle(alert.isOutOfStock ? .red : .orange)
 		}
 	}
 }

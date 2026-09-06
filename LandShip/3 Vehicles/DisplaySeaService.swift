@@ -18,6 +18,7 @@ struct DisplaySeaService: View {
 
 	@State private var newRecordToEdit: SeaServiceEntry?
 	@State private var showingCredential: Bool = false
+	@State private var isShowingPDFReport: Bool = false
 
 	private enum LogSort: String, CaseIterable, Identifiable {
 		case dateDesc = "Date ↓"
@@ -87,6 +88,22 @@ struct DisplaySeaService: View {
 						.toolbar {
 							ToolbarItem(placement: .automatic) {
 								Button {
+									isShowingPDFReport = true
+								} label: {
+#if os(macOS)
+									Image(systemName: "doc.text")
+#else
+									VStack(spacing: 2) {
+										Image(systemName: "doc.text")
+										Text("Report").font(.caption2)
+									}
+#endif
+								}
+								.help("Report")
+								.accessibilityLabel("Report")
+							}
+							ToolbarItem(placement: .automatic) {
+								Button {
 									showingCredential = true
 								} label: {
 #if os(macOS)
@@ -154,6 +171,10 @@ struct DisplaySeaService: View {
 		.navigationDestination(item: $newRecordToEdit) { record in
 			EditSeaServiceEntry(entry: record)
 				.id(record.persistentModelID)
+		}
+		.navigationDestination(isPresented: $isShowingPDFReport) {
+			pdfReportSeaService()
+				.ignoresSafeArea()
 		}
 		.sheet(isPresented: $showingCredential) {
 			NavigationStack {

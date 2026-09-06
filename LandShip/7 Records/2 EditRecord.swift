@@ -42,6 +42,7 @@ struct EditRecord: View {
 
 	// SwiftData environment context for fetching/saving/deleting.
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 
 	// Dismiss handler for closing the view (e.g., after delete).
 	@Environment(\.dismiss) private var dismiss
@@ -60,6 +61,10 @@ struct EditRecord: View {
 	// UI state flags
 	@State private var isPresentingConfirm: Bool = false  // Controls delete confirmation dialog
 	@State private var isEditing: Bool = false            // Toggles between Edit and Details modes
+
+	// Controls presentation of the "save as service item" prompt, shown when saving a record
+	// whose service item was typed manually rather than picked from the Database Item list.
+	@State private var showingSaveAsItemPrompt: Bool = false
 	
 	// Core fields mirrored from ServiceRecords1.
 	// These are edited in Edit mode and written back to dataSet on Save.
@@ -153,6 +158,41 @@ struct EditRecord: View {
 	@State private var selectedPart5: MxParts1? = nil
 	@State private var selectedVehicle: Vehicle8? = nil
 
+	// Embedded sub service items (up to 5), each optionally picked from MxItems3.
+	// Description/labor cost are one-time snapshots taken when picked; editing the source
+	// item later does not reach back into this record.
+	@State private var subItem1: String = ""
+	@State private var subItem1Id: String = ""
+	@State private var subItem1Description: String = ""
+	@State private var subItem1LaborCost: Float = 0
+	@State private var subItem1Comments: String = ""
+	@State private var subItem2: String = ""
+	@State private var subItem2Id: String = ""
+	@State private var subItem2Description: String = ""
+	@State private var subItem2LaborCost: Float = 0
+	@State private var subItem2Comments: String = ""
+	@State private var subItem3: String = ""
+	@State private var subItem3Id: String = ""
+	@State private var subItem3Description: String = ""
+	@State private var subItem3LaborCost: Float = 0
+	@State private var subItem3Comments: String = ""
+	@State private var subItem4: String = ""
+	@State private var subItem4Id: String = ""
+	@State private var subItem4Description: String = ""
+	@State private var subItem4LaborCost: Float = 0
+	@State private var subItem4Comments: String = ""
+	@State private var subItem5: String = ""
+	@State private var subItem5Id: String = ""
+	@State private var subItem5Description: String = ""
+	@State private var subItem5LaborCost: Float = 0
+	@State private var subItem5Comments: String = ""
+	@State private var trackSubItemsLaborTotal: Double = 0.0
+	@State private var selectedSubItem1: MxItems3? = nil
+	@State private var selectedSubItem2: MxItems3? = nil
+	@State private var selectedSubItem3: MxItems3? = nil
+	@State private var selectedSubItem4: MxItems3? = nil
+	@State private var selectedSubItem5: MxItems3? = nil
+
 	// Additions transfer link
 	@State private var additionsLinkId: String = ""
 	@State private var showAdditionsTransferSheet: Bool = false
@@ -216,6 +256,32 @@ struct EditRecord: View {
 		// Start in edit mode if requested
 		self._isEditing = State(initialValue: startEditing)
 		self._additionsLinkId = State.init(initialValue: serviceRecords1.additionsLinkId)
+
+		self._subItem1 = State.init(initialValue: dataSet.subItem1)
+		self._subItem1Id = State.init(initialValue: dataSet.subItem1Id)
+		self._subItem1Description = State.init(initialValue: dataSet.subItem1Description)
+		self._subItem1LaborCost = State.init(initialValue: dataSet.subItem1LaborCost)
+		self._subItem1Comments = State.init(initialValue: dataSet.subItem1Comments)
+		self._subItem2 = State.init(initialValue: dataSet.subItem2)
+		self._subItem2Id = State.init(initialValue: dataSet.subItem2Id)
+		self._subItem2Description = State.init(initialValue: dataSet.subItem2Description)
+		self._subItem2LaborCost = State.init(initialValue: dataSet.subItem2LaborCost)
+		self._subItem2Comments = State.init(initialValue: dataSet.subItem2Comments)
+		self._subItem3 = State.init(initialValue: dataSet.subItem3)
+		self._subItem3Id = State.init(initialValue: dataSet.subItem3Id)
+		self._subItem3Description = State.init(initialValue: dataSet.subItem3Description)
+		self._subItem3LaborCost = State.init(initialValue: dataSet.subItem3LaborCost)
+		self._subItem3Comments = State.init(initialValue: dataSet.subItem3Comments)
+		self._subItem4 = State.init(initialValue: dataSet.subItem4)
+		self._subItem4Id = State.init(initialValue: dataSet.subItem4Id)
+		self._subItem4Description = State.init(initialValue: dataSet.subItem4Description)
+		self._subItem4LaborCost = State.init(initialValue: dataSet.subItem4LaborCost)
+		self._subItem4Comments = State.init(initialValue: dataSet.subItem4Comments)
+		self._subItem5 = State.init(initialValue: dataSet.subItem5)
+		self._subItem5Id = State.init(initialValue: dataSet.subItem5Id)
+		self._subItem5Description = State.init(initialValue: dataSet.subItem5Description)
+		self._subItem5Comments = State.init(initialValue: dataSet.subItem5Comments)
+		self._subItem5LaborCost = State.init(initialValue: dataSet.subItem5LaborCost)
 	}
 	
 	var body: some View {
@@ -228,12 +294,12 @@ struct EditRecord: View {
 					VStack {
 						SectionText(label: "GENERAL")
 						HStack{
-							Text("Vehicle")
+							Text(Vertical.current.assetSingular)
 								.textLabelModified()
 
 							ModelPicker(
 								selection: $selectedVehicle,
-								title: "Vehicle",
+								title: Vertical.current.assetSingular,
 								includeEmptyChoice: false,
 								emptyChoiceLabel: "—",
 								autoSelectFirst: false,
@@ -242,6 +308,7 @@ struct EditRecord: View {
 								labelProvider: { v in "\(v.year) \(v.displayName)"},
 								thumbnailData: { $0.image1 }
 							)
+							.fixedSize(horizontal: true, vertical: true)
 							.frame(maxWidth: .infinity, alignment: .trailing)
 							.onChange(of: selectedVehicle) { _, newVehicle in
 								let name = newVehicle?.name ?? ""
@@ -266,12 +333,13 @@ struct EditRecord: View {
 //								.textLabelModified()
 //						}
 							
-						// Generic ModelPicker for MxItems3 filtered by the chosen vehicle.
-							// IMPORTANT: Avoid capturing dataSet directly inside #Predicate.
+						// Generic ModelPicker for MxItems3 filtered by the chosen vehicle, plus any
+							// generic "All Vehicles" items. IMPORTANT: Avoid capturing dataSet directly
+							// inside #Predicate.
 							let currentVehicle = vehicleId
 							let itemsFilter: Predicate<MxItems3>? = currentVehicle.isEmpty
 							? nil
-							: #Predicate<MxItems3> { $0.vehicleId == currentVehicle }
+							: #Predicate<MxItems3> { $0.vehicleId == currentVehicle || $0.vehicleId == "All Vehicles" }
 							LabeledContent {
 								ModelPicker(
 									selection: $selectedServiceItem,
@@ -281,7 +349,7 @@ struct EditRecord: View {
 									autoSelectFirst: false,
 									filter: itemsFilter,
 									sort: [SortDescriptor(\.mxName, order: .forward)],
-									labelProvider: { $0.mxName }
+									labelProvider: { $0.pickerLabel }
 								)
 								.onChange(of: selectedServiceItem) { _, newItem in
 									guard let item = newItem else {
@@ -345,6 +413,11 @@ struct EditRecord: View {
 									syncPartSelectionsFromNames(
 										p1: part1, p2: part2, p3: part3, p4: part4, p5: part5
 									)
+									// Import the master item's own embedded sub service items, so this
+									// record's SUB SERVICE ITEMS slots pick up the whole bundle. Overwrites
+									// whatever sub-items were previously on this record, exactly like the
+									// description/vendor/parts copy above.
+									importSubItemsFromTemplate(item)
 									recomputeTotals()
 								}
 								.fixedSize(horizontal: true, vertical: true)
@@ -357,6 +430,10 @@ struct EditRecord: View {
 						
 						// Manual overrides for the service item and descriptions
 						HStack{LabelDataTextview(label: "Manual Item", data: $mxName)}
+						Text("Not in Database Item above? Type a name here — saving offers to add it as a new Service Item for reuse.")
+							.font(.caption)
+							.foregroundStyle(.secondary)
+							.frame(maxWidth: .infinity, alignment: .trailing)
 						HStack{LabelDataTextview(label: "Description", data: $mxDescription)}
 //						HStack{LabelDataTextview(label: "Notes", data: $Notes)}
 
@@ -407,7 +484,7 @@ struct EditRecord: View {
 					VStack {
 						SectionText(label: "SERVICE COMPLETED AT")
 						// Mileage and engine hours at the time of service
-						HStack{LabelDataTextview_Numberpad_Int(label: "Miles (\(unit(UnitIndex.distance)))", data: $Miles)}
+						HStack{LabelDataTextview_Numberpad_Int(label: "\(Vertical.current.primaryMeterLabel) (\(unit(UnitIndex.distance)))", data: $Miles)}
 							.onChange(of: Miles) { _, _ in recomputeTotals() }
 						HStack{LabelDataTextview_Numberpad_Float(label: "Engine Hours", data: $engHours)}
 							.onChange(of: engHours) { _, _ in recomputeTotals() }
@@ -466,15 +543,30 @@ struct EditRecord: View {
 						}
 						// Manual overrides
 						HStack{LabelDataTextview(label: "Manual Entry", data: $part1)}
-						HStack{LabelDataTextview_Numberpad_Int(label: "Quantity (\(part1Unit))", data: $part1Quantity)}
+						if let p = selectedPart1, p.inventoryTracked {
+							HStack{LabelDataText(label: "Current Inventory", data: "\(p.inventoryQuantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")}
+						}
+						HStack{LabelDataTextview_Numberpad_Int(label: "Quantity Used/Repair", data: $part1Quantity)}
 							.onChange(of: part1Quantity) { _, _ in recomputeTotals() }
+						if let p = selectedPart1, p.inventoryTracked {
+							let projectedRemaining = p.inventoryQuantityOnHand - Float(part1Quantity)
+							let reorderNeeded = projectedRemaining <= p.inventoryReorderPoint
+							HStack{LabelDataText(label: "Inventory After", data: "\(projectedRemaining.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")}
+								.foregroundColor(reorderNeeded ? .red : .primary)
+							if reorderNeeded {
+								Text("Reorder needed — remaining inventory will be at or below the reorder point.")
+									.font(.caption)
+									.foregroundStyle(.red)
+									.frame(maxWidth: .infinity, alignment: .leading)
+							}
+						}
 						HStack{LabelDataTextview_Numberpad_Currency(label: "Cost", data: $part1cost)}
 							.onChange(of: part1cost) { _, _ in recomputeTotals() }
 						Picker_PartsUnit(label: "Unit", data: $part1Unit)
 						HStack{LabelDataCurrency(label: "Total Part Cost", data: Float(Double(part1Quantity) * Double(part1cost)), unit: "")}
 					}
 				}
-				
+
 				// PART 2 (conditionally shown if at least part1 or part2 is non-empty)
 				if part2 != "" || part1 != "" {
 					CardView {
@@ -494,8 +586,23 @@ struct EditRecord: View {
 								.frame(maxWidth: .infinity, alignment: .trailing)
 							}
 							HStack{LabelDataTextview(label: "Manual Entry", data: $part2)}
-							HStack{LabelDataTextview_Numberpad_Int(label: "Quantity (\(part2Unit))", data: $part2Quantity)}
+							if let p = selectedPart2, p.inventoryTracked {
+								HStack{LabelDataText(label: "Current Inventory", data: "\(p.inventoryQuantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")}
+							}
+							HStack{LabelDataTextview_Numberpad_Int(label: "Quantity Used/Repair", data: $part2Quantity)}
 								.onChange(of: part2Quantity) { _, _ in recomputeTotals() }
+							if let p = selectedPart2, p.inventoryTracked {
+								let projectedRemaining = p.inventoryQuantityOnHand - Float(part2Quantity)
+								let reorderNeeded = projectedRemaining <= p.inventoryReorderPoint
+								HStack{LabelDataText(label: "Inventory After", data: "\(projectedRemaining.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")}
+									.foregroundColor(reorderNeeded ? .red : .primary)
+								if reorderNeeded {
+									Text("Reorder needed — remaining inventory will be at or below the reorder point.")
+										.font(.caption)
+										.foregroundStyle(.red)
+										.frame(maxWidth: .infinity, alignment: .leading)
+								}
+							}
 							HStack{LabelDataTextview_Numberpad_Currency(label: "Cost", data: $part2cost)}
 								.onChange(of: part2cost) { _, _ in recomputeTotals() }
 							Picker_PartsUnit(label: "Unit", data: $part2Unit)
@@ -523,8 +630,23 @@ struct EditRecord: View {
 								.frame(maxWidth: .infinity, alignment: .trailing)
 							}
 							HStack{LabelDataTextview(label: "Manual Entry", data: $part3)}
-							HStack{LabelDataTextview_Numberpad_Int(label: "Quantity (\(part3Unit))", data: $part3Quantity)}
+							if let p = selectedPart3, p.inventoryTracked {
+								HStack{LabelDataText(label: "Current Inventory", data: "\(p.inventoryQuantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")}
+							}
+							HStack{LabelDataTextview_Numberpad_Int(label: "Quantity Used/Repair", data: $part3Quantity)}
 								.onChange(of: part3Quantity) { _, _ in recomputeTotals() }
+							if let p = selectedPart3, p.inventoryTracked {
+								let projectedRemaining = p.inventoryQuantityOnHand - Float(part3Quantity)
+								let reorderNeeded = projectedRemaining <= p.inventoryReorderPoint
+								HStack{LabelDataText(label: "Inventory After", data: "\(projectedRemaining.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")}
+									.foregroundColor(reorderNeeded ? .red : .primary)
+								if reorderNeeded {
+									Text("Reorder needed — remaining inventory will be at or below the reorder point.")
+										.font(.caption)
+										.foregroundStyle(.red)
+										.frame(maxWidth: .infinity, alignment: .leading)
+								}
+							}
 							HStack{LabelDataTextview_Numberpad_Currency(label: "Cost", data: $part3cost)}
 								.onChange(of: part3cost) { _, _ in recomputeTotals() }
 							Picker_PartsUnit(label: "Unit", data: $part3Unit)
@@ -558,6 +680,10 @@ struct EditRecord: View {
 								.onChange(of: part4cost) { _, _ in recomputeTotals() }
 							Picker_PartsUnit(label: "Unit", data: $part4Unit)
 							HStack{LabelDataCurrency(label: "Total Part Cost", data: Float(Double(part4Quantity) * Double(part4cost)), unit: "")}
+							if let p = selectedPart4, p.inventoryTracked {
+								HStack{LabelDataText(label: "In Stock", data: "\(p.inventoryQuantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")}
+									.foregroundColor(p.inventoryQuantityOnHand <= p.inventoryReorderPoint ? .red : .primary)
+							}
 						}
 					}
 				}
@@ -587,10 +713,178 @@ struct EditRecord: View {
 								.onChange(of: part5cost) { _, _ in recomputeTotals() }
 							Picker_PartsUnit(label: "Unit", data: $part5Unit)
 							HStack{LabelDataCurrency(label: "Total Part Cost", data: Float(Double(part5Quantity) * Double(part5cost)), unit: "")}
+							if let p = selectedPart5, p.inventoryTracked {
+								HStack{LabelDataText(label: "In Stock", data: "\(p.inventoryQuantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")}
+									.foregroundColor(p.inventoryQuantityOnHand <= p.inventoryReorderPoint ? .red : .primary)
+							}
 						}
 					}
 				}
-				
+
+				// SUB SERVICE ITEMS
+				// Additional MxItems3 templates covering other work done during the same visit.
+				// Each slot is its own card and reveals the next once it has a name, mirroring
+				// the PART 1...PART 5 cards above. Picking a Database Item copies its
+				// description/labor cost in as a one-time snapshot — later edits to that
+				// template do not reach back here.
+				let currentSubItemVehicle = vehicleId
+				let subItemsFilter: Predicate<MxItems3>? = currentSubItemVehicle.isEmpty
+				? nil
+				: #Predicate<MxItems3> { $0.vehicleId == currentSubItemVehicle || $0.vehicleId == "All Vehicles" }
+
+				CardView {
+					VStack {
+						SectionBanner(label: "ITEM 1")
+						LabeledContent {
+							ModelPicker(
+								selection: $selectedSubItem1,
+								title: "Sub Item 1",
+								includeEmptyChoice: true,
+								emptyChoiceLabel: "—",
+								autoSelectFirst: false,
+								filter: subItemsFilter,
+								sort: [SortDescriptor(\.mxName, order: .forward)],
+								labelProvider: { $0.pickerLabel },
+								onSelectionChanged: { newItem in setSubItem(index: 1, from: newItem) }
+							)
+							.fixedSize(horizontal: true, vertical: true)
+							.frame(maxWidth: .infinity, alignment: .trailing)
+						} label: {
+							Text("Database Item")
+								.textLabelModified()
+						}
+						HStack{LabelDataTextview(label: "Manual Item", data: $subItem1)}
+						HStack{LabelDataTextview(label: "Description", data: $subItem1Description)}
+						HStack{LabelDataTextview_Numberpad_Currency(label: "Labor Cost", data: $subItem1LaborCost)}
+							.onChange(of: subItem1LaborCost) { _, _ in recomputeTotals() }
+						LabelDataTextview_MultiLine(label: "Comments", data: $subItem1Comments)
+					}
+				}
+
+				if !subItem1.isEmpty {
+					CardView {
+						VStack {
+							SectionBanner(label: "ITEM 2")
+							LabeledContent {
+								ModelPicker(
+									selection: $selectedSubItem2,
+									title: "Sub Item 2",
+									includeEmptyChoice: true,
+									emptyChoiceLabel: "—",
+									autoSelectFirst: false,
+									filter: subItemsFilter,
+									sort: [SortDescriptor(\.mxName, order: .forward)],
+									labelProvider: { $0.pickerLabel },
+									onSelectionChanged: { newItem in setSubItem(index: 2, from: newItem) }
+								)
+								.fixedSize(horizontal: true, vertical: true)
+								.frame(maxWidth: .infinity, alignment: .trailing)
+							} label: {
+								Text("Database Item")
+									.textLabelModified()
+							}
+							HStack{LabelDataTextview(label: "Manual Item", data: $subItem2)}
+							HStack{LabelDataTextview(label: "Description", data: $subItem2Description)}
+							HStack{LabelDataTextview_Numberpad_Currency(label: "Labor Cost", data: $subItem2LaborCost)}
+								.onChange(of: subItem2LaborCost) { _, _ in recomputeTotals() }
+							LabelDataTextview_MultiLine(label: "Comments", data: $subItem2Comments)
+						}
+					}
+				}
+
+				if !subItem2.isEmpty {
+					CardView {
+						VStack {
+							SectionBanner(label: "ITEM 3")
+							LabeledContent {
+								ModelPicker(
+									selection: $selectedSubItem3,
+									title: "Sub Item 3",
+									includeEmptyChoice: true,
+									emptyChoiceLabel: "—",
+									autoSelectFirst: false,
+									filter: subItemsFilter,
+									sort: [SortDescriptor(\.mxName, order: .forward)],
+									labelProvider: { $0.pickerLabel },
+									onSelectionChanged: { newItem in setSubItem(index: 3, from: newItem) }
+								)
+								.fixedSize(horizontal: true, vertical: true)
+								.frame(maxWidth: .infinity, alignment: .trailing)
+							} label: {
+								Text("Database Item")
+									.textLabelModified()
+							}
+							HStack{LabelDataTextview(label: "Manual Item", data: $subItem3)}
+							HStack{LabelDataTextview(label: "Description", data: $subItem3Description)}
+							HStack{LabelDataTextview_Numberpad_Currency(label: "Labor Cost", data: $subItem3LaborCost)}
+								.onChange(of: subItem3LaborCost) { _, _ in recomputeTotals() }
+							LabelDataTextview_MultiLine(label: "Comments", data: $subItem3Comments)
+						}
+					}
+				}
+
+				if !subItem3.isEmpty {
+					CardView {
+						VStack {
+							SectionBanner(label: "ITEM 4")
+							LabeledContent {
+								ModelPicker(
+									selection: $selectedSubItem4,
+									title: "Sub Item 4",
+									includeEmptyChoice: true,
+									emptyChoiceLabel: "—",
+									autoSelectFirst: false,
+									filter: subItemsFilter,
+									sort: [SortDescriptor(\.mxName, order: .forward)],
+									labelProvider: { $0.pickerLabel },
+									onSelectionChanged: { newItem in setSubItem(index: 4, from: newItem) }
+								)
+								.fixedSize(horizontal: true, vertical: true)
+								.frame(maxWidth: .infinity, alignment: .trailing)
+							} label: {
+								Text("Database Item")
+									.textLabelModified()
+							}
+							HStack{LabelDataTextview(label: "Manual Item", data: $subItem4)}
+							HStack{LabelDataTextview(label: "Description", data: $subItem4Description)}
+							HStack{LabelDataTextview_Numberpad_Currency(label: "Labor Cost", data: $subItem4LaborCost)}
+								.onChange(of: subItem4LaborCost) { _, _ in recomputeTotals() }
+							LabelDataTextview_MultiLine(label: "Comments", data: $subItem4Comments)
+						}
+					}
+				}
+
+				if !subItem4.isEmpty {
+					CardView {
+						VStack {
+							SectionBanner(label: "ITEM 5")
+							LabeledContent {
+								ModelPicker(
+									selection: $selectedSubItem5,
+									title: "Sub Item 5",
+									includeEmptyChoice: true,
+									emptyChoiceLabel: "—",
+									autoSelectFirst: false,
+									filter: subItemsFilter,
+									sort: [SortDescriptor(\.mxName, order: .forward)],
+									labelProvider: { $0.pickerLabel },
+									onSelectionChanged: { newItem in setSubItem(index: 5, from: newItem) }
+								)
+								.fixedSize(horizontal: true, vertical: true)
+								.frame(maxWidth: .infinity, alignment: .trailing)
+							} label: {
+								Text("Database Item")
+									.textLabelModified()
+							}
+							HStack{LabelDataTextview(label: "Manual Item", data: $subItem5)}
+							HStack{LabelDataTextview(label: "Description", data: $subItem5Description)}
+							HStack{LabelDataTextview_Numberpad_Currency(label: "Labor Cost", data: $subItem5LaborCost)}
+								.onChange(of: subItem5LaborCost) { _, _ in recomputeTotals() }
+							LabelDataTextview_MultiLine(label: "Comments", data: $subItem5Comments)
+						}
+					}
+				}
+
 				// COSTS (labor only here; parts totals are computed)
 				CardView {
 					VStack {
@@ -633,6 +927,9 @@ struct EditRecord: View {
 						SectionText(label: "STATISTICS")
 						HStack{LabelDataCurrency(label: "Parts Subtotal", data: Float(trackPartsCostTotal), unit: "")}
 						HStack{LabelDataCurrency(label: "Labor", data: laborCost, unit: "")}
+						if trackSubItemsLaborTotal != 0 {
+							HStack{LabelDataCurrency(label: "Sub-Items Labor", data: Float(trackSubItemsLaborTotal), unit: "")}
+						}
 						Divider()
 						HStack{LabelDataCurrency(label: "Grand Total", data: Float(trackAllCostTotal), unit: "")}
 							.foregroundColor(.red)
@@ -652,9 +949,9 @@ struct EditRecord: View {
 				// SERVICE ITEM & VEHICLE STATS (intervals and due estimates)
 				CardView {
 					VStack {
-						SectionText(label: "SERVICE ITEM & VEHICLE STATS")
+						SectionText(label: "SERVICE ITEM & \(Vertical.current.assetSingular.uppercased()) STATS")
 						// Vehicle
-						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: vehicleId, context: modelContext))}
+						HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: vehicleId, context: modelContext))}
 						if vehicleCurrentMiles > 0 {
 							HStack{LabelDataText(label: "Current Odometer", data: "\(vehicleCurrentMiles) \(unit(UnitIndex.distance))")}
 						}
@@ -662,7 +959,7 @@ struct EditRecord: View {
 							HStack{LabelDataNumber(label: "Current Engine Hours", data: vehicleCurrentEngHours, fractionalLength: 1)}
 						}
 						if Miles > 0 && vehicleCurrentMiles >= Miles {
-							HStack{LabelDataText(label: "Miles Since Service", data: "\(milesSinceService) \(unit(UnitIndex.distance))")}
+							HStack{LabelDataText(label: "\(Vertical.current.primaryMeterLabel) Since Service", data: "\(milesSinceService) \(unit(UnitIndex.distance))")}
 						}
 						if engHours > 0 && vehicleCurrentEngHours >= engHours {
 							HStack{LabelDataNumber(label: "Hours Since Service", data: hoursSinceService, fractionalLength: 1)}
@@ -758,6 +1055,25 @@ struct EditRecord: View {
 					}
 				}
 
+				// Seed the sub-item pickers from existing subItemNId, if present. Assign the
+				// selection only — do NOT call setSubItem here, which would re-copy the source
+				// MxItems3's current description/labor cost over this record's saved snapshot.
+				if selectedSubItem1 == nil, !dataSet.subItem1Id.isEmpty {
+					selectedSubItem1 = resolveMxItem(named: dataSet.subItem1Id)
+				}
+				if selectedSubItem2 == nil, !dataSet.subItem2Id.isEmpty {
+					selectedSubItem2 = resolveMxItem(named: dataSet.subItem2Id)
+				}
+				if selectedSubItem3 == nil, !dataSet.subItem3Id.isEmpty {
+					selectedSubItem3 = resolveMxItem(named: dataSet.subItem3Id)
+				}
+				if selectedSubItem4 == nil, !dataSet.subItem4Id.isEmpty {
+					selectedSubItem4 = resolveMxItem(named: dataSet.subItem4Id)
+				}
+				if selectedSubItem5 == nil, !dataSet.subItem5Id.isEmpty {
+					selectedSubItem5 = resolveMxItem(named: dataSet.subItem5Id)
+				}
+
 				// Seed vendor selection if needed
 				if selectedVendor == nil, !dataSet.vendor.isEmpty {
 					let name = dataSet.vendor
@@ -822,11 +1138,37 @@ struct EditRecord: View {
 				}
 				ToolbarItem(placement: .automatic) {
 					Button("Save") {
-						// Tapping Save writes all local state back into dataSet and persists it.
-						isEditing.toggle()
-						updateItem()
+						// Tapping Save writes all local state back into dataSet and persists it —
+						// unless the current item name isn't in the Service Items table yet
+						// (whether it was typed manually or edited after picking a database item),
+						// in which case we offer to save it there first.
+						let trimmedName = trimmed(mxName)
+						if !trimmedName.isEmpty && !serviceItemExists(trimmedName) {
+							showingSaveAsItemPrompt = true
+						} else {
+							isEditing.toggle()
+							updateItem()
+						}
 					}
 					.buttonStyle(GrowingButton(buttonColor: Color.red))
+					.confirmationDialog(
+						"Save as Service Item?",
+						isPresented: $showingSaveAsItemPrompt,
+						titleVisibility: .visible
+					) {
+						Button("Save as New Service Item") {
+							saveManualItemAsServiceItem()
+							isEditing.toggle()
+							updateItem()
+						}
+						Button("Just Save This Record") {
+							isEditing.toggle()
+							updateItem()
+						}
+						Button("Cancel", role: .cancel) { }
+					} message: {
+						Text("\"\(trimmed(mxName))\" isn't in your Service Items list yet. Save it there so it can be reused for future service records on this \(Vertical.current.assetSingular.lowercased())?")
+					}
 				}
 			}
 
@@ -841,7 +1183,7 @@ struct EditRecord: View {
 				CardView {
 					VStack {
 						SectionText(label: "GENERAL")
-						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
+						HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						HStack{LabelDataText(label: "Service Date", data: "\(functions.formatDate_DDMMMyy(date:dataSet.mxDate))")}
 						HStack{LabelDataText(label: "Status", data: dataSet.inactive ? "INACTIVE" : "ACTIVE")}
 					}
@@ -871,7 +1213,7 @@ struct EditRecord: View {
 					VStack {
 						SectionText(label: "SERVICE COMPLETED AT")
 						if dataSet.Miles > 0 {
-							HStack{LabelDataText(label: "Miles", data: "\(dataSet.Miles) \(unit(UnitIndex.distance))")}
+							HStack{LabelDataText(label: Vertical.current.primaryMeterLabel, data: "\(dataSet.Miles) \(unit(UnitIndex.distance))")}
 						}
 						if dataSet.engHours > 0 {
 							HStack{LabelDataNumber(label: "Engine Hours", data: Float(dataSet.engHours), fractionalLength: 1)}
@@ -893,6 +1235,9 @@ struct EditRecord: View {
 							HStack{LabelDataText(label: "Quantity", data: "\(part1Quantity) \(part1Unit)")}
 							HStack{LabelDataCurrency(label: "Cost/Unit", data: Float(part1cost), unit: "/ \(part1Unit)")}
 							HStack{LabelDataCurrency(label: "Part Total", data: Float(Double(part1Quantity) * Double(part1cost)), unit: "")}
+							if let p = fetchPart(named: dataSet.part1), p.inventoryTracked {
+								HStack{LabelDataText(label: "Inventory Remaining", data: "\(p.inventoryQuantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")}
+							}
 						}
 						if dataSet.part2 != "" {
 							Divider()
@@ -900,6 +1245,9 @@ struct EditRecord: View {
 							HStack{LabelDataText(label: "Quantity", data: "\(dataSet.part2Quantity) \(dataSet.part2Unit)")}
 							HStack{LabelDataCurrency(label: "Cost/Unit", data: Float(part2cost), unit: "/ \(part2Unit)")}
 							HStack{LabelDataCurrency(label: "Part Total", data: Float(Double(part2Quantity) * Double(part2cost)), unit: "")}
+							if let p = fetchPart(named: dataSet.part2), p.inventoryTracked {
+								HStack{LabelDataText(label: "Inventory Remaining", data: "\(p.inventoryQuantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")}
+							}
 						}
 						if dataSet.part3 != "" {
 							Divider()
@@ -907,6 +1255,9 @@ struct EditRecord: View {
 							HStack{LabelDataText(label: "Quantity", data: "\(dataSet.part3Quantity) \(dataSet.part3Unit)")}
 							HStack{LabelDataCurrency(label: "Cost/Unit", data: Float(part3cost), unit: "/ \(part3Unit)")}
 							HStack{LabelDataCurrency(label: "Part Total", data: Float(Double(part3Quantity) * Double(part3cost)), unit: "")}
+							if let p = fetchPart(named: dataSet.part3), p.inventoryTracked {
+								HStack{LabelDataText(label: "Inventory Remaining", data: "\(p.inventoryQuantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")}
+							}
 						}
 						if dataSet.part4 != "" {
 							Divider()
@@ -914,6 +1265,9 @@ struct EditRecord: View {
 							HStack{LabelDataText(label: "Quantity", data: "\(dataSet.part4Quantity) \(dataSet.part4Unit)")}
 							HStack{LabelDataCurrency(label: "Cost/Unit", data: Float(part4cost), unit: "/ \(part4Unit)")}
 							HStack{LabelDataCurrency(label: "Part Total", data: Float(Double(part4Quantity) * Double(part4cost)), unit: "")}
+							if let p = fetchPart(named: dataSet.part4), p.inventoryTracked {
+								HStack{LabelDataText(label: "Inventory Remaining", data: "\(p.inventoryQuantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")}
+							}
 						}
 						if dataSet.part5 != "" {
 							Divider()
@@ -921,17 +1275,81 @@ struct EditRecord: View {
 							HStack{LabelDataText(label: "Quantity", data: "\(dataSet.part5Quantity) \(dataSet.part5Unit)")}
 							HStack{LabelDataCurrency(label: "Cost/Unit", data: Float(part5cost), unit: "/ \(part5Unit)")}
 							HStack{LabelDataCurrency(label: "Part Total", data: Float(Double(part5Quantity) * Double(part5cost)), unit: "")}
+							if let p = fetchPart(named: dataSet.part5), p.inventoryTracked {
+								HStack{LabelDataText(label: "Inventory Remaining", data: "\(p.inventoryQuantityOnHand.formatted(.number.precision(.fractionLength(0...2)))) \(p.partUnit)")}
+							}
 						}
 					}
 					}
 				}
-				
+
+				// SUB SERVICE ITEMS (read-only summary) — each sub-item is its own card, for
+				// clear visual separation, mirroring the PART 1...PART 5 cards above.
+				if dataSet.subItem1 != "" {
+					CardView {
+						VStack {
+							SectionText(label: "SUB SERVICE ITEM 1")
+							HStack{LabelDataText(label: "Item Name", data: dataSet.subItem1)}
+							if dataSet.subItem1Description != "" { HStack{LabelDataText(label: "Description", data: dataSet.subItem1Description)} }
+							HStack{LabelDataCurrency(label: "Labor Cost", data: Float(dataSet.subItem1LaborCost), unit: "")}
+							if dataSet.subItem1Comments != "" { TextNoteDisplay_Inline(label: "Comments", data: dataSet.subItem1Comments) }
+						}
+					}
+				}
+				if dataSet.subItem2 != "" {
+					CardView {
+						VStack {
+							SectionText(label: "SUB SERVICE ITEM 2")
+							HStack{LabelDataText(label: "Item Name", data: dataSet.subItem2)}
+							if dataSet.subItem2Description != "" { HStack{LabelDataText(label: "Description", data: dataSet.subItem2Description)} }
+							HStack{LabelDataCurrency(label: "Labor Cost", data: Float(dataSet.subItem2LaborCost), unit: "")}
+							if dataSet.subItem2Comments != "" { TextNoteDisplay_Inline(label: "Comments", data: dataSet.subItem2Comments) }
+						}
+					}
+				}
+				if dataSet.subItem3 != "" {
+					CardView {
+						VStack {
+							SectionText(label: "SUB SERVICE ITEM 3")
+							HStack{LabelDataText(label: "Item Name", data: dataSet.subItem3)}
+							if dataSet.subItem3Description != "" { HStack{LabelDataText(label: "Description", data: dataSet.subItem3Description)} }
+							HStack{LabelDataCurrency(label: "Labor Cost", data: Float(dataSet.subItem3LaborCost), unit: "")}
+							if dataSet.subItem3Comments != "" { TextNoteDisplay_Inline(label: "Comments", data: dataSet.subItem3Comments) }
+						}
+					}
+				}
+				if dataSet.subItem4 != "" {
+					CardView {
+						VStack {
+							SectionText(label: "SUB SERVICE ITEM 4")
+							HStack{LabelDataText(label: "Item Name", data: dataSet.subItem4)}
+							if dataSet.subItem4Description != "" { HStack{LabelDataText(label: "Description", data: dataSet.subItem4Description)} }
+							HStack{LabelDataCurrency(label: "Labor Cost", data: Float(dataSet.subItem4LaborCost), unit: "")}
+							if dataSet.subItem4Comments != "" { TextNoteDisplay_Inline(label: "Comments", data: dataSet.subItem4Comments) }
+						}
+					}
+				}
+				if dataSet.subItem5 != "" {
+					CardView {
+						VStack {
+							SectionText(label: "SUB SERVICE ITEM 5")
+							HStack{LabelDataText(label: "Item Name", data: dataSet.subItem5)}
+							if dataSet.subItem5Description != "" { HStack{LabelDataText(label: "Description", data: dataSet.subItem5Description)} }
+							HStack{LabelDataCurrency(label: "Labor Cost", data: Float(dataSet.subItem5LaborCost), unit: "")}
+							if dataSet.subItem5Comments != "" { TextNoteDisplay_Inline(label: "Comments", data: dataSet.subItem5Comments) }
+						}
+					}
+				}
+
 				// COSTS (read-only)
 				CardView {
 					VStack {
 						SectionText(label: "COSTS")
 						HStack{LabelDataCurrency(label: "Labor", data: Float(laborCost), unit: "")}
 						HStack{LabelDataCurrency(label: "Parts", data: Float(trackPartsCostTotal), unit: "")}
+						if trackSubItemsLaborTotal != 0 {
+							HStack{LabelDataCurrency(label: "Sub-Items Labor", data: Float(trackSubItemsLaborTotal), unit: "")}
+						}
 						Divider()
 						HStack{LabelDataCurrency(label: "Total Costs", data: Float(trackAllCostTotal), unit: "")}
 							.foregroundColor(.red)
@@ -971,8 +1389,8 @@ struct EditRecord: View {
 				// VEHICLE STATS and SERVICE ITEM intervals (read-only)
 				CardView {
 					VStack {
-						SectionText(label: "VEHICLE STATS")
-						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
+						SectionText(label: "\(Vertical.current.assetSingular.uppercased()) STATS")
+						HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						if vehicleCurrentMiles > 0 {
 							HStack{LabelDataText(label: "Current Odometer", data: "\(vehicleCurrentMiles) \(unit(UnitIndex.distance))")}
 						}
@@ -1069,6 +1487,9 @@ struct EditRecord: View {
 
 	// Deletes the current record from SwiftData and dismisses the view.
 	private func DeleteRecord(){
+		// Return any inventory this record consumed before it disappears, so deleting
+		// a service record doesn't permanently understate stock on hand.
+		releaseAllPartsInventory()
 		do {
 			modelContext.delete(dataSet)
 			try modelContext.save()
@@ -1094,6 +1515,16 @@ struct EditRecord: View {
 	// Persists changes from local @State back to the SwiftData model, then
 	// updates related Vehicle8 odometer/hours if needed, and refreshes derived values.
 	private func updateItem() {
+		// Snapshot each part slot's previously-saved name/quantity before overwriting dataSet,
+		// so inventory can be reconciled against what was actually consumed last time.
+		let oldParts: [(name: String, qty: Int)] = [
+			(dataSet.part1, dataSet.part1Quantity),
+			(dataSet.part2, dataSet.part2Quantity),
+			(dataSet.part3, dataSet.part3Quantity),
+			(dataSet.part4, dataSet.part4Quantity),
+			(dataSet.part5, dataSet.part5Quantity),
+		]
+
 		// Copy all edited values back into the model
 		dataSet.createdAt = createdAt
 		dataSet.updatedAt = Date()
@@ -1137,6 +1568,39 @@ struct EditRecord: View {
 		dataSet.image1Description = image1Description
 		dataSet.image2Description = image2Description
 		dataSet.image3Description = image3Description
+		dataSet.subItem1 = subItem1
+		dataSet.subItem1Id = subItem1Id
+		dataSet.subItem1Description = subItem1Description
+		dataSet.subItem1LaborCost = subItem1LaborCost
+		dataSet.subItem1Comments = subItem1Comments
+		dataSet.subItem2 = subItem2
+		dataSet.subItem2Id = subItem2Id
+		dataSet.subItem2Description = subItem2Description
+		dataSet.subItem2LaborCost = subItem2LaborCost
+		dataSet.subItem2Comments = subItem2Comments
+		dataSet.subItem3 = subItem3
+		dataSet.subItem3Id = subItem3Id
+		dataSet.subItem3Description = subItem3Description
+		dataSet.subItem3LaborCost = subItem3LaborCost
+		dataSet.subItem3Comments = subItem3Comments
+		dataSet.subItem4 = subItem4
+		dataSet.subItem4Id = subItem4Id
+		dataSet.subItem4Description = subItem4Description
+		dataSet.subItem4LaborCost = subItem4LaborCost
+		dataSet.subItem4Comments = subItem4Comments
+		dataSet.subItem5 = subItem5
+		dataSet.subItem5Id = subItem5Id
+		dataSet.subItem5Description = subItem5Description
+		dataSet.subItem5LaborCost = subItem5LaborCost
+		dataSet.subItem5Comments = subItem5Comments
+
+		// Reconcile inventory-tracked parts against what this record previously consumed,
+		// so quantity changes, part swaps, and this save all net out to the correct on-hand total.
+		let newParts: [(name: String, qty: Int)] = [
+			(part1, part1Quantity), (part2, part2Quantity), (part3, part3Quantity),
+			(part4, part4Quantity), (part5, part5Quantity),
+		]
+		reconcilePartsInventory(old: oldParts, new: newParts)
 
 		// Save the record
 		do {
@@ -1321,6 +1785,148 @@ struct EditRecord: View {
 		recomputeTotals()
 	}
 
+	// Centralized updater for embedded sub-item fields (both local state and dataSet) by index.
+	// Called when a ModelPicker<MxItems3> selection changes. Description/labor cost/comments
+	// are copied as a one-time snapshot — later edits to the source MxItems3 template never
+	// reach back into this record. Comments is seeded from the picked item's own Item Notes,
+	// same as every other copied field, so re-picking replaces it too.
+	private func setSubItem(index: Int, from item: MxItems3?) {
+		let name = item?.mxName ?? ""
+		let description = item?.mxDescription ?? ""
+		let cost = item?.laborCost ?? 0
+		let comments = item?.Notes ?? ""
+
+		switch index {
+		case 1:
+			subItem1 = name; subItem1Id = name; subItem1Description = description; subItem1LaborCost = cost; subItem1Comments = comments
+			dataSet.subItem1 = name; dataSet.subItem1Id = name; dataSet.subItem1Description = description; dataSet.subItem1LaborCost = cost; dataSet.subItem1Comments = comments
+		case 2:
+			subItem2 = name; subItem2Id = name; subItem2Description = description; subItem2LaborCost = cost; subItem2Comments = comments
+			dataSet.subItem2 = name; dataSet.subItem2Id = name; dataSet.subItem2Description = description; dataSet.subItem2LaborCost = cost; dataSet.subItem2Comments = comments
+		case 3:
+			subItem3 = name; subItem3Id = name; subItem3Description = description; subItem3LaborCost = cost; subItem3Comments = comments
+			dataSet.subItem3 = name; dataSet.subItem3Id = name; dataSet.subItem3Description = description; dataSet.subItem3LaborCost = cost; dataSet.subItem3Comments = comments
+		case 4:
+			subItem4 = name; subItem4Id = name; subItem4Description = description; subItem4LaborCost = cost; subItem4Comments = comments
+			dataSet.subItem4 = name; dataSet.subItem4Id = name; dataSet.subItem4Description = description; dataSet.subItem4LaborCost = cost; dataSet.subItem4Comments = comments
+		case 5:
+			subItem5 = name; subItem5Id = name; subItem5Description = description; subItem5LaborCost = cost; subItem5Comments = comments
+			dataSet.subItem5 = name; dataSet.subItem5Id = name; dataSet.subItem5Description = description; dataSet.subItem5LaborCost = cost; dataSet.subItem5Comments = comments
+		default:
+			break
+		}
+		recomputeTotals()
+	}
+
+	/// Resolves a sub-item's stored template-name reference to a live `MxItems3`, if it
+	/// still exists. Used both to seed picker selections and to resolve a master item's
+	/// bundled sub-items when importing them below.
+	private func resolveMxItem(named name: String) -> MxItems3? {
+		guard !name.isEmpty else { return nil }
+		var fd = FetchDescriptor<MxItems3>(predicate: #Predicate<MxItems3> { $0.mxName == name })
+		fd.fetchLimit = 1
+		return try? modelContext.fetch(fd).first
+	}
+
+	// Writes a raw sub-item snapshot (as already stored on a master MxItems3, not re-derived
+	// from a live object) into both local state and dataSet, then resolves the picker
+	// selection for interactivity. Used by importSubItemsFromTemplate below; kept distinct
+	// from setSubItem(index:from:), which derives its snapshot from a live MxItems3 instead.
+	private func setSubItemSnapshot(index: Int, name: String, id: String, description: String, laborCost: Float, comments: String) {
+		let resolved = resolveMxItem(named: id)
+		switch index {
+		case 1:
+			subItem1 = name; subItem1Id = id; subItem1Description = description; subItem1LaborCost = laborCost; subItem1Comments = comments
+			dataSet.subItem1 = name; dataSet.subItem1Id = id; dataSet.subItem1Description = description; dataSet.subItem1LaborCost = laborCost; dataSet.subItem1Comments = comments
+			selectedSubItem1 = resolved
+		case 2:
+			subItem2 = name; subItem2Id = id; subItem2Description = description; subItem2LaborCost = laborCost; subItem2Comments = comments
+			dataSet.subItem2 = name; dataSet.subItem2Id = id; dataSet.subItem2Description = description; dataSet.subItem2LaborCost = laborCost; dataSet.subItem2Comments = comments
+			selectedSubItem2 = resolved
+		case 3:
+			subItem3 = name; subItem3Id = id; subItem3Description = description; subItem3LaborCost = laborCost; subItem3Comments = comments
+			dataSet.subItem3 = name; dataSet.subItem3Id = id; dataSet.subItem3Description = description; dataSet.subItem3LaborCost = laborCost; dataSet.subItem3Comments = comments
+			selectedSubItem3 = resolved
+		case 4:
+			subItem4 = name; subItem4Id = id; subItem4Description = description; subItem4LaborCost = laborCost; subItem4Comments = comments
+			dataSet.subItem4 = name; dataSet.subItem4Id = id; dataSet.subItem4Description = description; dataSet.subItem4LaborCost = laborCost; dataSet.subItem4Comments = comments
+			selectedSubItem4 = resolved
+		case 5:
+			subItem5 = name; subItem5Id = id; subItem5Description = description; subItem5LaborCost = laborCost; subItem5Comments = comments
+			dataSet.subItem5 = name; dataSet.subItem5Id = id; dataSet.subItem5Description = description; dataSet.subItem5LaborCost = laborCost; dataSet.subItem5Comments = comments
+			selectedSubItem5 = resolved
+		default:
+			break
+		}
+	}
+
+	/// Imports a master `MxItems3`'s own bundled sub-items into this record as a one-time
+	/// snapshot (the master's already-snapshotted values, not re-derived from whatever those
+	/// sub-items currently look like). Only one level deep — a sub-item's own sub-items, if
+	/// any, are not expanded further.
+	private func importSubItemsFromTemplate(_ item: MxItems3) {
+		setSubItemSnapshot(index: 1, name: item.subItem1, id: item.subItem1Id, description: item.subItem1Description, laborCost: item.subItem1LaborCost, comments: item.subItem1Comments)
+		setSubItemSnapshot(index: 2, name: item.subItem2, id: item.subItem2Id, description: item.subItem2Description, laborCost: item.subItem2LaborCost, comments: item.subItem2Comments)
+		setSubItemSnapshot(index: 3, name: item.subItem3, id: item.subItem3Id, description: item.subItem3Description, laborCost: item.subItem3LaborCost, comments: item.subItem3Comments)
+		setSubItemSnapshot(index: 4, name: item.subItem4, id: item.subItem4Id, description: item.subItem4Description, laborCost: item.subItem4LaborCost, comments: item.subItem4Comments)
+		setSubItemSnapshot(index: 5, name: item.subItem5, id: item.subItem5Id, description: item.subItem5Description, laborCost: item.subItem5LaborCost, comments: item.subItem5Comments)
+	}
+
+	/// True if an `MxItems3` service item template already exists with this name.
+	private func serviceItemExists(_ name: String) -> Bool {
+		guard !name.isEmpty else { return false }
+		var fd = FetchDescriptor<MxItems3>(predicate: #Predicate<MxItems3> { $0.mxName == name })
+		fd.fetchLimit = 1
+		return ((try? modelContext.fetch(fd)) ?? []).isEmpty == false
+	}
+
+	/// Creates a new `MxItems3` service item template from the manually-entered fields on this
+	/// service record (name, description, notes, vendor, labor, parts, custom field), so the
+	/// item becomes available for future records via the "Database Item" picker.
+	private func saveManualItemAsServiceItem() {
+		let name = trimmed(mxName)
+		guard !name.isEmpty, !serviceItemExists(name) else { return }
+		let vId = vehicleId.isEmpty ? dataSet.vehicleId : vehicleId
+
+		let newItem = MxItems3(
+			createdAt: Date(),
+			updatedAt: Date(),
+			vehicleId: vId,
+			vehicleSystem: "",
+			mxName: name,
+			mxDescription: mxDescription,
+			Notes: Notes,
+			vendor: vendor,
+			laborCost: laborCost,
+			intervalMonths: 0,
+			intervalMiles: 0,
+			intervalHours: 0,
+			part1: part1, part1Id: part1, part1Qty: Float(part1Quantity), part1cost: part1cost, part1Unit: part1Unit,
+			part2: part2, part2Id: part2, part2Qty: Float(part2Quantity), part2cost: part2cost, part2Unit: part2Unit,
+			part3: part3, part3Id: part3, part3Qty: Float(part3Quantity), part3cost: part3cost, part3Unit: part3Unit,
+			part4: part4, part4Id: part4, part4Qty: Float(part4Quantity), part4cost: part4cost, part4Unit: part4Unit,
+			part5: part5, part5Id: part5, part5Qty: Float(part5Quantity), part5cost: part5cost, part5Unit: part5Unit,
+			customMeasureLabel: customMeasureLabel,
+			customMeasureUnit: customMeasureUnit,
+			customMeasureValue: customMeasureValue,
+			image1: image1, image1Description: image1Description,
+			image2: image2, image2Description: image2Description,
+			image3: image3, image3Description: image3Description
+		)
+		modelContext.insert(newItem)
+
+		// Link this record to the newly created template, same as picking it from Database Item.
+		mxName = name
+		mxItemId = name
+		dataSet.mxItemId = name
+
+		do {
+			try modelContext.save()
+		} catch {
+			print("Failed to save new service item: \(error.localizedDescription)")
+		}
+	}
+
 	// Helper to read the current part name from the record for seeding ModelPicker.
 	private func getPartNameFromDataSet(index: Int) -> String {
 		switch index {
@@ -1343,7 +1949,8 @@ struct EditRecord: View {
 		trackPartsCost4 = Double(part4Quantity) * Double(part4cost)
 		trackPartsCost5 = Double(part5Quantity) * Double(part5cost)
 		trackPartsCostTotal = trackPartsCost1 + trackPartsCost2 + trackPartsCost3 + trackPartsCost4 + trackPartsCost5
-		trackAllCostTotal = trackPartsCostTotal + Double(laborCost)
+		trackSubItemsLaborTotal = Double(subItem1LaborCost) + Double(subItem2LaborCost) + Double(subItem3LaborCost) + Double(subItem4LaborCost) + Double(subItem5LaborCost)
+		trackAllCostTotal = trackPartsCostTotal + Double(laborCost) + trackSubItemsLaborTotal
 
 		// Lines and quantities
 		let line1 = (!part1.isEmpty && part1Quantity > 0) ? 1 : 0
@@ -1449,11 +2056,34 @@ struct EditRecord: View {
 		for (name, cost, qty) in parts where !name.isEmpty {
 			items.append((name: name, cost: Float(Double(qty) * Double(cost))))
 		}
+		let subItems: [(String, Float)] = [
+			(subItem1, subItem1LaborCost), (subItem2, subItem2LaborCost), (subItem3, subItem3LaborCost),
+			(subItem4, subItem4LaborCost), (subItem5, subItem5LaborCost),
+		]
+		for (name, cost) in subItems where !name.isEmpty && cost > 0 {
+			items.append((name: name, cost: cost))
+		}
 		return items
 	}
 
 	// Creates individual Additions records (one per part + one for labor) linked to this service record.
 	private func transferToAdditions(category: String, subCategory: String) {
+		let parts: [(String, Float, Int)] = [
+			(part1, part1cost, part1Quantity),
+			(part2, part2cost, part2Quantity),
+			(part3, part3cost, part3Quantity),
+			(part4, part4cost, part4Quantity),
+			(part5, part5cost, part5Quantity),
+		]
+		let subItems: [(String, Float)] = [
+			(subItem1, subItem1LaborCost), (subItem2, subItem2LaborCost), (subItem3, subItem3LaborCost),
+			(subItem4, subItem4LaborCost), (subItem5, subItem5LaborCost),
+		]
+		let willCreate = (laborCost > 0 ? 1 : 0) + parts.filter { !$0.0.isEmpty }.count
+			+ subItems.filter { !$0.0.isEmpty && $0.1 > 0 }.count
+		guard willCreate > 0 else { return }
+		guard entitlements.requestCreate(Additions.self, count: willCreate, in: modelContext) else { return }
+
 		let linkId = UUID().uuidString
 		let vId = vehicleId.isEmpty ? dataSet.vehicleId : vehicleId
 		let serviceName = mxName.isEmpty ? dataSet.mxName : mxName
@@ -1472,13 +2102,6 @@ struct EditRecord: View {
 			count += 1
 		}
 		// Part entries
-		let parts: [(String, Float, Int)] = [
-			(part1, part1cost, part1Quantity),
-			(part2, part2cost, part2Quantity),
-			(part3, part3cost, part3Quantity),
-			(part4, part4cost, part4Quantity),
-			(part5, part5cost, part5Quantity),
-		]
 		for (pName, pCost, pQty) in parts where !pName.isEmpty {
 			let entry = Additions(
 				vehicleId: vId, miles: Miles, engHours: engHours,
@@ -1486,6 +2109,18 @@ struct EditRecord: View {
 				itemVendor: vend, category: category,
 				subCategory: subCategory,
 				itemCost: Float(Double(pQty) * Double(pCost))
+			)
+			entry.serviceRecordLinkId = linkId
+			modelContext.insert(entry)
+			count += 1
+		}
+		// Sub-item labor entries
+		for (siName, siCost) in subItems where !siName.isEmpty && siCost > 0 {
+			let entry = Additions(
+				vehicleId: vId, miles: Miles, engHours: engHours,
+				itemName: siName, itemDescription: serviceName,
+				itemVendor: vend, category: category,
+				subCategory: subCategory, itemCost: siCost
 			)
 			entry.serviceRecordLinkId = linkId
 			modelContext.insert(entry)
@@ -1538,12 +2173,81 @@ struct EditRecord: View {
 				addition.itemCost = Float(Double(part4Quantity) * Double(part4cost))
 			} else if addition.itemName == part5 {
 				addition.itemCost = Float(Double(part5Quantity) * Double(part5cost))
+			} else if addition.itemName == subItem1 {
+				addition.itemCost = subItem1LaborCost
+			} else if addition.itemName == subItem2 {
+				addition.itemCost = subItem2LaborCost
+			} else if addition.itemName == subItem3 {
+				addition.itemCost = subItem3LaborCost
+			} else if addition.itemName == subItem4 {
+				addition.itemCost = subItem4LaborCost
+			} else if addition.itemName == subItem5 {
+				addition.itemCost = subItem5LaborCost
 			}
 		}
 		try? modelContext.save()
 		transferCategory = additions[0].category
 		transferSubCategory = additions[0].subCategory
 		linkedAdditionsCount = additions.count
+	}
+
+	// MARK: - Inventory tracking
+
+	/// Fetches the `MxParts1` record matching `name`, if any.
+	private func fetchPart(named name: String) -> MxParts1? {
+		guard !name.isEmpty else { return nil }
+		var fd = FetchDescriptor<MxParts1>(predicate: #Predicate<MxParts1> { $0.partName == name })
+		fd.fetchLimit = 1
+		return try? modelContext.fetch(fd).first
+	}
+
+	/// Adjusts the named part's on-hand inventory by `-delta` (a positive delta consumes more
+	/// stock, a negative delta returns stock). No-ops for parts that aren't inventory-tracked
+	/// or can't be matched by name.
+	private func adjustInventory(partNamed name: String, byDelta delta: Int) {
+		guard delta != 0, let part = fetchPart(named: name), part.inventoryTracked else { return }
+		part.inventoryQuantityOnHand -= Float(delta)
+		part.updatedAt = Date()
+	}
+
+	/// Reconciles inventory for all five part slots between what this record previously consumed
+	/// and what's about to be saved. A slot whose part name changed returns the old part's stock
+	/// in full and consumes the new part's stock in full, rather than diffing across two parts.
+	private func reconcilePartsInventory(
+		old: [(name: String, qty: Int)],
+		new: [(name: String, qty: Int)]
+	) {
+		for i in 0..<old.count {
+			let oldName = old[i].name, oldQty = old[i].qty
+			let newName = new[i].name, newQty = new[i].qty
+			if oldName == newName {
+				adjustInventory(partNamed: oldName, byDelta: newQty - oldQty)
+			} else {
+				adjustInventory(partNamed: oldName, byDelta: -oldQty)
+				adjustInventory(partNamed: newName, byDelta: newQty)
+			}
+		}
+	}
+
+	/// Returns all inventory this record currently has consumed. Called before deleting the
+	/// record so removing it doesn't permanently understate stock on hand.
+	private func releaseAllPartsInventory() {
+		let parts: [(name: String, qty: Int)] = [
+			(dataSet.part1, dataSet.part1Quantity),
+			(dataSet.part2, dataSet.part2Quantity),
+			(dataSet.part3, dataSet.part3Quantity),
+			(dataSet.part4, dataSet.part4Quantity),
+			(dataSet.part5, dataSet.part5Quantity),
+		]
+		for p in parts { adjustInventory(partNamed: p.name, byDelta: -p.qty) }
+	}
+}
+
+// MARK: - Normalization helpers
+private extension EditRecord {
+	/// Trims leading and trailing whitespace/newlines from the provided string.
+	func trimmed(_ s: String) -> String {
+		s.trimmingCharacters(in: .whitespacesAndNewlines)
 	}
 }
 

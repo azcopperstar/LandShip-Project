@@ -58,6 +58,8 @@ struct pdfReportService: View {
 	@State private var scope: String
 	@State private var pdfDocument: PDFDocument?
 	@State private var zoomAction: ZoomAction?
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 
 	let functions = Functions()
 
@@ -126,7 +128,68 @@ struct pdfReportService: View {
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
+			}
 		}
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: "Service Records") { _ in }
+	}
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let records = fetchRecords()
+
+		let partCount = 5
+		var headers = [
+			"Inactive", "Created At", "Updated At", "Service Date", Vertical.current.assetSingular, "\(Vertical.current.assetSingular) Display Name",
+			Vertical.current.primaryMeterLabel, "Engine Hours", "Service Item", "Service Item ID", "Description", "Notes",
+			"Vendor", "Labor Cost",
+			"Custom Measure Label", "Custom Measure Unit", "Custom Measure Value",
+			"Image 1 Description", "Image 2 Description", "Image 3 Description", "Image 4 Description", "Image 5 Description",
+			"Sub Item 1", "Sub Item 1 ID", "Sub Item 1 Description", "Sub Item 1 Labor Cost", "Sub Item 1 Comments",
+			"Sub Item 2", "Sub Item 2 ID", "Sub Item 2 Description", "Sub Item 2 Labor Cost", "Sub Item 2 Comments",
+			"Sub Item 3", "Sub Item 3 ID", "Sub Item 3 Description", "Sub Item 3 Labor Cost", "Sub Item 3 Comments",
+			"Sub Item 4", "Sub Item 4 ID", "Sub Item 4 Description", "Sub Item 4 Labor Cost", "Sub Item 4 Comments",
+			"Sub Item 5", "Sub Item 5 ID", "Sub Item 5 Description", "Sub Item 5 Labor Cost", "Sub Item 5 Comments"
+		]
+		for i in 1...partCount {
+			headers.append(contentsOf: ["Part \(i)", "Part \(i) Cost", "Part \(i) Unit", "Part \(i) Quantity"])
+		}
+
+		let rows: [[String]] = records.map { r in
+			let vehicleName = r.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: r.vehicleId, context: modelContext)
+			var row = [
+				CSVField.bool(r.inactive), CSVField.date(r.createdAt), CSVField.date(r.updatedAt), CSVField.date(r.mxDate), r.vehicleId, vehicleName,
+				CSVField.int(r.Miles), CSVField.float(r.engHours), r.mxName, r.mxItemId, r.mxDescription, r.Notes,
+				r.vendor, CSVField.float(r.laborCost),
+				r.customMeasureLabel, r.customMeasureUnit, CSVField.float(r.customMeasureValue),
+				r.image1Description, r.image2Description, r.image3Description, r.image4Description, r.image5Description,
+				r.subItem1, r.subItem1Id, r.subItem1Description, CSVField.float(r.subItem1LaborCost), r.subItem1Comments,
+				r.subItem2, r.subItem2Id, r.subItem2Description, CSVField.float(r.subItem2LaborCost), r.subItem2Comments,
+				r.subItem3, r.subItem3Id, r.subItem3Description, CSVField.float(r.subItem3LaborCost), r.subItem3Comments,
+				r.subItem4, r.subItem4Id, r.subItem4Description, CSVField.float(r.subItem4LaborCost), r.subItem4Comments,
+				r.subItem5, r.subItem5Id, r.subItem5Description, CSVField.float(r.subItem5LaborCost), r.subItem5Comments
+			]
+			let parts: [(name: String, cost: Float, unit: String, quantity: Int)] = [
+				(r.part1, r.part1cost, r.part1Unit, r.part1Quantity),
+				(r.part2, r.part2cost, r.part2Unit, r.part2Quantity),
+				(r.part3, r.part3cost, r.part3Unit, r.part3Quantity),
+				(r.part4, r.part4cost, r.part4Unit, r.part4Quantity),
+				(r.part5, r.part5cost, r.part5Unit, r.part5Quantity)
+			]
+			for part in parts {
+				row.append(contentsOf: [part.name, CSVField.float(part.cost), part.unit, CSVField.int(part.quantity)])
+			}
+			return row
+		}
+
+		return CSVBuilder.build(headers: headers, rows: rows)
 	}
 
 	// MARK: - Generation
@@ -177,12 +240,36 @@ struct pdfReportService: View {
 			]
 		}
 
-		let scopeTitle = (scope == "All Vehicles" || scope.isEmpty) ? "All Vehicles" : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
+		let scopeTitle = FleetScope.isAll(scope) ? FleetScope.allDisplayLabel : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
 		let recordWord = records.count == 1 ? "record" : "records"
 		let subtitle = "\(scopeTitle) • \(functions.formatDate_DDMMMyy(date: Date())) • \(records.count) \(recordWord)"
 
-		let costSummary = PDFCostSummaryBuilder.build(scope: scope, context: modelContext)
-		return PDFReportRenderer.render(title: "Service Records Report", subtitle: subtitle, columns: columns, rows: rows, costSummary: costSummary, style: .standard)
+		let summary = serviceSummary(records)
+		return PDFReportRenderer.render(title: "Service Records Report", subtitle: subtitle, columns: columns, rows: rows, summary: summary, style: .standard)
+	}
+
+	private func serviceSummary(_ records: [ServiceRecords1]) -> PDFReportSummary {
+		let groups = pdfVehicleScopedSummaryGroups(scope: scope, records: records, vehicleId: \.vehicleId, context: modelContext) { subset in
+			let totalLabor = subset.reduce(Float(0)) { $0 + $1.laborCost }
+			let totalParts = subset.reduce(Float(0)) { total, record in
+				total + record.part1cost * Float(record.part1Quantity)
+					+ record.part2cost * Float(record.part2Quantity)
+					+ record.part3cost * Float(record.part3Quantity)
+					+ record.part4cost * Float(record.part4Quantity)
+					+ record.part5cost * Float(record.part5Quantity)
+			}
+			let totalSubItemsLabor = subset.reduce(Float(0)) {
+				$0 + $1.subItem1LaborCost + $1.subItem2LaborCost + $1.subItem3LaborCost + $1.subItem4LaborCost + $1.subItem5LaborCost
+			}
+			return [
+				("Total Records", subset.isEmpty ? nil : "\(subset.count)"),
+				("Total Labor", totalLabor != 0 ? pdfCurrencyString(totalLabor) : nil),
+				("Total Parts", totalParts != 0 ? pdfCurrencyString(totalParts) : nil),
+				("Total Sub-Items Labor", totalSubItemsLabor != 0 ? pdfCurrencyString(totalSubItemsLabor) : nil),
+				("Total Cost", (totalLabor + totalParts + totalSubItemsLabor) != 0 ? pdfCurrencyString(totalLabor + totalParts + totalSubItemsLabor) : nil)
+			]
+		}
+		return PDFReportSummary(title: "SERVICE RECORDS SUMMARY", groups: groups)
 	}
 
 	// MARK: - Field-group builders
@@ -210,7 +297,7 @@ struct pdfReportService: View {
 
 		var groups: [PDFFieldGroup] = []
 		if let identity = fieldGroup(nil, [
-			("Vehicle", vehicleName),
+			(Vertical.current.assetSingular, vehicleName),
 			("Date", functions.formatDate_DDMMMyy(date: record.mxDate)),
 			("Service Item", text(record.mxName)),
 			("Vendor", text(record.vendor))
@@ -225,7 +312,7 @@ struct pdfReportService: View {
 		var groups: [PDFFieldGroup] = []
 		if let details = fieldGroup(nil, [
 			("Description", text(record.mxDescription)),
-			("Miles", record.Miles != 0 ? NumberFormatter.localizedString(from: NSNumber(value: record.Miles), number: .decimal) : nil),
+			(Vertical.current.primaryMeterLabel, record.Miles != 0 ? NumberFormatter.localizedString(from: NSNumber(value: record.Miles), number: .decimal) : nil),
 			("Engine Hours", record.engHours != 0 ? String(format: "%.1f hrs", record.engHours) : nil),
 			(record.customMeasureLabel.isEmpty ? "Custom" : record.customMeasureLabel,
 			 record.customMeasureValue != 0 ? "\(String(format: "%.1f", record.customMeasureValue)) \(record.customMeasureUnit)" : nil)
@@ -254,7 +341,22 @@ struct pdfReportService: View {
 		]) {
 			groups.append(parts)
 		}
+		if let subItems = fieldGroup("Sub-Items", [
+			("Item 1", subItemLine(name: record.subItem1, cost: record.subItem1LaborCost)),
+			("Item 2", subItemLine(name: record.subItem2, cost: record.subItem2LaborCost)),
+			("Item 3", subItemLine(name: record.subItem3, cost: record.subItem3LaborCost)),
+			("Item 4", subItemLine(name: record.subItem4, cost: record.subItem4LaborCost)),
+			("Item 5", subItemLine(name: record.subItem5, cost: record.subItem5LaborCost))
+		]) {
+			groups.append(subItems)
+		}
 		return .groups(groups)
+	}
+
+	private func subItemLine(name: String, cost: Float) -> String? {
+		let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !trimmedName.isEmpty else { return nil }
+		return cost != 0 ? "\(trimmedName) — \(functions.formatCurrency(dollars: cost))" : trimmedName
 	}
 
 	private func costsAndNotesCell(_ record: ServiceRecords1) -> PDFCell {
@@ -265,11 +367,14 @@ struct pdfReportService: View {
 			+ record.part3cost * Float(record.part3Quantity)
 			+ record.part4cost * Float(record.part4Quantity)
 			+ record.part5cost * Float(record.part5Quantity)
-		let total = record.laborCost + partsCost
+		let subItemsLaborCost = record.subItem1LaborCost + record.subItem2LaborCost + record.subItem3LaborCost
+			+ record.subItem4LaborCost + record.subItem5LaborCost
+		let total = record.laborCost + partsCost + subItemsLaborCost
 
 		if let costs = fieldGroup("Costs", [
 			("Labor", record.laborCost != 0 ? functions.formatCurrency(dollars: record.laborCost) : nil),
 			("Parts", partsCost != 0 ? functions.formatCurrency(dollars: partsCost) : nil),
+			("Sub-Items Labor", subItemsLaborCost != 0 ? functions.formatCurrency(dollars: subItemsLaborCost) : nil),
 			("Total", total != 0 ? functions.formatCurrency(dollars: total) : nil)
 		]) {
 			groups.append(costs)

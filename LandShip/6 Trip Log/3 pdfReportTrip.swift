@@ -58,6 +58,8 @@ struct pdfReportTrip: View {
 	@State private var scope: String
 	@State private var pdfDocument: PDFDocument?
 	@State private var zoomAction: ZoomAction?
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 
 	let functions = Functions()
 
@@ -126,7 +128,78 @@ struct pdfReportTrip: View {
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
+			}
 		}
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: "Trip Log") { _ in }
+	}
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let trips = fetchTrips()
+
+		let stopCount = 6
+		var headers = [
+			"Inactive", Vertical.current.assetSingular, "\(Vertical.current.assetSingular) Display Name", "Log Name", "Notes",
+			"Created At", "Updated At", "Trip Start", "Trip End",
+			"\(Vertical.current.primaryMeterLabel) Start", "\(Vertical.current.primaryMeterLabel) End",
+			"Engine Hours Start", "Engine Hours End",
+			"Fuel Qty Start", "Fuel Qty End", "Fuel Consumed",
+			"Fuel Level Start", "Fuel Level End", "Fuel Level Start Fraction", "Fuel Level End Fraction",
+			"DEF Level Start", "DEF Level Start Fraction", "DEF Level End", "DEF Level End Fraction",
+			"DEF Qty Start", "DEF Qty End",
+			"Location Start", "Location End",
+			"Towed \(Vertical.current.assetSingular)", "Towed \(Vertical.current.assetSingular) ID", "Trip Group",
+			"Image 1 Description", "Image 2 Description", "Image 3 Description"
+		]
+		for i in 1...stopCount {
+			headers.append(contentsOf: [
+				"Stop \(i) Fuel Added Log", "Stop \(i) Fuel Added", "Stop \(i) Entry Time", "Stop \(i) Exit Time",
+				"Stop \(i) Reason", "Stop \(i) Comment", "Stop \(i) Location"
+			])
+		}
+
+		let rows: [[String]] = trips.map { trip in
+			let vehicleName = trip.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: trip.vehicleId, context: modelContext)
+			let towedName = trip.vehicleIdTowed.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: trip.vehicleIdTowed, context: modelContext)
+			var row = [
+				CSVField.bool(trip.inactive), trip.vehicleId, vehicleName, trip.logName, trip.tripNotes,
+				CSVField.date(trip.createdAt), CSVField.date(trip.updatedAt), CSVField.date(trip.tripDateTimeStart), CSVField.date(trip.tripDateTimeEnd),
+				CSVField.int(trip.odometerStart), CSVField.int(trip.odometerEnd),
+				CSVField.float(trip.engHoursStart), CSVField.float(trip.engHoursEnd),
+				CSVField.float(trip.fuelQuantityStart), CSVField.float(trip.fuelQuantityEnd), CSVField.float(trip.fuelConsumed),
+				CSVField.float(trip.fuelLevelStart1), CSVField.float(trip.fuelLevelEnd1), trip.fuelLevelStart, trip.fuelLevelEnd,
+				CSVField.float(trip.defLevel1), trip.defLevelFraction, CSVField.float(trip.defLevelEnd1), trip.defLevelEndFraction,
+				CSVField.float(trip.defQuantityStart), CSVField.float(trip.defQuantityEnd),
+				trip.locationStart, trip.locationEnd,
+				CSVField.bool(trip.vehicleTowed), towedName.isEmpty ? trip.vehicleIdTowed : towedName, trip.tripGroup,
+				trip.image1Description, trip.image2Description, trip.image3Description
+			]
+			let stops: [(log: String, added: Float, entry: Date?, exit: Date?, reason: String, comment: String, location: String)] = [
+				(trip.fuelAdded1Log, trip.fuelAdded1, trip.fuelDateTime1, trip.fuelExitTime1, trip.stopReason1, trip.stopComment1, trip.fuelLocation1),
+				(trip.fuelAdded2Log, trip.fuelAdded2, trip.fuelDateTime2, trip.fuelExitTime2, trip.stopReason2, trip.stopComment2, trip.fuelLocation2),
+				(trip.fuelAdded3Log, trip.fuelAdded3, trip.fuelDateTime3, trip.fuelExitTime3, trip.stopReason3, trip.stopComment3, trip.fuelLocation3),
+				(trip.fuelAdded4Log, trip.fuelAdded4, trip.fuelDateTime4, trip.fuelExitTime4, trip.stopReason4, trip.stopComment4, trip.fuelLocation4),
+				(trip.fuelAdded5Log, trip.fuelAdded5, trip.fuelDateTime5, trip.fuelExitTime5, trip.stopReason5, trip.stopComment5, trip.fuelLocation5),
+				(trip.fuelAdded6Log, trip.fuelAdded6, trip.fuelDateTime6, trip.fuelExitTime6, trip.stopReason6, trip.stopComment6, trip.fuelLocation6)
+			]
+			for stop in stops {
+				row.append(contentsOf: [
+					stop.log, CSVField.float(stop.added), stop.entry.map(CSVField.date) ?? "", stop.exit.map(CSVField.date) ?? "",
+					stop.reason, stop.comment, stop.location
+				])
+			}
+			return row
+		}
+
+		return CSVBuilder.build(headers: headers, rows: rows)
 	}
 
 	// MARK: - Generation
@@ -177,11 +250,36 @@ struct pdfReportTrip: View {
 			]
 		}
 
-		let scopeTitle = (scope == "All Vehicles" || scope.isEmpty) ? "All Vehicles" : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
+		let scopeTitle = FleetScope.isAll(scope) ? FleetScope.allDisplayLabel : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
 		let tripWord = trips.count == 1 ? "trip" : "trips"
 		let subtitle = "\(scopeTitle) • \(functions.formatDate_DDMMMyy(date: Date())) • \(trips.count) \(tripWord)"
 
-		return PDFReportRenderer.render(title: "Trip Log Report", subtitle: subtitle, columns: columns, rows: rows, style: .standard)
+		let summary = tripSummary(trips)
+		return PDFReportRenderer.render(title: "Trip Log Report", subtitle: subtitle, columns: columns, rows: rows, summary: summary, style: .standard)
+	}
+
+	/// Trip Log has no cost field of its own, so this breaks down distance/duration/fuel instead.
+	private func tripSummary(_ trips: [TripLog2]) -> PDFReportSummary {
+		let groups = pdfVehicleScopedSummaryGroups(scope: scope, records: trips, vehicleId: \.vehicleId, context: modelContext) { subset in
+			let totalDistance = subset.reduce(0) { total, trip in
+				total + (trip.odometerEnd > trip.odometerStart ? trip.odometerEnd - trip.odometerStart : 0)
+			}
+			let totalSeconds = subset.reduce(0.0) { total, trip in
+				let seconds = trip.tripDateTimeEnd.timeIntervalSince(trip.tripDateTimeStart)
+				return total + max(0, seconds)
+			}
+			let totalHours = Int(totalSeconds) / 3600
+			let totalMinutes = (Int(totalSeconds) % 3600) / 60
+			let totalFuelConsumed = subset.reduce(Float(0)) { $0 + $1.fuelConsumed }
+
+			return [
+				("Total Trips", subset.isEmpty ? nil : "\(subset.count)"),
+				("Total Distance", totalDistance != 0 ? NumberFormatter.localizedString(from: NSNumber(value: totalDistance), number: .decimal) : nil),
+				("Total Duration", totalSeconds != 0 ? "\(totalHours)h \(totalMinutes)m" : nil),
+				("Total Fuel Consumed", totalFuelConsumed != 0 ? String(format: "%.1f", totalFuelConsumed) : nil)
+			]
+		}
+		return PDFReportSummary(title: "TRIP LOG SUMMARY", groups: groups)
 	}
 
 	// MARK: - Field-group builders
@@ -210,10 +308,10 @@ struct pdfReportTrip: View {
 
 		var groups: [PDFFieldGroup] = []
 		if let identity = fieldGroup(nil, [
-			("Vehicle", vehicleName),
+			(Vertical.current.assetSingular, vehicleName),
 			("Log Name", text(trip.logName)),
 			("Trip Group", text(trip.tripGroup)),
-			("Towed Vehicle", towedName)
+			("Towed \(Vertical.current.assetSingular)", towedName)
 		]) {
 			groups.append(identity)
 		}
@@ -243,7 +341,7 @@ struct pdfReportTrip: View {
 
 		if let start = fieldGroup("Start", [
 			("Date/Time", functions.formatDate_DDMMMyy_HHmm(date: trip.tripDateTimeStart)),
-			("Odometer", trip.odometerStart != 0 ? NumberFormatter.localizedString(from: NSNumber(value: trip.odometerStart), number: .decimal) : nil),
+			(Vertical.current.primaryMeterLabel, trip.odometerStart != 0 ? NumberFormatter.localizedString(from: NSNumber(value: trip.odometerStart), number: .decimal) : nil),
 			("Engine Hours", trip.engHoursStart != 0 ? String(format: "%.1f hrs", trip.engHoursStart) : nil),
 			("Location", text(trip.locationStart)),
 			("Fuel Level", text(trip.fuelLevelStart)),
@@ -254,7 +352,7 @@ struct pdfReportTrip: View {
 
 		if let end = fieldGroup("End", [
 			("Date/Time", trip.tripDateTimeEnd > trip.tripDateTimeStart ? functions.formatDate_DDMMMyy_HHmm(date: trip.tripDateTimeEnd) : nil),
-			("Odometer", trip.odometerEnd != 0 ? NumberFormatter.localizedString(from: NSNumber(value: trip.odometerEnd), number: .decimal) : nil),
+			(Vertical.current.primaryMeterLabel, trip.odometerEnd != 0 ? NumberFormatter.localizedString(from: NSNumber(value: trip.odometerEnd), number: .decimal) : nil),
 			("Engine Hours", trip.engHoursEnd != 0 ? String(format: "%.1f hrs", trip.engHoursEnd) : nil),
 			("Location", text(trip.locationEnd)),
 			("Fuel Level", text(trip.fuelLevelEnd)),

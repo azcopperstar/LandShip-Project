@@ -45,22 +45,44 @@ struct OnboardingView: View {
 	
 	/// Called when the user completes or skips onboarding.
 	var didFinish: () -> Void
-	
+
 	// MARK: - State
-	
+
 	/// The currently selected onboarding page index used by the TabView.
 	/// Page indices (tags) are:
-	/// 0: App overview
-	/// 1: Settings intro (with button to open settings sheet)
-	/// 2: Navigation overview
-	/// 3: Garage group
-	/// 4: Tracking
-	/// 5: Service
-	/// 6: Setup
-	@State private var selectedPage: Int = 0
-	
+	/// 0: Free trial intro (with button to open the paywall)
+	/// 1: App overview
+	/// 2: Settings intro (with button to open settings sheet)
+	/// 3: Navigation overview
+	/// 4: Dashboard
+	/// 5-6: Garage (Vehicles, Parts)
+	/// 7-8: Data Tracking (Fuel, Travel)
+	/// 9-10: Vehicle Service (Records, Items)
+	/// 11-12: Vehicle Financials (Improvements, Expenditures)
+	/// 13: Projects & Punch Lists
+	/// 14: CheckLists & Sub-Items
+	/// 15-17: Setup (Systems, Vendors/Shops, Settings)
+	/// 18: Data Management (Backup/Restore)
+	@State private var selectedPage: Int
+
+	/// Starts on page 1 (skipping the trial pitch) for anyone who already has
+	/// the full version — passed in by the presenter, which already knows
+	/// `entitlements.isFullVersion`, rather than read here to avoid this view
+	/// needing its own environment/actor-isolation concerns.
+	init(didFinish: @escaping () -> Void, startingPage: Int = 0) {
+		self.didFinish = didFinish
+		self._selectedPage = State(initialValue: startingPage)
+	}
+
 	/// Controls presentation of the Settings sheet (SettingsEditorView).
 	@State private var showingSettingsSheet: Bool = false
+
+	/// Controls presentation of the paywall (PaywallView), triggered from the
+	/// trial intro page. Kept local rather than routing through
+	/// EntitlementStore.paywallContext/ContentView's sheet, since OnboardingView
+	/// is itself already presented as a sheet — stacking a second sheet off the
+	/// same shared state would fight with that presentation.
+	@State private var showingPaywall: Bool = false
 	
 	// MARK: - Body
 	
@@ -70,8 +92,12 @@ struct OnboardingView: View {
 				// The main paged content of the onboarding. Each page is tagged to enable
 				// programmatic navigation via `selectedPage`.
 				TabView(selection: $selectedPage) {
-					
-					// Page 0: App overview and data model/sync description.
+
+					// Page 0: Free trial intro, with a button to open the paywall.
+					trialIntro
+						.tag(0)
+
+					// Page 1: App overview and data model/sync description.
 					OnboardingPage(
 						title: OnboardingCopy.Overview.title,
 						systemImage: OnboardingCopy.Overview.systemImage,
@@ -80,13 +106,13 @@ struct OnboardingView: View {
 						header2: OnboardingCopy.Overview.header2,
 						message2: OnboardingCopy.Overview.message2
 					)
-					.tag(0)
- 
-					// Page 1: Settings intro with button to open the settings sheet.
-					settingsIntro
-						.tag(1)
+					.tag(1)
 
-					// Page 2: App navigation overview for multi-column vs. phone layouts.
+					// Page 2: Settings intro with button to open the settings sheet.
+					settingsIntro
+						.tag(2)
+
+					// Page 3: App navigation overview for multi-column vs. phone layouts.
 					OnboardingPage(
 						title: OnboardingCopy.Navigation.title,
 						systemImage: OnboardingCopy.Navigation.systemImage,
@@ -99,9 +125,24 @@ struct OnboardingView: View {
 						header4: OnboardingCopy.Navigation.header4,
 						message4: OnboardingCopy.Navigation.message4
 					)
-					.tag(2)
+					.tag(3)
 
-					// Page 3: Garage: Vehicles.
+					// Page 4: Dashboard.
+					OnboardingPage(
+						title: OnboardingCopy.Dashboard.title,
+						systemImage: OnboardingCopy.Dashboard.systemImage,
+						header1: OnboardingCopy.Dashboard.header1,
+						message1: OnboardingCopy.Dashboard.message1,
+						header2: OnboardingCopy.Dashboard.header2,
+						message2: OnboardingCopy.Dashboard.message2,
+						header3: OnboardingCopy.Dashboard.header3,
+						message3: OnboardingCopy.Dashboard.message3,
+						header4: OnboardingCopy.Dashboard.header4,
+						message4: OnboardingCopy.Dashboard.message4
+					)
+					.tag(4)
+
+					// Page 5: Garage: Vehicles.
 					OnboardingPage(
 						title: OnboardingCopy.GarageVehicles.title,
 						systemImage: OnboardingCopy.GarageVehicles.systemImage,
@@ -114,9 +155,9 @@ struct OnboardingView: View {
 						header4: OnboardingCopy.GarageVehicles.header4,
 						message4: OnboardingCopy.GarageVehicles.message4
 					)
-					.tag(3)
+					.tag(5)
 
-					// Page 4: Garage: Parts.
+					// Page 6: Garage: Parts.
 					OnboardingPage(
 						title: OnboardingCopy.GarageParts.title,
 						systemImage: OnboardingCopy.GarageParts.systemImage,
@@ -129,9 +170,9 @@ struct OnboardingView: View {
 						header4: OnboardingCopy.GarageParts.header4,
 						message4: OnboardingCopy.GarageParts.message4
 					)
-					.tag(4)
+					.tag(6)
 
-					// Page 4: Data Tracking: Fuel.
+					// Page 7: Data Tracking: Fuel.
 					OnboardingPage(
 						title: OnboardingCopy.DataTracking_Fuel.title,
 						systemImage: OnboardingCopy.DataTracking_Fuel.systemImage,
@@ -144,9 +185,9 @@ struct OnboardingView: View {
 						header4: OnboardingCopy.DataTracking_Fuel.header4,
 						message4: OnboardingCopy.DataTracking_Fuel.message4
 					)
-					.tag(5)
-					
-					// Page 5: Data Tracking: Travel.
+					.tag(7)
+
+					// Page 8: Data Tracking: Travel.
 					OnboardingPage(
 						title: OnboardingCopy.DataTracking_Travel.title,
 						systemImage: OnboardingCopy.DataTracking_Travel.systemImage,
@@ -159,9 +200,9 @@ struct OnboardingView: View {
 						header4: OnboardingCopy.DataTracking_Travel.header4,
 						message4: OnboardingCopy.DataTracking_Travel.message4
 					)
-					.tag(6)
+					.tag(8)
 
-					// Page 5: Vehicle Service: Records.
+					// Page 9: Vehicle Service: Records.
 					OnboardingPage(
 						title: OnboardingCopy.VehicleService_Records.title,
 						systemImage: OnboardingCopy.VehicleService_Records.systemImage,
@@ -174,9 +215,9 @@ struct OnboardingView: View {
 						header4: OnboardingCopy.VehicleService_Records.header4,
 						message4: OnboardingCopy.VehicleService_Records.message4
 					)
-					.tag(7)
-					
-					// Page 5: Vehicle Service: Items.
+					.tag(9)
+
+					// Page 10: Vehicle Service: Items.
 					OnboardingPage(
 						title: OnboardingCopy.VehicleService_Items.title,
 						systemImage: OnboardingCopy.VehicleService_Items.systemImage,
@@ -189,9 +230,69 @@ struct OnboardingView: View {
 						header4: OnboardingCopy.VehicleService_Items.header4,
 						message4: OnboardingCopy.VehicleService_Items.message4
 					)
-					.tag(8)
+					.tag(10)
 
-					// Page 6: Setup: Systems.
+					// Page 11: Vehicle Financials: Improvements (Additions).
+					OnboardingPage(
+						title: OnboardingCopy.Additions.title,
+						systemImage: OnboardingCopy.Additions.systemImage,
+						header1: OnboardingCopy.Additions.header1,
+						message1: OnboardingCopy.Additions.message1,
+						header2: OnboardingCopy.Additions.header2,
+						message2: OnboardingCopy.Additions.message2,
+						header3: OnboardingCopy.Additions.header3,
+						message3: OnboardingCopy.Additions.message3,
+						header4: OnboardingCopy.Additions.header4,
+						message4: OnboardingCopy.Additions.message4
+					)
+					.tag(11)
+
+					// Page 12: Vehicle Financials: Expenditures (Subscriptions).
+					OnboardingPage(
+						title: OnboardingCopy.Subscriptions.title,
+						systemImage: OnboardingCopy.Subscriptions.systemImage,
+						header1: OnboardingCopy.Subscriptions.header1,
+						message1: OnboardingCopy.Subscriptions.message1,
+						header2: OnboardingCopy.Subscriptions.header2,
+						message2: OnboardingCopy.Subscriptions.message2,
+						header3: OnboardingCopy.Subscriptions.header3,
+						message3: OnboardingCopy.Subscriptions.message3,
+						header4: OnboardingCopy.Subscriptions.header4,
+						message4: OnboardingCopy.Subscriptions.message4
+					)
+					.tag(12)
+
+					// Page 13: Projects & Punch Lists.
+					OnboardingPage(
+						title: OnboardingCopy.Projects.title,
+						systemImage: OnboardingCopy.Projects.systemImage,
+						header1: OnboardingCopy.Projects.header1,
+						message1: OnboardingCopy.Projects.message1,
+						header2: OnboardingCopy.Projects.header2,
+						message2: OnboardingCopy.Projects.message2,
+						header3: OnboardingCopy.Projects.header3,
+						message3: OnboardingCopy.Projects.message3,
+						header4: OnboardingCopy.Projects.header4,
+						message4: OnboardingCopy.Projects.message4
+					)
+					.tag(13)
+
+					// Page 14: CheckLists & Sub-Items.
+					OnboardingPage(
+						title: OnboardingCopy.CheckLists.title,
+						systemImage: OnboardingCopy.CheckLists.systemImage,
+						header1: OnboardingCopy.CheckLists.header1,
+						message1: OnboardingCopy.CheckLists.message1,
+						header2: OnboardingCopy.CheckLists.header2,
+						message2: OnboardingCopy.CheckLists.message2,
+						header3: OnboardingCopy.CheckLists.header3,
+						message3: OnboardingCopy.CheckLists.message3,
+						header4: OnboardingCopy.CheckLists.header4,
+						message4: OnboardingCopy.CheckLists.message4
+					)
+					.tag(14)
+
+					// Page 15: Setup: Systems.
 					OnboardingPage(
 						title: OnboardingCopy.Setup_Systems.title,
 						systemImage: OnboardingCopy.Setup_Systems.systemImage,
@@ -204,9 +305,9 @@ struct OnboardingView: View {
 						header4: OnboardingCopy.Setup_Systems.header4,
 						message4: OnboardingCopy.Setup_Systems.message4
 					)
-					.tag(9)
+					.tag(15)
 
-					// Page 6: Setup: Vendors/Shops.
+					// Page 16: Setup: Vendors/Shops.
 					OnboardingPage(
 						title: OnboardingCopy.Setup_Vendors.title,
 						systemImage: OnboardingCopy.Setup_Vendors.systemImage,
@@ -219,9 +320,9 @@ struct OnboardingView: View {
 						header4: OnboardingCopy.Setup_Vendors.header4,
 						message4: OnboardingCopy.Setup_Vendors.message4
 					)
-					.tag(10)
+					.tag(16)
 
-					// Page 6: Setup: Settings.
+					// Page 17: Setup: Settings.
 					OnboardingPage(
 						title: OnboardingCopy.Setup_Settings.title,
 						systemImage: OnboardingCopy.Setup_Settings.systemImage,
@@ -234,9 +335,9 @@ struct OnboardingView: View {
 						header4: OnboardingCopy.Setup_Settings.header4,
 						message4: OnboardingCopy.Setup_Settings.message4
 					)
-					.tag(11)
+					.tag(17)
 
-					// Page 6: Data Management: Backup/Restore.
+					// Page 18: Data Management: Backup/Restore.
 					OnboardingPage(
 						title: OnboardingCopy.DataManagement_BackupRestore.title,
 						systemImage: OnboardingCopy.DataManagement_BackupRestore.systemImage,
@@ -249,9 +350,9 @@ struct OnboardingView: View {
 						header4: OnboardingCopy.DataManagement_BackupRestore.header4,
 						message4: OnboardingCopy.DataManagement_BackupRestore.message4
 					)
-					.tag(12)
+					.tag(18)
 
-					
+
 				}
 				#if os(macOS)
 				// macOS uses the default TabView style (no dots).
@@ -260,7 +361,18 @@ struct OnboardingView: View {
 				// iOS/iPadOS uses a page-style TabView with page control dots.
 				.tabViewStyle(.page(indexDisplayMode: .always))
 				#endif
-				
+
+				// Regulatory disclaimer, shown only on the last page alongside the Finish action —
+				// land has none (regulatoryDisclaimer is nil), so this is a no-op there.
+				if selectedPage == 18, let disclaimer = Vertical.current.regulatoryDisclaimer {
+					Text(disclaimer)
+						.font(.caption2)
+						.foregroundStyle(.secondary)
+						.multilineTextAlignment(.center)
+						.padding(.horizontal)
+						.frame(maxWidth: .infinity, alignment: .center)
+				}
+
 				// Bottom control bar with Skip, Next, and Finish actions.
 				HStack {
 					// Skip: Immediately finishes onboarding (hidden on the last page).
@@ -268,19 +380,19 @@ struct OnboardingView: View {
 						didFinish()
 					}
 					// Hide Skip on the last page to reduce clutter.
-					.opacity(selectedPage == 12 ? 0 : 1)
+					.opacity(selectedPage == 18 ? 0 : 1)
 
 					Spacer()
 
 					// Next: Advances to the next page until the last page is reached.
-					if selectedPage < 12 {
+					if selectedPage < 18 {
 						Button("Next >") {
 							withAnimation { selectedPage += 1 }
 						}
 						.buttonStyle(.borderedProminent)
 					} else {
 						// Finish: Final call-to-action when onboarding is complete.
-						Button("Start setting up vehicle data...") {
+						Button("Start setting up \(Vertical.current.assetSingular.lowercased()) data...") {
 							didFinish()
 						}
 						.buttonStyle(.borderedProminent)
@@ -299,10 +411,48 @@ struct OnboardingView: View {
 		.sheet(isPresented: $showingSettingsSheet) {
 			SettingsEditorView()
 		}
+		// Paywall presentation, triggered via the trial intro page.
+		.sheet(isPresented: $showingPaywall) {
+			PaywallView(context: .sidebar)
+#if os(macOS)
+				.frame(minWidth: 520, minHeight: 620)
+#else
+				.presentationDetents([.large])
+#endif
+		}
 	}
-	
+
 	// MARK: - Subviews
-	
+
+	/// The onboarding page that introduces the free trial and its limits, with a
+	/// button to open the paywall for anyone who wants to unlock immediately.
+	private var trialIntro: some View {
+		VStack(spacing: 1) {
+			Image(systemName: OnboardingCopy.TrialIntro.icon)
+				.font(.system(size: 50, weight: .semibold))
+				.foregroundStyle(.blue)
+				.padding(.top, 10)
+
+			Text(OnboardingCopy.TrialIntro.title)
+				.font(.title2).bold()
+
+			Text(OnboardingCopy.TrialIntro.message)
+				.multilineTextAlignment(.leading)
+				.foregroundStyle(.secondary)
+				.padding(.horizontal)
+
+			Button {
+				showingPaywall = true
+			} label: {
+				Label(OnboardingCopy.TrialIntro.buttonLabel, systemImage: OnboardingCopy.TrialIntro.buttonIcon)
+			}
+			.buttonStyle(.borderedProminent)
+			.padding(.top, 8)
+
+			Spacer()
+		}
+	}
+
 	/// The onboarding page that introduces Settings and provides a button to open
 	/// the Settings editor sheet for configuring shared preferences.
 	private var settingsIntro: some View {

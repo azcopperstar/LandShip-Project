@@ -9,9 +9,9 @@ import SwiftData
 import SwiftUI
 
 /// The single non-consumable unlock. Immutable once created in App Store
-/// Connect — do not change this string after shipping.
+/// Connect — do not change this string after shipping, per vertical.
 enum Entitlement {
-	static let productID = "com.aeronauticaltrax.LandShip.fullversion"
+	static var productID: String { Vertical.current.storeProductID }
 
 	/// Non-isolated, allocation-free read of the last known good entitlement,
 	/// for callers with no environment access (PDFReportFile, PrintablePDFView,
@@ -34,6 +34,7 @@ enum EntitlementSource: String {
 	case originalVersion
 	case overCap
 	case cached
+	case testFlight
 }
 
 enum RestoreOutcome: Equatable {
@@ -43,7 +44,7 @@ enum RestoreOutcome: Equatable {
 }
 
 #if DEBUG
-enum DebugEntitlementOverride: String, CaseIterable, Identifiable {
+enum DebugEntitlementOverride: String, CaseIterable, Identifiable, Hashable {
 	case auto, forceTrial, forceFull, forceGrandfathered, forceReceiptFailure
 	var id: String { rawValue }
 	var label: String {
@@ -66,8 +67,12 @@ enum DebugEntitlementOverride: String, CaseIterable, Identifiable {
 @Observable
 @MainActor
 final class EntitlementStore {
-	nonisolated(unsafe) static let shared = EntitlementStore()
-	nonisolated(unsafe) static let unlockedForPreviews = EntitlementStore(forcing: true)
+	// A static let of a Sendable type is nonisolated by inference even inside a
+	// @MainActor class, so non-View callers (PDFReportFile, PrintablePDFView,
+	// .commands) can reach `shared` without `await`. assumeIsolated below covers
+	// the one-time initializer's call into the actor-isolated init.
+	static let shared: EntitlementStore = MainActor.assumeIsolated { EntitlementStore() }
+	static let unlockedForPreviews: EntitlementStore = MainActor.assumeIsolated { EntitlementStore(forcing: true) }
 
 	private(set) var isFullVersion: Bool
 	private(set) var source: EntitlementSource
@@ -80,7 +85,10 @@ final class EntitlementStore {
 	private var didStart = false
 
 	var product: StoreKit.Product? { store.products.first }
-	var lastError: Error? { store.lastError }
+	/// Genuinely stored (not a computed passthrough to `store.lastError`) so
+	/// SwiftUI's Observation tracking actually sees it change — `store` isn't
+	/// itself @Observable, so a computed indirection into it wouldn't refresh views.
+	private(set) var lastError: Error?
 
 	init() {
 		store = StoreKitService(productIDs: [Entitlement.productID])
@@ -94,12 +102,27 @@ final class EntitlementStore {
 			Task { @MainActor in self?.handleEntitlementIDs(ids) }
 		}
 
+		// Start listening for Transaction.updates as early as possible — from
+		// init(), which (unlike start()) only ever runs once, at app launch,
+		// well before any purchase UI can appear. Xcode's StoreKit runtime
+		// checker warns if a purchase can happen before this listener is
+		// demonstrably running; kicking it off here rather than from start()
+		// (which only fires once RootStartupView's .task renders) closes that gap.
+		Task { await store.observeTransactionUpdates() }
+
 		// Must run here, in the singleton's init (invoked from LandShipApp.init()),
 		// strictly BEFORE ContentView.onAppear sets hasCompletedOnboarding —
 		// that ordering is what makes the marker a trustworthy signal.
 		capturePriorInstallMarkerIfNeeded()
 		if UserDefaults.standard.bool(forKey: StorageKey.priorInstallDetected) {
 			grant(.priorInstall)
+		}
+
+		// TestFlight testers get the full version without a sandbox purchase.
+		// Checked synchronously (receipt-filename heuristic, not AppTransaction)
+		// so it's granted before the first frame, same as the prior-install marker.
+		if TrialPolicy.isRunningViaTestFlight {
+			grant(.testFlight)
 		}
 	}
 
@@ -112,9 +135,9 @@ final class EntitlementStore {
 
 	// MARK: - Lifecycle
 
-	/// Kicks off product loading, the transaction observer, and the receipt
-	/// check. Safe to call from multiple scenes (e.g. the macOS Help window) —
-	/// only the first call does anything.
+	/// Kicks off product loading and the receipt check (the transaction
+	/// observer starts earlier, from init()). Safe to call from multiple
+	/// scenes (e.g. the macOS Help window) — only the first call does anything.
 	func start() async {
 		guard !didStart else { return }
 		didStart = true
@@ -126,7 +149,6 @@ final class EntitlementStore {
 		}
 #endif
 
-		Task { await store.observeTransactionUpdates() }
 		await store.refresh()
 		await evaluateReceipt()
 	}
@@ -155,11 +177,24 @@ final class EntitlementStore {
 
 	// MARK: - Purchase / Restore
 
+	/// Re-attempts loading the product list. Unlike `start()`, this always
+	/// runs — `start()`'s `didStart` guard means the paywall's "Retry" button
+	/// would otherwise do nothing after the first failed attempt in a session.
+	func retryLoadingProduct() async {
+		await store.refresh()
+		lastError = product == nil ? store.lastError : nil
+	}
+
+	func clearLastError() {
+		lastError = nil
+	}
+
 	func purchase() async {
 		guard let product else { return }
 		purchaseInFlight = true
 		defer { purchaseInFlight = false }
-		_ = await store.purchase(product)
+		let success = await store.purchase(product)
+		lastError = success ? nil : store.lastError
 	}
 
 	func restorePurchases() async -> RestoreOutcome {
@@ -242,7 +277,7 @@ final class EntitlementStore {
 		// No purchase found. Only revoke if no other grant is in force —
 		// this is the ONLY branch that may ever write `false`.
 		guard !UserDefaults.standard.bool(forKey: StorageKey.priorInstallDetected),
-		      source != .originalVersion, source != .overCap else { return }
+		      source != .originalVersion, source != .overCap, source != .testFlight else { return }
 		revoke()
 	}
 

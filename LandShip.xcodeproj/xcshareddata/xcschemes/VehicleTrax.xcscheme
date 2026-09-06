@@ -51,6 +51,9 @@
             ReferencedContainer = "container:LandShip.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <StoreKitConfigurationFileReference
+         identifier = "../../StoreKitTesting/VehicleTrax.storekit">
+      </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -75,5 +78,23 @@
    <ArchiveAction
       buildConfiguration = "Release"
       revealArchiveInOrganizer = "YES">
+      <PreActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Bump Build Number"
+               scriptText = "cd &quot;$SRCROOT&quot;&#10;agvtool next-version -all&#10;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "E89F2A482E2BF9C800EE079C"
+                     BuildableName = "VehicleTrax.app"
+                     BlueprintName = "VehicleTrax"
+                     ReferencedContainer = "container:LandShip.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PreActions>
    </ArchiveAction>
 </Scheme>

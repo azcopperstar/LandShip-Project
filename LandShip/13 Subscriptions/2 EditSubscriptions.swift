@@ -167,12 +167,12 @@ struct EditSubscriptions: View {
 					VStack {
 						SectionText(label: "GENERAL")
 						HStack{
-							Text("Vehicle")
+							Text(Vertical.current.assetSingular)
 								.textLabelModified()
 
 							ModelPicker(
 								selection: $selectedVehicle,
-								title: "Vehicle",
+								title: Vertical.current.assetSingular,
 								includeEmptyChoice: false,
 								emptyChoiceLabel: "—",
 								autoSelectFirst: false,
@@ -472,7 +472,7 @@ struct EditSubscriptions: View {
 					VStack {
 						SectionText(label: "GENERAL")
 						HStack{LabelDataText(label: "Expense Name", data: dataSet.itemName)}
-						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
+						HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						HStack{LabelDataText(label: "Status", data: dataSet.inactive ? "Inactive" : "Active")}
 						HStack{LabelDataText(label: "Account Number", data: dataSet.accountNumber)}
 						HStack{LabelDataText(label: "Vendor", data: dataSet.itemVendor)}

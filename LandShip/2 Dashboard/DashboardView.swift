@@ -129,6 +129,7 @@ struct DashboardView: View {
 	@State var additionsCostByCategory: [AdditionsCategoryCost] = []
 	@State var warrantyAlerts: [WarrantyAlert] = []
 	@State var tripGroups: [TripGroupSummary] = []
+	@State var inventoryAlerts: [InventoryAlert] = []
 
 	// Thresholds that define what counts as "due soon" across various dimensions.
 	let dueSoonFraction: Double = 0.10 // within 10% of interval
@@ -256,9 +257,9 @@ struct DashboardView: View {
 				LabeledContent {
 					ModelPicker(
 						selection: $selectedVehicle,
-						title: "Vehicle",
+						title: Vertical.current.assetSingular,
 						includeEmptyChoice: true,
-						emptyChoiceLabel: "All Vehicles",
+						emptyChoiceLabel: FleetScope.allDisplayLabel,
 						autoSelectFirst: false,
 						sort: [SortDescriptor(\.name, order: .forward)],
 						labelProvider: { $0.displayName },
@@ -266,7 +267,7 @@ struct DashboardView: View {
 					)
 					.fixedSize(horizontal: true, vertical: true)
 				} label: {
-					Text("Vehicle")
+					Text(Vertical.current.assetSingular)
 						.textLabelModified()
 				}
 			}
@@ -285,9 +286,9 @@ struct DashboardView: View {
 				LabeledContent {
 					ModelPicker(
 						selection: $selectedVehicle,
-						title: "Vehicle",
+						title: Vertical.current.assetSingular,
 						includeEmptyChoice: true,
-						emptyChoiceLabel: "All Vehicles",
+						emptyChoiceLabel: FleetScope.allDisplayLabel,
 						autoSelectFirst: false,
 						sort: [SortDescriptor(\.name, order: .forward)],
 						labelProvider: { $0.displayName },
@@ -295,7 +296,7 @@ struct DashboardView: View {
 					)
 					.fixedSize(horizontal: true, vertical: true)
 				} label: {
-					Text("Vehicle")
+					Text(Vertical.current.assetSingular)
 						.textLabelModified()
 				}
 			}
@@ -351,7 +352,7 @@ struct DashboardView: View {
 				Image(systemName: "info.circle")
 					.font(.headline)
 					.foregroundStyle(.secondary)
-				Text("This dashboard summarizes your fleet's status. Tap a card to open a detailed view. Tap \(Image(systemName: "slider.horizontal.3")) to customize which cards are shown and which vehicles count toward totals.")
+				Text("This dashboard summarizes your fleet's status. Tap a card to open a detailed view. Tap \(Image(systemName: "slider.horizontal.3")) to customize which cards are shown and which \(Vertical.current.assetPlural.lowercased()) count toward totals.")
 					.font(.caption)
 					.foregroundStyle(.secondary)
 					.fixedSize(horizontal: false, vertical: true)
@@ -363,7 +364,7 @@ struct DashboardView: View {
 					Image(systemName: "line.3.horizontal.decrease.circle")
 						.font(.caption)
 						.foregroundStyle(.blue)
-					Text("Totals limited to \(count) of \(vehicles.count) vehicles.")
+					Text("Totals limited to \(count) of \(vehicles.count) \(Vertical.current.assetPlural.lowercased()).")
 						.font(.caption2)
 						.foregroundStyle(.blue)
 				}
@@ -613,6 +614,22 @@ struct DashboardView: View {
 		.buttonStyle(.plain)
 	}
 
+	@ViewBuilder private var inventoryStatusCard: some View {
+		let vehicleDisplayName = buildVehicleDisplayNameLookup()
+		NavigationLink {
+			InventoryStatusDetailView(
+				alerts: inventoryAlerts,
+				vehicleDisplayName: vehicleDisplayName
+			)
+		} label: {
+			InventoryStatusCard(
+				alerts: inventoryAlerts,
+				vehicleDisplayName: vehicleDisplayName
+			)
+		}
+		.buttonStyle(.plain)
+	}
+
 	@ViewBuilder private func cardView(for card: DashboardCard) -> some View {
 		switch card {
 		case .maintenanceStatus: maintenanceStatusCard
@@ -627,6 +644,7 @@ struct DashboardView: View {
 		case .systemHotlist: systemHotlistCard
 		case .costSnapshot: costSnapshotCard
 		case .additionsCost: additionsCostCard
+		case .inventoryStatus: inventoryStatusCard
 		}
 	}
 
@@ -648,6 +666,7 @@ struct DashboardView: View {
 		computeAdditionsCategoryCosts()
 		computeWarrantyAlerts()
 		computeTripGroups()
+		computeInventoryStatus()
 	}
 }
 #Preview("Dashboard – Seeded Data") {

@@ -29,17 +29,29 @@ enum AppInfo {
 // Custom title view that shows app name and version (version in smaller font)
 struct AppTitleView: View {
 	var body: some View {
+#if os(macOS)
+		// The Liquid Glass toolbar pill only has room for a single line, so name and
+		// version sit side by side here rather than stacked like on iOS.
+		HStack(alignment: .firstTextBaseline, spacing: 6) {
+			Text(AppInfo.displayName)
+				.font(.headline.bold())
+				.foregroundStyle(Color.accentColor)
+			Text(VersionStrings.fullVersionString)
+				.font(.caption2)
+				.foregroundStyle(.secondary)
+		}
+		.padding(.vertical, 4)
+#else
 		VStack(spacing: 0) {
 			Text(" \(AppInfo.displayName)")
-				.font(.headline)
-			Text("\(VersionStrings.fullVersionStringWithAppName)")
+				.font(.headline.bold())
+				.foregroundStyle(Color.accentColor)
+			Text(VersionStrings.fullVersionString)
 				.font(.caption2)
 				.foregroundStyle(.secondary)
 				.baselineOffset(6)
-//			Text("v\(AppInfo.version) ")
-//				.font(.caption2)
-//				.foregroundStyle(.secondary)
 		}
+#endif
 	}
 }
 

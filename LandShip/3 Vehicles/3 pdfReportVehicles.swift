@@ -52,6 +52,8 @@ struct pdfReportVehicles: View {
 	@State private var scope: String
 	@State private var pdfDocument: PDFDocument?
 	@State private var zoomAction: ZoomAction?
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 
 	let functions = Functions()
 	let prefsFunctions = PrefsFunctions()
@@ -88,7 +90,7 @@ struct pdfReportVehicles: View {
 		}
 		.toolbar {
 			ToolbarItem(placement: .automatic) {
-				vehiclePicker
+				VehicleScopePicker(scope: $scope)
 			}
 			ToolbarItem(placement: .automatic) {
 				Button("Regenerate") {
@@ -116,7 +118,7 @@ struct pdfReportVehicles: View {
 			ToolbarItem(placement: .automatic) {
 				Button {
 					if let doc = pdfDocument {
-						PDFReportFile.printDocument(doc, jobName: "Vehicles")
+						PDFReportFile.printDocument(doc, jobName: Vertical.current.assetPlural)
 					}
 				} label: {
 					Label("Print", systemImage: "printer")
@@ -124,32 +126,68 @@ struct pdfReportVehicles: View {
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
-		}
-	}
-
-	// MARK: - Vehicle picker
-
-	private var vehiclePicker: some View {
-		let vehicles = fetchAllVehicles().filter { showInactiveVehicles || !$0.inactive }
-		return Menu {
-			Button("All Vehicles") { scope = "All Vehicles" }
-			ForEach(vehicles, id: \.name) { vehicle in
-				Button(vehicle.displayName.isEmpty ? vehicle.name : vehicle.displayName) {
-					scope = vehicle.name
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
 				}
 			}
-		} label: {
-			Label(currentScopeLabel(), systemImage: "car")
 		}
-		.accessibilityLabel("Vehicle Filter")
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: Vertical.current.assetPlural) { _ in }
 	}
 
-	private func currentScopeLabel() -> String {
-		guard scope != "All Vehicles" && !scope.isEmpty else { return "All Vehicles" }
-		let selected = scope
-		let descriptor = FetchDescriptor<Vehicle8>(predicate: #Predicate<Vehicle8> { $0.name == selected })
-		guard let vehicle = try? modelContext.fetch(descriptor).first else { return scope }
-		return vehicle.displayName.isEmpty ? vehicle.name : vehicle.displayName
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let vehicles = fetchAllVehicles().filter { showInactiveVehicles || !$0.inactive || $0.name == scope }
+		let scoped = FleetScope.isAll(scope) ? vehicles : vehicles.filter { $0.name == scope }
+
+		let headers = [
+			"Name", "Display Name", "Inactive", "Manufacturer", "Model", "Year", "Trim",
+			Vertical.current.primaryMeterLabel, "Virtual \(Vertical.current.primaryMeterLabel)", "Engine Hours",
+			"Transmission", "Engine", "Engine Serial #", "Transmission Serial #", "Fuel Type",
+			"Doors", "Seats", "Cargo Space", "Length", "Width", "Height", "Weight", "Date Weighed",
+			"Wheelbase", "GVWR", "GCWR", "GAWR Front", "GAWR Rear", "Towing Capacity", "UVW", "CCC",
+			"Fuel Capacity", "DEF Capacity", "Water Capacity", "Gray Capacity", "Black Capacity",
+			"Image URL", "Price", "Notes", "Created At", "Updated At", "Owner ID", "Location ID",
+			Vertical.current.registrationLabel, Vertical.current.plateLabel, "Date Purchased", "Place Purchased",
+			"Tire Size", "Title Number", "Online Service Provider", "Online Service Number",
+			"Online Service Login", "Online Service URL", "Online Service Billing Account",
+			"\(Vertical.current.assetSingular) Mobile #", "Insurance Company", "Insurance Policy #",
+			"Insurance Policy Holder", "Insurance Expiration", "Tire Pressure Front", "Tire Pressure Rear",
+			"Tire Pressure Tag", "Tire Pressure Pusher", "Wheel Stud Size", "Wheel Nut Socket",
+			"Wheel Nut Torque", "Available Payload", "Scale Weight Front Axle", "Scale Weight Rear Axle",
+			"Scale Weight Pusher Axle", "Scale Weight Tag Axle", "Scale Weight Trailer Axle", "Sort Order",
+			"Linked Master Vehicle ID", "Master Vehicle Display Name", "\(Vertical.current.assetSingular) Aspect",
+			"Image 1 Description", "Image 2 Description", "Image 3 Description"
+		]
+
+		let rows: [[String]] = scoped.map { v in
+			let masterName = v.linkedMasterVehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: v.linkedMasterVehicleId, context: modelContext)
+			return [
+				v.name, v.displayName, CSVField.bool(v.inactive), v.manufacturer, v.model, CSVField.int(v.year), v.trim,
+				CSVField.int(v.mileage), CSVField.int(v.mileageVirtual), CSVField.float(v.engHours),
+				v.transmission, v.engine, v.engineSerialNumber, v.transmissionSerialNumber, v.fuelType,
+				CSVField.int(v.doors), CSVField.int(v.seats), CSVField.int(v.cargoSpace), CSVField.int(v.length), CSVField.int(v.width), CSVField.int(v.height), CSVField.int(v.weight), CSVField.date(v.dateWeighed),
+				CSVField.int(v.wheelbase), CSVField.int(v.gvwr), CSVField.int(v.gcwr), CSVField.int(v.gawrFront), CSVField.int(v.gawrRear), CSVField.int(v.towingCapcity), CSVField.int(v.uvw), CSVField.int(v.ccc),
+				CSVField.int(v.fuelCapacity), CSVField.int(v.defCapacity), CSVField.int(v.waterCapacity), CSVField.int(v.grayCapacity), CSVField.int(v.blackCapacity),
+				v.imageUrl, CSVField.int(v.price), v.notes, CSVField.date(v.createdAt), CSVField.date(v.updatedAt), v.ownerId, v.locationId,
+				v.vin, v.licensePlate, CSVField.date(v.datePurchased), v.placePurchased,
+				v.tireSize, v.titleNumber, v.onlineServiceProvider, v.onlineServiceNumber,
+				v.onlineServiceLogin, v.onlineServiceURL, v.onlineServiceBillingAccount,
+				v.vehicleMobileNumber, v.insuranceCompany, v.insurancePolicyNumber,
+				v.insurancePolicyHolder, CSVField.date(v.insuranceExpiration), CSVField.int(v.tirePressureFront), CSVField.int(v.tirePressureRear),
+				CSVField.int(v.tirePressureTag), CSVField.int(v.tirePressurePusher), v.wheelStudSize, v.wheelNutSocket,
+				v.wheelNutTorque, CSVField.int(v.availablePayload), CSVField.int(v.scaleWeightFrontAxle), CSVField.int(v.scaleWeightRearAxle),
+				CSVField.int(v.scaleWeightPusherAxle), CSVField.int(v.scaleWeightTagAxle), CSVField.int(v.scaleWeightTrailerAxle), CSVField.int(v.sortOrder),
+				v.linkedMasterVehicleId, masterName, v.vehicleAspect,
+				v.image1Description, v.image2Description, v.image3Description
+			]
+		}
+
+		return CSVBuilder.build(headers: headers, rows: rows)
 	}
 
 	// MARK: - Generation
@@ -158,7 +196,7 @@ struct pdfReportVehicles: View {
 		guard let pdfData = generatePDFWithTable() else { return }
 		if let doc = PDFDocument(data: pdfData) {
 			self.pdfDocument = doc
-			PDFReportFile.save(data: pdfData, fileName: "Vehicles")
+			PDFReportFile.save(data: pdfData, fileName: Vertical.current.assetPlural)
 		}
 	}
 
@@ -186,7 +224,7 @@ struct pdfReportVehicles: View {
 		let units = prefsFunctions.loadSettingsArray(context: modelContext, userName: "primary1") ?? Array(repeating: "", count: 13)
 
 		let columns: [PDFTableColumn] = [
-			PDFTableColumn("VEHICLE", weight: 0.20),
+			PDFTableColumn(Vertical.current.assetSingular.uppercased(), weight: 0.20),
 			PDFTableColumn("MECHANICAL &\nUSAGE", weight: 0.20),
 			PDFTableColumn("DIMENSIONS &\nWEIGHTS", weight: 0.21),
 			PDFTableColumn("CAPACITIES &\nTIRES", weight: 0.19),
@@ -203,11 +241,11 @@ struct pdfReportVehicles: View {
 			]
 		}
 
-		let scopeTitle = (scope == "All Vehicles" || scope.isEmpty) ? "All Vehicles" : (nameToDisplayName[scope] ?? scope)
-		let vehicleWord = vehicles.count == 1 ? "vehicle" : "vehicles"
+		let scopeTitle = FleetScope.isAll(scope) ? FleetScope.allDisplayLabel : (nameToDisplayName[scope] ?? scope)
+		let vehicleWord = vehicles.count == 1 ? Vertical.current.assetSingular.lowercased() : Vertical.current.assetPlural.lowercased()
 		let subtitle = "\(scopeTitle) • \(functions.formatDate_DDMMMyy(date: Date())) • \(vehicles.count) \(vehicleWord)"
 
-		return PDFReportRenderer.render(title: "Vehicles Report", subtitle: subtitle, columns: columns, rows: rows, style: .standard)
+		return PDFReportRenderer.render(title: "\(Vertical.current.assetPlural) Report", subtitle: subtitle, columns: columns, rows: rows, style: .standard)
 	}
 
 	// MARK: - Field-group builders
@@ -241,14 +279,14 @@ struct pdfReportVehicles: View {
 
 		var groups: [PDFFieldGroup] = []
 		if let identity = fieldGroup(nil, [
-			("Vehicle", displayName),
+			(Vertical.current.assetSingular, displayName),
 			("Status", vehicle.inactive ? "Inactive" : "Active"),
 			("Year", vehicle.year > 0 ? functions.formatYear(year: vehicle.year) : nil),
 			("Make", text(vehicle.manufacturer)),
 			("Model", text(vehicle.model)),
 			("Trim", text(vehicle.trim)),
-			("VIN", text(vehicle.vin)),
-			("Plate", text(vehicle.licensePlate)),
+			(Vertical.current.registrationLabel, text(vehicle.vin)),
+			(Vertical.current.plateLabel, text(vehicle.licensePlate)),
 			("Title #", text(vehicle.titleNumber))
 		]) {
 			groups.append(identity)
@@ -282,10 +320,12 @@ struct pdfReportVehicles: View {
 			groups.append(mechanical)
 		}
 
+		let isLand = Vertical.current.id == .land
+		let engineHoursLabel = isLand ? "Engine Hours" : Vertical.current.primaryMeterLabel
 		if let usage = fieldGroup("Usage", [
-			("Odometer", num(vehicle.mileage, unit: distanceUnit)),
-			("Odometer (Virtual)", num(vehicle.mileageVirtual, unit: distanceUnit)),
-			("Engine Hours", vehicle.engHours != 0 ? String(format: "%.1f hrs", vehicle.engHours) : nil),
+			(isLand ? "Odometer" : "", isLand ? num(vehicle.mileage, unit: distanceUnit) : nil),
+			(isLand ? "Odometer (Virtual)" : "", isLand ? num(vehicle.mileageVirtual, unit: distanceUnit) : nil),
+			(engineHoursLabel, vehicle.engHours != 0 ? String(format: "%.1f hrs", vehicle.engHours) : nil),
 			("Doors", vehicle.doors > 0 ? "\(vehicle.doors)" : nil),
 			("Seats", vehicle.seats > 0 ? "\(vehicle.seats)" : nil)
 		]) {
@@ -315,14 +355,14 @@ struct pdfReportVehicles: View {
 			groups.append(dimensions)
 		}
 
-		if let weights = fieldGroup("Weights", [
+		if Vertical.current.visibleFieldGroups.contains(.weightRatings), let weights = fieldGroup("Weights", [
 			("Weight", num(vehicle.weight, unit: massUnit)),
 			("Date Weighed", vehicle.weight != 0 ? functions.formatDate_DDMMMyy(date: vehicle.dateWeighed) : nil),
 			("GVWR", num(vehicle.gvwr, unit: massUnit)),
 			("GCWR", num(vehicle.gcwr, unit: massUnit)),
 			("GAWR Front", num(vehicle.gawrFront, unit: massUnit)),
 			("GAWR Rear", num(vehicle.gawrRear, unit: massUnit)),
-			("Towing", num(vehicle.towingCapcity, unit: massUnit)),
+			("Towing", Vertical.current.visibleFieldGroups.contains(.towing) ? num(vehicle.towingCapcity, unit: massUnit) : nil),
 			("UVW", num(vehicle.uvw, unit: massUnit)),
 			("CCC", num(vehicle.ccc, unit: massUnit)),
 			("Payload", num(vehicle.availablePayload, unit: massUnit))
@@ -332,13 +372,13 @@ struct pdfReportVehicles: View {
 
 		let totalVehicleWeight = vehicle.scaleWeightFrontAxle + vehicle.scaleWeightRearAxle + vehicle.scaleWeightPusherAxle + vehicle.scaleWeightTagAxle
 		let totalRollingWeight = totalVehicleWeight + vehicle.scaleWeightTrailerAxle
-		if let scale = fieldGroup("Scale Readings", [
+		if Vertical.current.visibleFieldGroups.contains(.axleWeights), let scale = fieldGroup("Scale Readings", [
 			("Steer Axle", num(vehicle.scaleWeightFrontAxle, unit: massUnit)),
 			("Drive Axle(s)", num(vehicle.scaleWeightRearAxle, unit: massUnit)),
 			("Pusher Axle", num(vehicle.scaleWeightPusherAxle, unit: massUnit)),
 			("Tag Axle", num(vehicle.scaleWeightTagAxle, unit: massUnit)),
 			("Trailer Axle(s)", num(vehicle.scaleWeightTrailerAxle, unit: massUnit)),
-			("Total Vehicle Wt", num(totalVehicleWeight, unit: massUnit)),
+			("Total \(Vertical.current.assetSingular) Wt", num(totalVehicleWeight, unit: massUnit)),
 			("Total Rolling Wt", num(totalRollingWeight, unit: massUnit))
 		]) {
 			groups.append(scale)
@@ -354,17 +394,18 @@ struct pdfReportVehicles: View {
 
 		var groups: [PDFFieldGroup] = []
 
+		let rvTanks = Vertical.current.visibleFieldGroups.contains(.rvTanks)
 		if let capacities = fieldGroup("Capacities", [
 			("Fuel", num(vehicle.fuelCapacity, unit: fuelUnit)),
-			("DEF", num(vehicle.defCapacity, unit: defUnit)),
-			("Fresh Water", num(vehicle.waterCapacity, unit: fuelUnit)),
-			("Gray Water", num(vehicle.grayCapacity, unit: fuelUnit)),
-			("Black Water", num(vehicle.blackCapacity, unit: fuelUnit))
+			("DEF", rvTanks ? num(vehicle.defCapacity, unit: defUnit) : nil),
+			("Fresh Water", rvTanks ? num(vehicle.waterCapacity, unit: fuelUnit) : nil),
+			("Gray Water", rvTanks ? num(vehicle.grayCapacity, unit: fuelUnit) : nil),
+			("Black Water", rvTanks ? num(vehicle.blackCapacity, unit: fuelUnit) : nil)
 		]) {
 			groups.append(capacities)
 		}
 
-		if let tires = fieldGroup("Tires", [
+		if Vertical.current.visibleFieldGroups.contains(.tires), let tires = fieldGroup("Tires", [
 			("Size", text(vehicle.tireSize)),
 			("Pressure Front", num(vehicle.tirePressureFront, unit: pressureUnit)),
 			("Pressure Rear", num(vehicle.tirePressureRear, unit: pressureUnit)),

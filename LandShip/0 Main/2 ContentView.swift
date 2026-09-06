@@ -60,7 +60,6 @@ struct ContentView: View {
 	@State private var showingHelpSheet = false
 	@State private var showingChangelogSheet = false
 	@State private var showingFeedbackSheet = false
-	// Removed showingUpgrades property as per instructions
 	
 	// Hidden Debug Tools sheet (appears on long-press of title)
 	@State private var showingDebugTools = false
@@ -135,6 +134,7 @@ struct ContentView: View {
 
 	@Environment(\.modelContext) private var modelContext
 	@Environment(\.scenePhase) private var scenePhase
+	@Environment(\.entitlements) private var entitlements
 
 #if os(iOS)
 	private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
@@ -157,6 +157,7 @@ struct ContentView: View {
             showingHelpSheet: $showingHelpSheet,
             showingChangelogSheet: $showingChangelogSheet,
             showingFeedbackSheet: $showingFeedbackSheet,
+            showingOnboarding: $showingOnboarding,
             isBackupInProgress: isBackupInProgress,
             onBackupTapped: handleBackupTapped,
             onRestoreTapped: { showRestoreSourceChoice = true },
@@ -276,8 +277,18 @@ struct ContentView: View {
 #endif
 		}
 		
-		// Removed the purchases sheet block as per instructions
-		
+		.sheet(item: Binding(
+			get: { entitlements.paywallContext },
+			set: { entitlements.paywallContext = $0 }
+		)) { context in
+			PaywallView(context: context)
+#if os(macOS)
+				.frame(minWidth: 520, minHeight: 620)
+#else
+				.presentationDetents([.large])
+#endif
+		}
+
 		// Backup export
 		.fileExporter(
 			isPresented: $isExportingBackup,
@@ -370,7 +381,7 @@ struct ContentView: View {
 			Button("Cancel", role: .cancel) {}
 		} message: {
 			Text(isCloudKitActive
-				? "\u{201C}Resync from iCloud\u{201D} restores your Documents (PDFs, etc.) from the backup and re-downloads your vehicle/service data fresh from iCloud — safe, but records already deleted from iCloud will stay deleted. \u{201C}Restore Exact Snapshot\u{201D} instead rebuilds your data from the backup and uploads it to iCloud, replacing what iCloud has now — use this if iCloud's data didn't come back correctly, or you're restoring onto a different iCloud account. Other devices on the same account will update to match once they sync. A restart is required after restoring either way."
+				? "\u{201C}Resync from iCloud\u{201D} restores your Documents (PDFs, etc.) from the backup and re-downloads your \(Vertical.current.assetSingular.lowercased())/service data fresh from iCloud — safe, but records already deleted from iCloud will stay deleted. \u{201C}Restore Exact Snapshot\u{201D} instead rebuilds your data from the backup and uploads it to iCloud, replacing what iCloud has now — use this if iCloud's data didn't come back correctly, or you're restoring onto a different iCloud account. Other devices on the same account will update to match once they sync. A restart is required after restoring either way."
 				: "This will replace your current data with the contents of the selected backup folder. A restart is required after restoring.")
 		}
 		
@@ -557,7 +568,8 @@ struct ContentView: View {
 					hasCompletedOnboarding = true
 					showingOnboarding = false
 					InAppLogger.shared.log("Onboarding finished")
-				}
+				},
+				startingPage: entitlements.isFullVersion ? 1 : 0
 			)
 			.interactiveDismissDisabled(true)
 		}
@@ -568,7 +580,8 @@ struct ContentView: View {
 					hasCompletedOnboarding = true
 					showingOnboarding = false
 					InAppLogger.shared.log("Onboarding finished")
-				}
+				},
+				startingPage: entitlements.isFullVersion ? 1 : 0
 			)
 			.interactiveDismissDisabled(true)
 		}
@@ -577,6 +590,11 @@ struct ContentView: View {
 		// Debug Tools sheet (available in all builds)
 		.sheet(isPresented: $showingDebugTools) {
 			DebugToolsView()
+		}
+		// macOS menu fallback — see DebugCommands in LandShipApp.swift.
+		.onReceive(NotificationCenter.default.publisher(for: .openDebugToolsRequested)) { _ in
+			showingDebugTools = true
+			InAppLogger.shared.log("DebugTools opened via menu")
 		}
 	}
 	
@@ -702,7 +720,7 @@ struct ContentView: View {
 				// Check if name looks like a UUID (contains dashes and is long)
 				if vehicle.name.contains("-") && vehicle.name.count > 30 {
 					// It's a UUID, use a friendly default
-					vehicle.displayName = "Unnamed Vehicle"
+					vehicle.displayName = "Unnamed \(Vertical.current.assetSingular)"
 				} else {
 					// It's a regular name, copy it to displayName
 					vehicle.displayName = vehicle.name
@@ -964,10 +982,12 @@ private struct SidebarView: View {
 	@Binding var showingHelpSheet: Bool
 	@Binding var showingChangelogSheet: Bool
 	@Binding var showingFeedbackSheet: Bool
+	@Binding var showingOnboarding: Bool
 #if os(macOS)
 	// Opens the standalone Help window declared in LandShipApp.
 	@Environment(\.openWindow) private var openWindow
 #endif
+	@Environment(\.entitlements) private var entitlements
 	var isBackupInProgress: Bool
 	var onBackupTapped: () -> Void
 	var onRestoreTapped: () -> Void
@@ -1030,14 +1050,36 @@ private struct SidebarView: View {
 
 	var body: some View {
 		List(selection: $sidebarSelection) {
+			if !entitlements.isFullVersion {
+				Section(header: CenteredSectionHeader(title: PaywallCopy.Sidebar.sectionTitle)) {
+					Button {
+						entitlements.paywallContext = .sidebar
+						InAppLogger.shared.log("Opened Paywall from sidebar")
+					} label: {
+						Label(PaywallCopy.Sidebar.rowTitle, systemImage: "lock.open")
+							.sidebarRowStyle(selected: false)
+					}
+					.buttonStyle(.plain)
+
+					HStack(spacing: 0) {
+						Spacer().frame(width: 32)
+						Text(PaywallCopy.Sidebar.trialCaption)
+							.font(.caption2)
+							.foregroundStyle(.secondary)
+						Spacer()
+					}
+					.listRowBackground(Color.clear)
+				}
+			}
+
 			Section(header: CenteredSectionHeader(title: "")) {
 				Label("Dashboard", systemImage: "rectangle.grid.2x2")
 					.sidebarRowStyle(selected: sidebarSelection == .dashboard)
 					.tag(SidebarItem.dashboard)
 			}
 
-			Section(header: CenteredSectionHeader(title: "Garage")) {
-				Label("Vehicles", systemImage: "car.2.fill")
+			Section(header: CenteredSectionHeader(title: Vertical.current.garageSectionTitle)) {
+				Label(Vertical.current.assetPlural, systemImage: Vertical.current.assetGroupIcon)
 					.sidebarRowStyle(selected: sidebarSelection == .vehicles)
 					.tag(SidebarItem.vehicles)
 				Label("Parts", systemImage: "gearshape.2.fill")
@@ -1049,12 +1091,22 @@ private struct SidebarView: View {
 				Label("Fuel Log", systemImage: "fuelpump.arrowtriangle.left")
 					.sidebarRowStyle(selected: sidebarSelection == .fuelLog)
 					.tag(SidebarItem.fuelLog)
-				Label("Travel Log", systemImage: "map")
+				Label(Vertical.current.travelLogLabel, systemImage: "map")
 					.sidebarRowStyle(selected: sidebarSelection == .tripLog)
 					.tag(SidebarItem.tripLog)
+				if Vertical.current.enabledFeatures.contains(.pilotLogbook) {
+					Label("Pilot Logbook", systemImage: "book.closed")
+						.sidebarRowStyle(selected: sidebarSelection == .pilotLogbook)
+						.tag(SidebarItem.pilotLogbook)
+				}
+				if Vertical.current.enabledFeatures.contains(.marinerSeaService) {
+					Label("Sea Service Log", systemImage: "book.closed")
+						.sidebarRowStyle(selected: sidebarSelection == .seaService)
+						.tag(SidebarItem.seaService)
+				}
 			}
-			
-			Section(header: CenteredSectionHeader(title: "Vehicle Service")) {
+
+			Section(header: CenteredSectionHeader(title: "\(Vertical.current.assetSingular) Service")) {
 				Label("Records", systemImage: "wrench.and.screwdriver.fill")
 					.sidebarRowStyle(selected: sidebarSelection == .records)
 					.tag(SidebarItem.records)
@@ -1063,7 +1115,7 @@ private struct SidebarView: View {
 					.tag(SidebarItem.items)
 			}
 			
-			Section(header: CenteredSectionHeader(title: "Vehicle Financials")) {
+			Section(header: CenteredSectionHeader(title: "\(Vertical.current.assetSingular) Financials")) {
 				Label("Improvements", systemImage: "cart.badge.plus")
 					.sidebarRowStyle(selected: sidebarSelection == .additions)
 					.tag(SidebarItem.additions)
@@ -1188,6 +1240,15 @@ private struct SidebarView: View {
 				.buttonStyle(.plain)
 
 				Button {
+					showingOnboarding = true
+					InAppLogger.shared.log("Opened Onboarding via sidebar")
+				} label: {
+					Label("Getting Started", systemImage: "hand.wave")
+						.sidebarRowStyle(selected: false)
+				}
+				.buttonStyle(.plain)
+
+				Button {
 					showingChangelogSheet = true
 					InAppLogger.shared.log("Opened What's New")
 				} label: {
@@ -1296,6 +1357,10 @@ struct MiddleColumnView: View {
                 DisplayFuelLog(trackVehicleSelected: $trackVehicleSelected)
             case .tripLog:
                 DisplayTripLog(trackVehicleSelected: $trackVehicleSelected)
+            case .pilotLogbook:
+                DisplayPilotLogbook()
+            case .seaService:
+                DisplaySeaService()
             case .records:
                 DisplayRecords(trackVehicleSelected: $trackVehicleSelected)
             case .items:
@@ -1466,9 +1531,40 @@ private struct DebugToolsView: View {
 	@State private var isSharing: Bool = false
 	@State private var shareURL: URL?
 
+#if DEBUG
+	@Environment(\.entitlements) private var entitlements
+	@Environment(\.modelContext) private var modelContext
+#endif
+
 	var body: some View {
 		NavigationStack {
 			Form {
+#if DEBUG
+				Section("Trial / Purchases") {
+					Picker("Override", selection: Binding(
+						get: { entitlements.debugOverride },
+						set: { entitlements.debugOverride = $0 }
+					)) {
+						ForEach(DebugEntitlementOverride.allCases) { option in
+							Text(option.label).tag(option)
+						}
+					}
+					LabeledContent("Full Version", value: entitlements.isFullVersion ? "Yes" : "No")
+					LabeledContent("Source", value: entitlements.source.rawValue)
+					LabeledContent("Original App Version", value: UserDefaults.standard.string(forKey: StorageKey.originalAppVersionCached) ?? "(none)")
+					LabeledContent("App Store Environment", value: UserDefaults.standard.string(forKey: StorageKey.appStoreEnvironment) ?? "(none)")
+					LabeledContent("Prior Install Detected", value: UserDefaults.standard.bool(forKey: StorageKey.priorInstallDetected) ? "Yes" : "No")
+					ForEach(Array(TrialCaps.allCapped.enumerated()), id: \.offset) { _, type in
+						LabeledContent(type.trialDisplayName, value: "\((try? type.trialFetchCount(in: modelContext)) ?? 0) / \(type.trialLimit)")
+					}
+					Button(role: .destructive) {
+						entitlements.resetTrialState()
+					} label: {
+						Label("Reset Trial State", systemImage: "arrow.counterclockwise")
+					}
+				}
+#endif
+
 				Section("Environment") {
 					LabeledContent("Platform", value: platform)
 #if DEBUG

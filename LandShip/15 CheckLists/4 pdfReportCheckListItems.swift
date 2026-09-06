@@ -54,6 +54,7 @@ struct pdfReportCheckListItems: View {
 	
 	// The SwiftData model context
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 	
 	// Holds the generated PDF
 	@State private var pdfDocument: PDFDocument?
@@ -80,6 +81,8 @@ struct pdfReportCheckListItems: View {
 	#endif
 	
 	@State private var isGenerating = false
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 	
 	// MARK: Init
 	
@@ -123,6 +126,14 @@ struct pdfReportCheckListItems: View {
 				Button("Regenerate") {
 					pdfDocument = nil
 					generateAndShowPDF()
+				}
+			}
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
 				}
 			}
 			ToolbarItemGroup(placement: .automatic) {
@@ -191,8 +202,31 @@ struct pdfReportCheckListItems: View {
 			}
 		)
 		#endif
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: checklist.checklistName.isEmpty ? "Checklist" : checklist.checklistName) { _ in }
 	}
-	
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let items = filteredItems()
+		let vehicleName = checklist.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: checklist.vehicleId, context: modelContext)
+		let headers = [
+			"Checklist Name", Vertical.current.assetSingular, "\(Vertical.current.assetSingular) Display Name", "Checklist Category",
+			"Inactive", "Created At", "Updated At", "Item Name", "Item Description", "Item Notes",
+			"Item Completed", "Completed At", "Order Index", "Item ID", "Parent Item ID", "Has Sub-Items", "Sub-Items Section Name",
+			"Image 1 Description"
+		]
+		let rows: [[String]] = items.map { item in
+			[
+				checklist.checklistName, checklist.vehicleId, vehicleName, checklist.category,
+				CSVField.bool(item.inactive), CSVField.date(item.createdAt), CSVField.date(item.updatedAt), item.itemName, item.itemDescription, item.itemNotes,
+				CSVField.bool(item.itemCompleted), CSVField.date(item.completedAt), CSVField.int(item.orderIndex), item.itemID, item.parentItemUUID ?? "", CSVField.bool(item.hasSubItems), item.subItemsSectionName,
+				item.image1Description
+			]
+		}
+		return CSVBuilder.build(headers: headers, rows: rows)
+	}
+
 	// MARK: - PDF Generation
 	
 	@MainActor
@@ -286,7 +320,7 @@ struct pdfReportCheckListItems: View {
 		
 		// Checklist info
 		var infoLines = [
-			"Vehicle: \(vehicleId)",
+			"\(Vertical.current.assetSingular): \(vehicleId)",
 			"Description: \(checklistDescription)"
 		]
 		if !checklistNotes.isEmpty {
@@ -612,7 +646,7 @@ struct pdfReportCheckListItems: View {
 		
 		// Checklist info
 		var infoLines = [
-			"Vehicle: \(vehicleId)",
+			"\(Vertical.current.assetSingular): \(vehicleId)",
 			"Description: \(checklistDescription)"
 		]
 		if !checklistNotes.isEmpty {
@@ -969,7 +1003,8 @@ struct pdfReportCheckListItems: View {
 	
 	private func printPDF() {
 		guard let doc = pdfDocument else { return }
-		
+		guard entitlements.requestExport(.pdfPrint) else { return }
+
 		#if os(macOS)
 		let printOp = doc.printOperation(for: .shared, scalingMode: .pageScaleToFit, autoRotate: true)
 		printOp?.run()
@@ -983,7 +1018,8 @@ struct pdfReportCheckListItems: View {
 	#if os(macOS)
 	private func saveAsPDF() {
 		guard let data = pdfDocument?.dataRepresentation() else { return }
-		
+		guard entitlements.requestExport(.pdfExport) else { return }
+
 		let savePanel = NSSavePanel()
 		savePanel.allowedContentTypes = [.pdf]
 		savePanel.nameFieldStringValue = "CheckList_\(checklist.checklistName).pdf"
@@ -1003,7 +1039,8 @@ struct pdfReportCheckListItems: View {
 	#if canImport(UIKit) && !os(macOS)
 	private func sharePDFiOS() {
 		guard let data = pdfDocument?.dataRepresentation() else { return }
-		
+		guard entitlements.requestExport(.pdfExport) else { return }
+
 		let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("CheckList_\(checklist.checklistName).pdf")
 		do {
 			try data.write(to: tempURL)

@@ -26,6 +26,8 @@ struct pdfReportAviationLogbook: View {
 	@State private var scope: String
 	@State private var pdfDocument: PDFDocument?
 	@State private var zoomAction: ZoomAction?
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 
 	let functions = Functions()
 
@@ -94,7 +96,65 @@ struct pdfReportAviationLogbook: View {
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
+			}
 		}
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: "Logbook") { _ in }
+	}
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let ads = fetchAirworthinessDirectives()
+		let inspections = fetchInspectionCycles()
+		let components = fetchComponentTimes()
+
+		let adHeaders = [
+			"AD Number", "Title", "Applicability", Vertical.current.assetSingular, "Recurring", "Interval Type", "Interval Value",
+			"Compliance Date", "Compliance Hours", "Method of Compliance", "Signed Off By", "Next Due Date", "Next Due Hours", "Notes",
+			"Image 1 Description"
+		]
+		let adRows: [[String]] = ads.map { ad in
+			let vehicleName = ad.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: ad.vehicleId, context: modelContext)
+			return [
+				ad.adNumber, ad.title, ad.applicability, vehicleName.isEmpty ? ad.vehicleId : vehicleName, CSVField.bool(ad.isRecurring), ad.intervalType, CSVField.float(ad.intervalValue),
+				CSVField.date(ad.complianceDate), CSVField.float(ad.complianceHours), ad.methodOfCompliance, ad.signedOffBy, CSVField.date(ad.nextDueDate), CSVField.float(ad.nextDueHours), ad.notes,
+				ad.image1Description
+			]
+		}
+
+		let inspHeaders = [
+			"Inspection Type", "Performing Shop", Vertical.current.assetSingular, "Last Complied Date", "Last Complied Hours",
+			"Interval (Months)", "Interval (Hours)", "Next Due Date", "Next Due Hours", "Notes", "Image 1 Description"
+		]
+		let inspRows: [[String]] = inspections.map { insp in
+			let vehicleName = insp.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: insp.vehicleId, context: modelContext)
+			return [
+				insp.inspectionType, insp.performingShop, vehicleName.isEmpty ? insp.vehicleId : vehicleName, CSVField.date(insp.lastCompliedDate), CSVField.float(insp.lastCompliedHours),
+				CSVField.int(insp.intervalMonths), CSVField.float(insp.intervalHours), CSVField.date(insp.nextDueDate), CSVField.float(insp.nextDueHours), insp.notes, insp.image1Description
+			]
+		}
+
+		let compHeaders = [
+			"Component Name", "Component Type", Vertical.current.assetSingular, "Total Time", "Time Since Overhaul", "Last Overhaul Date", "Notes", "Image 1 Description"
+		]
+		let compRows: [[String]] = components.map { comp in
+			let vehicleName = comp.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: comp.vehicleId, context: modelContext)
+			return [
+				comp.componentName, comp.componentType, vehicleName.isEmpty ? comp.vehicleId : vehicleName, CSVField.float(comp.totalTime), CSVField.float(comp.timeSinceOverhaul), CSVField.date(comp.lastOverhaulDate), comp.notes, comp.image1Description
+			]
+		}
+
+		var output = "AIRWORTHINESS DIRECTIVES\r\n" + CSVBuilder.build(headers: adHeaders, rows: adRows)
+		output += "\r\nINSPECTION CYCLES\r\n" + CSVBuilder.build(headers: inspHeaders, rows: inspRows)
+		output += "\r\nCOMPONENT TIMES\r\n" + CSVBuilder.build(headers: compHeaders, rows: compRows)
+		return output
 	}
 
 	// MARK: - Generation

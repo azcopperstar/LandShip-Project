@@ -23,6 +23,23 @@ struct TextNoteDisplay_FullWidth: View {
 	}
 }
 
+/// Read-only display of a multi-line field as one more row inside an existing card section,
+/// mirroring `TextNoteDisplay_FullWidth` but without its own `SectionText` header.
+struct TextNoteDisplay_Inline: View {
+	let label: String
+	let data: String
+	var body: some View {
+		VStack(alignment: .leading, spacing: 4) {
+			Text(label)
+				.textLabelModified()
+			Text(data)
+				.frame(maxWidth: .infinity, alignment: .leading)
+				.multilineTextAlignment(.leading)
+				.foregroundStyle(.primary)
+		}
+	}
+}
+
 
 struct CreatedUpdatedText: View {
 	let created: Date
@@ -103,6 +120,23 @@ struct LabelDataText: View {
 //			.frame(maxWidth: .infinity, alignment: .trailing)
 //	}
 //}
+
+// MARK: label + hyperlink (URL string)
+struct LabelDataLink: View {
+	let label: String
+	let data: String
+	var body: some View {
+		Text(label)
+			.textLabelModified()
+		if let url = URL(string: data) {
+			Link(data, destination: url)
+				.frame(maxWidth: .infinity, alignment: .trailing)
+		} else {
+			Text(data)
+				.frame(maxWidth: .infinity, alignment: .trailing)
+		}
+	}
+}
 
 // MARK: label + text (number [no units])
 ///fractionalLength = number of decimal places
@@ -247,10 +281,16 @@ struct CenteredSectionHeader: View {
 	var body: some View {
 		Text(title.uppercased())
 			.font(.caption.bold())
+			.foregroundStyle(.tint)
+			.padding(.horizontal, 10)
+			.padding(.vertical, 4)
+			.background(
+				title.isEmpty ? Color.clear : Color.accentColor.opacity(0.12),
+				in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+			)
 			.frame(maxWidth: .infinity, alignment: .center)
 			.multilineTextAlignment(.center)
 			.textCase(nil) // we uppercase manually above; prevent double-uppercasing from list styles
-			.foregroundStyle(.tint)
 	}
 }
 

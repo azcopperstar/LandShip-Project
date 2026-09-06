@@ -54,6 +54,8 @@ struct pdfReportProjectList: View {
 	@State private var pdfDocument: PDFDocument?
 	@State private var zoomAction: ZoomAction?
 	@State private var showingSubcategoryPicker = false
+	@State private var csvDocument = CSVDocument(text: "")
+	@State private var isExportingCSV = false
 
 	let functions = Functions()
 
@@ -89,15 +91,16 @@ struct pdfReportProjectList: View {
 				List(uniqueSubcategories(), id: \.self) { sub in
 					Button(sub) {
 						showingSubcategoryPicker = false
-						punchListSubcategory = sub
+						punchListDestination = PunchListDestination(subcategory: sub)
 					}
 				}
 				.navigationTitle("Choose Sub-Category")
 			}
 		}
-		.navigationDestination(item: $punchListSubcategory) { sub in
-			pdfReportPunchList(trackVehicleSelected: scope, projectSubcategory: sub)
-				.ignoresSafeArea()
+		.sheet(item: $punchListDestination) { dest in
+			NavigationStack {
+				pdfReportPunchList(trackVehicleSelected: scope, projectSubcategory: dest.subcategory)
+			}
 		}
 		.toolbar {
 			ToolbarItem(placement: .automatic) {
@@ -144,12 +147,64 @@ struct pdfReportProjectList: View {
 				.keyboardShortcut("p", modifiers: .command)
 				.disabled(pdfDocument == nil)
 			}
+			ToolbarItem(placement: .automatic) {
+				Button {
+					csvDocument = CSVDocument(text: generateCSV())
+					isExportingCSV = true
+				} label: {
+					Label("Export CSV", systemImage: "tablecells")
+				}
+			}
 		}
+		.fileExporter(isPresented: $isExportingCSV, document: csvDocument, contentType: .commaSeparatedText, defaultFilename: "Project List") { _ in }
+	}
+
+	// MARK: - CSV Export
+
+	private func generateCSV() -> String {
+		let items = fetchProjects()
+		let partCount = 5
+		var headers = [
+			"Inactive", "Created At", "Updated At", Vertical.current.assetSingular, "\(Vertical.current.assetSingular) Display Name",
+			Vertical.current.primaryMeterLabel, "Engine Hours", "Item Name", "Description", "Notes", "Vendor",
+			"Category", "Category Order", "Sub-Category", "Sub-Category Order", "Project Order", "Priority",
+			"Completed", "Completed At", "Save In Logbook", "Saved To Logbook", "Linked Addition ID", "Item Cost", "Labor Cost",
+			"Image 1 Description", "Image 2 Description", "Image 3 Description", "Image 4 Description", "Image 5 Description"
+		]
+		for i in 1...partCount {
+			headers.append(contentsOf: ["Part \(i)", "Part \(i) Cost", "Part \(i) Unit", "Part \(i) Quantity"])
+		}
+		let rows: [[String]] = items.map { p in
+			let vehicleName = p.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: p.vehicleId, context: modelContext)
+			var row = [
+				CSVField.bool(p.inactive), CSVField.date(p.createdAt), CSVField.date(p.updatedAt), p.vehicleId, vehicleName,
+				CSVField.int(p.miles), CSVField.float(p.engHours), p.itemName, p.itemDescription, p.itemNotes, p.itemVendor,
+				p.category, CSVField.int(p.categoryOrder), p.subCategory, CSVField.int(p.subcategoryOrder), CSVField.int(p.projectOrder), CSVField.int(p.priority),
+				CSVField.bool(p.itemCompleted), CSVField.date(p.completedAt), CSVField.bool(p.saveInLogbook), CSVField.bool(p.savedToLogbook), p.additionsLinkId, CSVField.float(p.itemCost), CSVField.float(p.laborCost),
+				p.image1Description, p.image2Description, p.image3Description, p.image4Description, p.image5Description
+			]
+			let parts: [(name: String, cost: Float, unit: String, quantity: Int)] = [
+				(p.part1, p.part1cost, p.part1Unit, p.part1Quantity),
+				(p.part2, p.part2cost, p.part2Unit, p.part2Quantity),
+				(p.part3, p.part3cost, p.part3Unit, p.part3Quantity),
+				(p.part4, p.part4cost, p.part4Unit, p.part4Quantity),
+				(p.part5, p.part5cost, p.part5Unit, p.part5Quantity)
+			]
+			for part in parts {
+				row.append(contentsOf: [part.name, CSVField.float(part.cost), part.unit, CSVField.int(part.quantity)])
+			}
+			return row
+		}
+		return CSVBuilder.build(headers: headers, rows: rows)
 	}
 
 	// MARK: - Punch List hand-off
 
-	@State private var punchListSubcategory: String?
+	private struct PunchListDestination: Identifiable, Hashable {
+		let id = UUID()
+		let subcategory: String
+	}
+	@State private var punchListDestination: PunchListDestination?
 
 	private func uniqueSubcategories() -> [String] {
 		Array(Set(fetchProjects().map { $0.subCategory.isEmpty ? "General" : $0.subCategory })).sorted()
@@ -205,12 +260,36 @@ struct pdfReportProjectList: View {
 			]
 		}
 
-		let scopeTitle = (scope == "All Vehicles" || scope.isEmpty) ? "All Vehicles" : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
+		let scopeTitle = FleetScope.isAll(scope) ? FleetScope.allDisplayLabel : functions.getVehicleDisplayName(vehicleId: scope, context: modelContext)
 		let itemWord = items.count == 1 ? "project" : "projects"
 		let subtitle = "\(scopeTitle) • \(functions.formatDate_DDMMMyy(date: Date())) • \(items.count) \(itemWord)"
 
-		let costSummary = PDFCostSummaryBuilder.build(scope: scope, context: modelContext)
-		return PDFReportRenderer.render(title: "Project List Report", subtitle: subtitle, columns: columns, rows: rows, costSummary: costSummary, style: .standard)
+		let summary = projectsSummary(items)
+		return PDFReportRenderer.render(title: "Project List Report", subtitle: subtitle, columns: columns, rows: rows, summary: summary, style: .standard)
+	}
+
+	private func projectsSummary(_ items: [ProjectList]) -> PDFReportSummary {
+		let groups = pdfVehicleScopedSummaryGroups(scope: scope, records: items, vehicleId: \.vehicleId, context: modelContext) { subset in
+			let completedCount = subset.filter(\.itemCompleted).count
+			let totalLabor = subset.reduce(Float(0)) { $0 + $1.laborCost }
+			let totalParts = subset.reduce(Float(0)) { total, item in
+				total + item.part1cost * Float(item.part1Quantity)
+					+ item.part2cost * Float(item.part2Quantity)
+					+ item.part3cost * Float(item.part3Quantity)
+					+ item.part4cost * Float(item.part4Quantity)
+					+ item.part5cost * Float(item.part5Quantity)
+			}
+			let inProgressCount = subset.count - completedCount
+			return [
+				("Total Projects", subset.isEmpty ? nil : "\(subset.count)"),
+				("Completed", completedCount != 0 ? "\(completedCount)" : nil),
+				("In Progress", inProgressCount != 0 ? "\(inProgressCount)" : nil),
+				("Total Labor", totalLabor != 0 ? pdfCurrencyString(totalLabor) : nil),
+				("Total Parts", totalParts != 0 ? pdfCurrencyString(totalParts) : nil),
+				("Total Cost", (totalLabor + totalParts) != 0 ? pdfCurrencyString(totalLabor + totalParts) : nil)
+			]
+		}
+		return PDFReportSummary(title: "PROJECTS SUMMARY", groups: groups)
 	}
 
 	// MARK: - Field-group builders
@@ -238,7 +317,7 @@ struct pdfReportProjectList: View {
 
 		var groups: [PDFFieldGroup] = []
 		if let identity = fieldGroup(nil, [
-			("Vehicle", vehicleName),
+			(Vertical.current.assetSingular, vehicleName),
 			("Item", text(item.itemName)),
 			("Category", text(item.category)),
 			("Sub-Category", text(item.subCategory)),

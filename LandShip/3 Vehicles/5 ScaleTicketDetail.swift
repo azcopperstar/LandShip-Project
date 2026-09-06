@@ -135,7 +135,7 @@ struct ScaleTicketDetailView: View {
 				if hasIdentifiers {
 					CardView {
 						VStack {
-							SectionText(label: "VEHICLE IDENTIFIERS")
+							SectionText(label: "\(Vertical.current.assetSingular.uppercased()) IDENTIFIERS")
 							if !tractorLicensePlate.isEmpty {
 								HStack { LabelDataText(label: "Tractor License #", data: tractorLicensePlate) }
 							}

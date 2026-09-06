@@ -16,6 +16,7 @@ struct DisplayCheckList: View {
 	@Query(sort: [SortDescriptor(\CheckList.categoryOrder), SortDescriptor(\CheckList.checklistOrder)])
 	var allChecklists: [CheckList]
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 
 	@State private var selectedRecord: CheckList?
 	@AppStorage("showInactiveVehicles") private var showInactiveVehicles: Bool = false
@@ -30,6 +31,17 @@ struct DisplayCheckList: View {
 	
 	@State private var newRecordToEdit: CheckList?
 	@State private var showVehicleSelectionAlert: Bool = false
+
+	// MARK: - PDF Report
+	// Lets a checklist generate its report directly from the list (right-click/long-press a row)
+	// instead of requiring you to open LiveCheckListView first.
+	private struct ReportDestination: Identifiable, Hashable {
+		let id = UUID()
+		let checklist: CheckList
+		static func == (lhs: ReportDestination, rhs: ReportDestination) -> Bool { lhs.id == rhs.id }
+		func hash(into hasher: inout Hasher) { hasher.combine(id) }
+	}
+	@State private var reportDestination: ReportDestination?
 	
 	// MARK: - Editor state
 	
@@ -39,10 +51,13 @@ struct DisplayCheckList: View {
 	@State private var checklistName: String = ""
 	@State private var checklistDescription: String = ""
 	@State private var checklistNotes: String = ""
+	@State private var checklistVehicleId: String = ""
 	@State private var headerBgColor: Color = .clear
 	@State private var headerFgColor: Color = .blue
 
 	// MARK: - Delete confirmation
+	// (Rename-cascade confirmation for the checklist name lives in ChecklistEditorSheetView,
+	// which owns the Save button; see hasLinkedRecords/onSaveWithRename below.)
 	
 	@State private var showDeleteConfirmation: Bool = false
 	@State private var checklistToDelete: CheckList?
@@ -85,12 +100,15 @@ struct DisplayCheckList: View {
 	}
 
 	var body: some View {
-		Group {
+		// A `Group` here is "transparent" for preference-based modifiers like `.toolbar` — with
+		// two children, SwiftUI applies the toolbar content once per child, duplicating every
+		// item. `VStack` produces the same vertical layout without that duplication.
+		VStack(spacing: 0) {
 			ModelPicker(
 				selection: $selectedVehicle,
 				title: "",
 				includeEmptyChoice: true,
-				emptyChoiceLabel: "All Vehicles",
+				emptyChoiceLabel: FleetScope.allDisplayLabel,
 				autoSelectFirst: false,
 				filter: showInactiveVehicles ? nil : #Predicate<Vehicle8> { $0.inactive == false },
 				sort: [SortDescriptor(\.displayName, order: .forward)],
@@ -167,10 +185,14 @@ struct DisplayCheckList: View {
 		.navigationDestination(item: $newRecordToEdit) { record in
 			LiveCheckListView(checklist: record)
 		}
-		.alert("Select a Specific Vehicle", isPresented: $showVehicleSelectionAlert) {
+		.navigationDestination(item: $reportDestination) { dest in
+			pdfReportCheckListItems(checklist: dest.checklist)
+				.ignoresSafeArea()
+		}
+		.alert("Select a Specific \(Vertical.current.assetSingular)", isPresented: $showVehicleSelectionAlert) {
 			Button("OK", role: .cancel) {}
 		} message: {
-			Text("A checklist can only be created when a specific vehicle is selected. Please choose a vehicle — 'All Vehicles' is not allowed.")
+			Text("A checklist can only be created when a specific \(Vertical.current.assetSingular.lowercased()) is selected. Please choose a \(Vertical.current.assetSingular.lowercased()) — '\(FleetScope.allDisplayLabel)' is not allowed.")
 		}
 		.alert("Delete Checklist", isPresented: $showDeleteConfirmation) {
 			Button("Cancel", role: .cancel) {
@@ -204,12 +226,15 @@ struct DisplayCheckList: View {
 				checklistCategory: $checklistCategory,
 				checklistDescription: $checklistDescription,
 				checklistNotes: $checklistNotes,
+				checklistVehicleId: $checklistVehicleId,
 				headerBgColor: $headerBgColor,
 				headerFgColor: $headerFgColor,
 				editingChecklist: editingChecklist,
 				trackVehicleSelected: trackVehicleSelected,
 				uniqueCategories: uniqueCategories(),
-				onSave: saveChecklist,
+				hasLinkedRecords: hasLinkedRecords,
+				onSave: { saveChecklist(updateLinkedItems: false) },
+				onSaveWithRename: { saveChecklist(updateLinkedItems: true) },
 				onCancel: { showChecklistEditor = false }
 			)
 		}
@@ -350,7 +375,7 @@ struct DisplayCheckList: View {
 					}
 					
 					HStack(spacing: 12) {
-						Label(record.vehicleId.isEmpty ? "—" : record.vehicleId, systemImage: "car")
+						Label(record.vehicleId.isEmpty ? "—" : record.vehicleId, systemImage: Vertical.current.assetIcon)
 							.font(.caption2)
 							.foregroundStyle(.tertiary)
 						
@@ -382,6 +407,11 @@ struct DisplayCheckList: View {
 				editChecklist(record)
 			} label: {
 				Label("Edit Checklist Info", systemImage: "pencil")
+			}
+			Button {
+				reportDestination = ReportDestination(checklist: record)
+			} label: {
+				Label("Generate PDF Report", systemImage: "doc.text")
 			}
 			Button(role: .destructive) {
 				checklistToDelete = record
@@ -445,13 +475,13 @@ struct DisplayCheckList: View {
 	private var tipsView: some View {
 		VStack(alignment: .leading, spacing: 1) {
 #if os(macOS)
-			tipRow(icon: "hand.tap", text: "Right-click either category or checklist for edit and delete options")
+			tipRow(icon: "hand.tap", text: "Right-click either category or checklist for edit, report, and delete options")
 #else
-			tipRow(icon: "hand.tap", text: "Long-press either category or checklist for edit options")
+			tipRow(icon: "hand.tap", text: "Long-press either category or checklist for edit, report, and delete options")
 #endif
 			
 			tipRow(icon: "pencil", text: "Edit Mode icon above is used to reorder categories and checklists by dragging/dropping handles")
-			tipRowVehicle(icon: "car", text: "\(trackVehicleSelected)")
+			tipRowVehicle(icon: Vertical.current.assetIcon, text: "\(trackVehicleSelected)")
 		}
 		.padding(.horizontal, 2)
 //		.padding(.vertical, 1)
@@ -625,54 +655,76 @@ struct DisplayCheckList: View {
 			showVehicleSelectionAlert = true
 			return
 		}
-		
+		guard entitlements.requestCreate(CheckList.self, in: modelContext) else { return }
+
 		editingChecklist = nil
 		checklistCategory = ""
 		checklistName = "New Checklist"
 		checklistDescription = ""
 		checklistNotes = ""
+		checklistVehicleId = trackVehicleSelected
 		headerBgColor = .clear
 		headerFgColor = .blue
 		showChecklistEditor = true
 	}
-	
+
 	private func editChecklist(_ checklist: CheckList) {
 		editingChecklist = checklist
 		checklistCategory = checklist.category
 		checklistName = checklist.checklistName
 		checklistDescription = checklist.checklistDescription
 		checklistNotes = checklist.checklistNotes
+		checklistVehicleId = checklist.vehicleId
 		headerBgColor = checklist.headerBgColorHex.isEmpty ? .clear : (Color(hex: checklist.headerBgColorHex) ?? .clear)
 		headerFgColor = checklist.headerFgColorHex.isEmpty ? .blue : (Color(hex: checklist.headerFgColorHex) ?? .blue)
 		showChecklistEditor = true
 	}
 	
-	private func saveChecklist() {
+	/// True if any `CheckListItem` references `name` by checklist name. Used to decide whether
+	/// the rename-cascade dialog is worth showing — a brand-new or never-referenced checklist has
+	/// nothing to break, so saving proceeds silently.
+	private func hasLinkedRecords(_ name: String) -> Bool {
+		guard !name.isEmpty else { return false }
+		var fd = FetchDescriptor<CheckListItem>(predicate: #Predicate<CheckListItem> { $0.checklistName == name })
+		fd.fetchLimit = 1
+		return ((try? modelContext.fetch(fd)) ?? []).isEmpty == false
+	}
+
+	/// Updates every `CheckListItem` that references this checklist by name (LandShip's
+	/// string-based linking convention — the same one used for vendor/part/item/system renames),
+	/// so existing links survive a checklist rename instead of silently orphaning.
+	private func renameLinkedCheckListItems(from oldName: String, to newName: String) {
+		guard !oldName.isEmpty, oldName != newName else { return }
+		let itemsDescriptor = FetchDescriptor<CheckListItem>(predicate: #Predicate<CheckListItem> { $0.checklistName == oldName })
+		if let itemsToUpdate = try? modelContext.fetch(itemsDescriptor) {
+			for item in itemsToUpdate {
+				item.checklistName = newName
+				item.updatedAt = Date()
+			}
+		}
+	}
+
+	private func saveChecklist(updateLinkedItems: Bool) {
 		if let existing = editingChecklist {
 			// Capture the old name before changing it
 			let oldChecklistName = existing.checklistName
 			let newChecklistName = checklistName.trimmingCharacters(in: .whitespacesAndNewlines)
-			
+
 			existing.category = checklistCategory.trimmingCharacters(in: .whitespacesAndNewlines)
 			existing.checklistName = newChecklistName
 			existing.checklistDescription = checklistDescription.trimmingCharacters(in: .whitespacesAndNewlines)
 			existing.checklistNotes = checklistNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+			existing.vehicleId = checklistVehicleId.trimmingCharacters(in: .whitespacesAndNewlines)
 			existing.headerBgColorHex = headerBgColor.hexString()
 			existing.headerFgColorHex = headerFgColor.hexString()
 			existing.updatedAt = Date()
-			
-			// If the checklist name changed, update all associated CheckListItem records
-			if oldChecklistName != newChecklistName {
-				let itemsDescriptor = FetchDescriptor<CheckListItem>()
-				if let allItems = try? modelContext.fetch(itemsDescriptor) {
-					let itemsToUpdate = allItems.filter { $0.checklistName == oldChecklistName }
-					for item in itemsToUpdate {
-						item.checklistName = newChecklistName
-						item.updatedAt = Date()
-					}
-				}
+
+			// If the checklist name changed, update all associated CheckListItem records —
+			// but only when the user opted in via the rename-cascade dialog.
+			if updateLinkedItems, oldChecklistName != newChecklistName {
+				renameLinkedCheckListItems(from: oldChecklistName, to: newChecklistName)
 			}
-			
+
 			try? modelContext.save()
 			showChecklistEditor = false
 		} else {
@@ -762,13 +814,30 @@ private struct ChecklistEditorSheetView: View {
 	@Binding var checklistCategory: String
 	@Binding var checklistDescription: String
 	@Binding var checklistNotes: String
+	@Binding var checklistVehicleId: String
 	@Binding var headerBgColor: Color
 	@Binding var headerFgColor: Color
 	let editingChecklist: CheckList?
 	let trackVehicleSelected: String
 	let uniqueCategories: [String]
+	let hasLinkedRecords: (String) -> Bool
 	let onSave: () -> Void
+	let onSaveWithRename: () -> Void
 	let onCancel: () -> Void
+
+	// Controls presentation of the rename-cascade confirmation dialog, shown when saving
+	// a checklist name change that would otherwise orphan items that reference it by name.
+	@State private var showingRenameChoice: Bool = false
+
+	// Vehicle picker for the "Edit Checklist Info" flow — lets an existing checklist be
+	// reassigned to a different vehicle instead of being locked to the one it was created under.
+	@Query(sort: [SortDescriptor(\Vehicle8.displayName, order: .forward)]) private var vehicles: [Vehicle8]
+	private var vehicleBinding: Binding<Vehicle8?> {
+		Binding(
+			get: { vehicles.first(where: { $0.name == checklistVehicleId }) },
+			set: { checklistVehicleId = $0?.name ?? "" }
+		)
+	}
 
 	var body: some View {
 		NavigationStack {
@@ -801,6 +870,11 @@ private struct ChecklistEditorSheetView: View {
 						Text("Name")
 #endif
 					}
+					if editingChecklist != nil {
+						Text("Renaming this checklist offers to update any items that reference it by name.")
+							.font(.caption)
+							.foregroundStyle(.secondary)
+					}
 
 					LabeledContent {
 						TextField("Description", text: $checklistDescription, prompt: Text("Optional"))
@@ -826,12 +900,29 @@ private struct ChecklistEditorSheetView: View {
 				if editingChecklist == nil {
 					Section {
 						HStack {
-							Image(systemName: "car")
+							Image(systemName: Vertical.current.assetIcon)
 								.foregroundStyle(.secondary)
-							Text("Vehicle: \(trackVehicleSelected)")
+							Text("\(Vertical.current.assetSingular): \(trackVehicleSelected)")
 								.foregroundStyle(.secondary)
 						}
 						.font(.caption)
+					}
+				} else {
+					Section(header: Text(Vertical.current.assetSingular)) {
+						LabeledContent {
+							ModelPicker(
+								selection: vehicleBinding,
+								title: Vertical.current.assetSingular,
+								includeEmptyChoice: false,
+								autoSelectFirst: false,
+								labelProvider: { "\($0.year) \($0.displayName)" },
+								thumbnailData: { $0.image1 }
+							)
+						} label: {
+#if os(iOS)
+							Text(Vertical.current.assetSingular)
+#endif
+						}
 					}
 				}
 
@@ -861,9 +952,31 @@ private struct ChecklistEditorSheetView: View {
 				}
 				ToolbarItem(placement: .confirmationAction) {
 					Button("Save") {
-						onSave()
+						let trimmedName = checklistName.trimmingCharacters(in: .whitespacesAndNewlines)
+						if let existing = editingChecklist, existing.checklistName != trimmedName, hasLinkedRecords(existing.checklistName) {
+							showingRenameChoice = true
+						} else {
+							onSave()
+						}
 					}
 					.disabled(checklistName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+					.confirmationDialog(
+						"Checklist Name Changed",
+						isPresented: $showingRenameChoice,
+						titleVisibility: .visible
+					) {
+						Button("Update Linked Records") {
+							onSaveWithRename()
+						}
+						Button("Save Without Updating Links", role: .destructive) {
+							onSave()
+						}
+						Button("Cancel", role: .cancel) { }
+					} message: {
+						if let existing = editingChecklist {
+							Text("Renaming \"\(existing.checklistName)\" to \"\(checklistName.trimmingCharacters(in: .whitespacesAndNewlines))\" will break its links to this checklist's items unless they're updated to the new name. Update them now?")
+						}
+					}
 				}
 			}
 		}

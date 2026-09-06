@@ -36,6 +36,8 @@ enum VerticalFeature: Hashable {
 	case componentTimes
 	case haulOutRecords
 	case surveyRecords
+	case pilotLogbook
+	case marinerSeaService
 }
 
 /// Optional grandfathering policy for users who owned the app before it converted
@@ -75,6 +77,12 @@ struct Vertical: Sendable {
 	// Commerce
 	let storeProductID: String
 	let grandfathering: GrandfatheringPolicy?
+
+	// Compliance
+	/// Shown wherever regulatory-adjacent records are entered (AD/inspection/component
+	/// records, haul-out/survey records) and during onboarding. `nil` for land, which has
+	/// no equivalent regulatory framework this app could be mistaken for satisfying.
+	let regulatoryDisclaimer: String?
 }
 
 extension Vertical {
@@ -97,7 +105,8 @@ extension Vertical {
 			originalAppVersionThresholdIOS: "92",
 			originalAppVersionThresholdMacOS: "2026.09.02",
 			firstFreeBuildNumber: 92
-		)
+		),
+		regulatoryDisclaimer: nil
 	)
 
 	static let aviation = Vertical(
@@ -113,9 +122,10 @@ extension Vertical {
 		assetIcon: "airplane",
 		assetGroupIcon: "airplane",
 		visibleFieldGroups: [],
-		enabledFeatures: [.airworthinessDirectives, .inspectionCycles, .componentTimes],
+		enabledFeatures: [.airworthinessDirectives, .inspectionCycles, .componentTimes, .pilotLogbook],
 		storeProductID: "com.aeronauticaltrax.aerotraxapp.fullversion",
-		grandfathering: nil
+		grandfathering: nil,
+		regulatoryDisclaimer: "AeroTrax is a personal recordkeeping tool. It does not replace your official aircraft maintenance logbook, an A&P/IA's signoff, or your own research into applicable Airworthiness Directives. Always verify compliance through official FAA sources before flight."
 	)
 
 	static let marine = Vertical(
@@ -131,9 +141,10 @@ extension Vertical {
 		assetIcon: "sailboat.fill",
 		assetGroupIcon: "sailboat.fill",
 		visibleFieldGroups: [.rvTanks],
-		enabledFeatures: [.haulOutRecords, .surveyRecords],
+		enabledFeatures: [.haulOutRecords, .surveyRecords, .marinerSeaService],
 		storeProductID: "com.aeronauticaltrax.nauticaltrax.fullversion",
-		grandfathering: nil
+		grandfathering: nil,
+		regulatoryDisclaimer: "NauticalTrax is a personal recordkeeping tool. It does not replace a licensed marine surveyor's report or your vessel's official maintenance and safety records. Always consult a qualified surveyor for insurance, safety, or pre-purchase decisions."
 	)
 
 	/// Resolved once at launch from the active compilation condition. Exactly one

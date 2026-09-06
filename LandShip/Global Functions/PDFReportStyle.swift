@@ -10,6 +10,7 @@
 
 import Foundation
 import SwiftUI
+import SwiftData
 import PDFKit
 import ImageIO
 #if os(macOS)
@@ -26,6 +27,20 @@ typealias PlatformFont = NSFont
 typealias PlatformColor = UIColor
 typealias PlatformFont = UIFont
 #endif
+
+/// Cross-platform italic system font — NSFont has no `italicSystemFont(ofSize:)` convenience
+/// the way UIFont does, so this fills the gap for the one place (the disclaimer footer note)
+/// that needs italics.
+private func platformItalicSystemFont(ofSize size: CGFloat) -> PlatformFont {
+	#if os(macOS)
+	let base = NSFont.systemFont(ofSize: size)
+	guard let descriptor = base.fontDescriptor.withSymbolicTraits(.italic) as NSFontDescriptor?,
+	      let italic = NSFont(descriptor: descriptor, size: size) else { return base }
+	return italic
+	#else
+	return UIFont.italicSystemFont(ofSize: size)
+	#endif
+}
 
 // MARK: - Page sizes
 
@@ -85,9 +100,10 @@ struct PDFReportStyle {
 	var fieldLabelSize: CGFloat = 6.5
 	var bodySize: CGFloat = 7
 	var footerSize: CGFloat = 7.5
+	var footerNoteSize: CGFloat = 6.5
 
 	var cellInsetH: CGFloat = 5
-	var cellInsetV: CGFloat = 6
+	var cellInsetV: CGFloat = 8
 	var minRowHeight: CGFloat = 40
 	var thumbnailMaxHeight: CGFloat = 64
 
@@ -245,19 +261,28 @@ enum PDFReportRenderer {
 
 	// MARK: Text measurement/attribution helpers
 
-	private static func attributedText(_ text: String, font: PlatformFont, color: PDFColor, alignment: NSTextAlignment) -> NSAttributedString {
+	/// Pinning an explicit line height (rather than letting TextKit derive one from font
+	/// metrics) keeps the measure pass (`boundingRect`) and the draw pass (`draw(in:)`) in
+	/// agreement — without it, wrapped text measures a hair short and the last line's
+	/// descenders get clipped against the row border.
+	private static func paragraphStyle(alignment: NSTextAlignment, lineHeight: CGFloat) -> NSMutableParagraphStyle {
 		let paragraph = NSMutableParagraphStyle()
 		paragraph.alignment = alignment
 		paragraph.lineBreakMode = .byWordWrapping
+		paragraph.minimumLineHeight = lineHeight
+		paragraph.maximumLineHeight = lineHeight
+		return paragraph
+	}
+
+	private static func attributedText(_ text: String, font: PlatformFont, color: PDFColor, alignment: NSTextAlignment) -> NSAttributedString {
+		let paragraph = paragraphStyle(alignment: alignment, lineHeight: ceil(font.pointSize * 1.25))
 		return NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: color.platform, .paragraphStyle: paragraph])
 	}
 
 	private static func fieldLineAttributedString(label: String, value: String, style: PDFReportStyle) -> NSAttributedString {
-		let paragraph = NSMutableParagraphStyle()
-		paragraph.alignment = .left
-		paragraph.lineBreakMode = .byWordWrapping
 		let labelFont = PlatformFont.systemFont(ofSize: style.fieldLabelSize)
 		let valueFont = PlatformFont.systemFont(ofSize: style.bodySize)
+		let paragraph = paragraphStyle(alignment: .left, lineHeight: ceil(max(labelFont.pointSize, valueFont.pointSize) * 1.25))
 		let result = NSMutableAttributedString(string: "\(label): ", attributes: [.font: labelFont, .foregroundColor: PDFPalette.fieldLabel.platform, .paragraphStyle: paragraph])
 		result.append(NSAttributedString(string: value, attributes: [.font: valueFont, .foregroundColor: PDFPalette.bodyText.platform, .paragraphStyle: paragraph]))
 		return result
@@ -272,7 +297,8 @@ enum PDFReportRenderer {
 		let bounding = text.boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),
 		                                  options: [.usesLineFragmentOrigin, .usesFontLeading],
 		                                  context: nil)
-		return ceil(bounding.height)
+		// Small residual safety margin on top of the pinned line height above.
+		return ceil(bounding.height) + 2
 	}
 
 	private static func drawText(_ text: NSAttributedString, in rectTopLeft: CGRect, ctx: PDFDrawingContext) {
@@ -345,7 +371,9 @@ enum PDFReportRenderer {
 	}
 
 	private static func layoutImageWithGroups(data: Data?, caption: String, groups: [PDFFieldGroup], width: CGFloat, style: PDFReportStyle) -> ImageGroupsLayout {
-		var imageHeight: CGFloat = style.thumbnailMaxHeight * 0.5
+		// No image data means no thumbnail and no placeholder box — the row just skips
+		// straight to the caption/groups instead of reserving blank space for a "No Image" box.
+		var imageHeight: CGFloat = 0
 		if let data, let size = PDFImageDecoder.pixelSize(data), size.width > 0, size.height > 0 {
 			let scale = min(width / size.width, style.thumbnailMaxHeight / size.height)
 			imageHeight = max(0, min(style.thumbnailMaxHeight, size.height * scale))
@@ -380,12 +408,9 @@ enum PDFReportRenderer {
 			let drawW = size.width * scale
 			let imageRect = CGRect(x: rectTopLeft.origin.x + (rectTopLeft.width - drawW) / 2, y: y, width: drawW, height: layout.imageHeight)
 			PDFImageDecoder.draw(data, in: ctx.rect(imageRect))
-		} else {
-			let placeholderRect = CGRect(x: rectTopLeft.origin.x, y: y, width: rectTopLeft.width, height: layout.imageHeight)
-			PDFPath.fill(rect: ctx.rect(placeholderRect), color: PDFPalette.placeholderFill.platform)
-			drawText(attributedText("No Image", font: .systemFont(ofSize: style.fieldLabelSize), color: PDFPalette.mutedText, alignment: .center),
-			         in: placeholderRect.insetBy(dx: 2, dy: 2), ctx: ctx)
 		}
+		// No image data: skip the placeholder entirely — layout.imageHeight is already 0 so
+		// no blank space is reserved for it.
 		y += layout.imageHeight
 
 		if let captionAttr = layout.caption {
@@ -511,10 +536,24 @@ enum PDFReportRenderer {
 		PDFPath.strokeLines([(a, b)], color: PDFPalette.accentRule.platform, lineWidth: 1.2)
 	}
 
-	private static func drawPageFooter(pageNumber: Int, totalPages: Int, ctx: PDFDrawingContext, style: PDFReportStyle) {
+	/// Height of the wrapped disclaimer line, or 0 when there's no note — used both to reserve
+	/// space above the standard footer during pagination and to draw it in that same space.
+	private static func footerNoteHeight(_ footerNote: String?, width: CGFloat, style: PDFReportStyle) -> CGFloat {
+		guard let footerNote, !footerNote.isEmpty else { return 0 }
+		let attr = attributedText(footerNote, font: platformItalicSystemFont(ofSize: style.footerNoteSize), color: PDFPalette.mutedText, alignment: .center)
+		return height(of: attr, width: width) + 4
+	}
+
+	private static func drawPageFooter(pageNumber: Int, totalPages: Int, footerNote: String?, ctx: PDFDrawingContext, style: PDFReportStyle) {
 		let margin = style.margin
 		let width = style.pageSize.width - 2 * margin
 		let y = style.pageSize.height - margin - style.footerHeight
+
+		if let footerNote, !footerNote.isEmpty {
+			let noteHeight = footerNoteHeight(footerNote, width: width, style: style) - 4
+			drawText(attributedText(footerNote, font: platformItalicSystemFont(ofSize: style.footerNoteSize), color: PDFPalette.mutedText, alignment: .center),
+			         in: CGRect(x: margin, y: y - noteHeight - 4, width: width, height: noteHeight), ctx: ctx)
+		}
 
 		drawText(attributedText("\(AppInfo.displayName) • \(VersionStrings.fullVersionStringWithAppName)", font: .systemFont(ofSize: style.footerSize), color: PDFPalette.footerText, alignment: .left),
 		         in: CGRect(x: margin, y: y, width: width * 0.7, height: style.footerHeight), ctx: ctx)
@@ -523,45 +562,100 @@ enum PDFReportRenderer {
 		         in: CGRect(x: margin, y: y, width: width, height: style.footerHeight), ctx: ctx)
 	}
 
+	// MARK: Summary block
+	//
+	// Reuses the same stacked-field-group rendering built for table cells (`lines`/
+	// `measureStackedLines`/`drawStackedLines`): each group's heading (e.g. a vehicle name, or
+	// "ALL VEHICLES" for the grand total) gets the same bold/accent-ruled treatment a table
+	// cell's group heading gets, so per-vehicle breakdowns and the trailing total both read
+	// clearly without inventing separate styling.
+
+	/// Total block height including its own border/padding. Independent of pagination — callers
+	/// decide whether it fits on the current page or needs one of its own.
+	private static func measureSummary(_ summary: PDFReportSummary, width: CGFloat, style: PDFReportStyle) -> CGFloat {
+		let titleH = style.titleSize + 10
+		let innerWidth = width - 24
+		let contentH = measureStackedLines(lines(for: summary.groups, style: style), width: innerWidth)
+		return titleH + contentH + 16 // top+bottom padding inside the border box
+	}
+
+	private static func drawSummary(_ summary: PDFReportSummary, origin: CGPoint, width: CGFloat, ctx: PDFDrawingContext, style: PDFReportStyle) {
+		let height = measureSummary(summary, width: width, style: style)
+		let boxRect = CGRect(x: origin.x, y: origin.y, width: width, height: height)
+		let corners = [boxRect.origin,
+		               CGPoint(x: boxRect.maxX, y: boxRect.minY),
+		               CGPoint(x: boxRect.maxX, y: boxRect.maxY),
+		               CGPoint(x: boxRect.minX, y: boxRect.maxY)]
+		let borderSegments = (0..<4).map { (ctx.point(corners[$0]), ctx.point(corners[($0 + 1) % 4])) }
+		PDFPath.strokeLines(borderSegments, color: PDFPalette.border.platform, lineWidth: style.borderLineWidth)
+
+		let innerX = origin.x + 12
+		let innerWidth = width - 24
+		var y = origin.y + 8
+
+		drawText(attributedText(summary.title, font: .boldSystemFont(ofSize: style.titleSize - 3), color: PDFPalette.titleText, alignment: .left),
+		         in: CGRect(x: innerX, y: y, width: innerWidth, height: style.titleSize + 2), ctx: ctx)
+		y += style.titleSize + 8
+
+		let contentLines = lines(for: summary.groups, style: style)
+		let contentHeight = measureStackedLines(contentLines, width: innerWidth)
+		drawStackedLines(contentLines, in: CGRect(x: innerX, y: y, width: innerWidth, height: contentHeight), ctx: ctx)
+	}
+
 	// MARK: Page assembly (shared by both platform backends)
+
+	/// One physical page's worth of drawing instructions, decided up front during pagination.
+	private struct PageContent {
+		var rowIndices: [Int]
+		var showColumnHeaders: Bool
+		var summaryStartY: CGFloat? // set when the summary block should be drawn on this page
+	}
 
 	private static func drawPageContent(title: String, subtitle: String, pageNumber: Int, totalPages: Int,
 	                                     columns: [PDFTableColumn], columnWidths: [CGFloat], columnHeaderHeight: CGFloat,
-	                                     rowIndices: [Int], rows: [[PDFCell]], rowHeights: [CGFloat],
-	                                     top: CGFloat, ctx: PDFDrawingContext, style: PDFReportStyle) {
+	                                     page: PageContent, rows: [[PDFCell]], rowHeights: [CGFloat],
+	                                     top: CGFloat, summary: PDFReportSummary?, footerNote: String?, ctx: PDFDrawingContext, style: PDFReportStyle) {
 		drawPageHeader(title: title, subtitle: subtitle, pageNumber: pageNumber, totalPages: totalPages, ctx: ctx, style: style)
-		drawPageFooter(pageNumber: pageNumber, totalPages: totalPages, ctx: ctx, style: style)
+		drawPageFooter(pageNumber: pageNumber, totalPages: totalPages, footerNote: footerNote, ctx: ctx, style: style)
 
 		var y = top
-		drawColumnHeaders(columns: columns, columnWidths: columnWidths, origin: CGPoint(x: style.margin, y: y), rowHeight: columnHeaderHeight, ctx: ctx, style: style)
-		y += columnHeaderHeight
+		if page.showColumnHeaders {
+			drawColumnHeaders(columns: columns, columnWidths: columnWidths, origin: CGPoint(x: style.margin, y: y), rowHeight: columnHeaderHeight, ctx: ctx, style: style)
+			y += columnHeaderHeight
+		}
 
-		for index in rowIndices {
+		for index in page.rowIndices {
 			let h = rowHeights[index]
 			drawRow(rows[index], columns: columns, columnWidths: columnWidths, origin: CGPoint(x: style.margin, y: y), rowHeight: h, rowIndex: index, ctx: ctx, style: style)
 			y += h
+		}
+
+		if let summary, let summaryY = page.summaryStartY {
+			let contentWidth = style.pageSize.width - 2 * style.margin
+			drawSummary(summary, origin: CGPoint(x: style.margin, y: summaryY), width: contentWidth, ctx: ctx, style: style)
 		}
 	}
 
 	#if os(macOS)
 	private static func renderPages(title: String, subtitle: String, columns: [PDFTableColumn], columnWidths: [CGFloat],
 	                                 columnHeaderHeight: CGFloat, rows: [[PDFCell]], rowHeights: [CGFloat],
-	                                 pages: [[Int]], totalPages: Int, top: CGFloat, style: PDFReportStyle) -> Data? {
+	                                 pages: [PageContent], top: CGFloat, summary: PDFReportSummary?, footerNote: String?, style: PDFReportStyle) -> Data? {
 		let data = NSMutableData()
 		var mediaBox = CGRect(origin: .zero, size: style.pageSize)
 		guard let consumer = CGDataConsumer(data: data as CFMutableData),
 		      let cgContext = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else { return nil }
 
 		let ctx = PDFDrawingContext(pageHeight: style.pageSize.height)
+		let totalPages = pages.count
 
-		for (pageIndex, rowIndices) in pages.enumerated() {
+		for (pageIndex, page) in pages.enumerated() {
 			cgContext.beginPDFPage(nil)
 			NSGraphicsContext.saveGraphicsState()
 			NSGraphicsContext.current = NSGraphicsContext(cgContext: cgContext, flipped: false)
 
 			drawPageContent(title: title, subtitle: subtitle, pageNumber: pageIndex + 1, totalPages: totalPages,
 			                 columns: columns, columnWidths: columnWidths, columnHeaderHeight: columnHeaderHeight,
-			                 rowIndices: rowIndices, rows: rows, rowHeights: rowHeights, top: top, ctx: ctx, style: style)
+			                 page: page, rows: rows, rowHeights: rowHeights, top: top, summary: summary, footerNote: footerNote, ctx: ctx, style: style)
 
 			NSGraphicsContext.restoreGraphicsState()
 			cgContext.endPDFPage()
@@ -572,15 +666,16 @@ enum PDFReportRenderer {
 	#else
 	private static func renderPages(title: String, subtitle: String, columns: [PDFTableColumn], columnWidths: [CGFloat],
 	                                 columnHeaderHeight: CGFloat, rows: [[PDFCell]], rowHeights: [CGFloat],
-	                                 pages: [[Int]], totalPages: Int, top: CGFloat, style: PDFReportStyle) -> Data? {
+	                                 pages: [PageContent], top: CGFloat, summary: PDFReportSummary?, footerNote: String?, style: PDFReportStyle) -> Data? {
 		let renderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: style.pageSize))
 		let ctx = PDFDrawingContext(pageHeight: style.pageSize.height)
+		let totalPages = pages.count
 		return renderer.pdfData { rendererContext in
-			for (pageIndex, rowIndices) in pages.enumerated() {
+			for (pageIndex, page) in pages.enumerated() {
 				rendererContext.beginPage()
 				drawPageContent(title: title, subtitle: subtitle, pageNumber: pageIndex + 1, totalPages: totalPages,
 				                 columns: columns, columnWidths: columnWidths, columnHeaderHeight: columnHeaderHeight,
-				                 rowIndices: rowIndices, rows: rows, rowHeights: rowHeights, top: top, ctx: ctx, style: style)
+				                 page: page, rows: rows, rowHeights: rowHeights, top: top, summary: summary, footerNote: footerNote, ctx: ctx, style: style)
 			}
 		}
 	}
@@ -590,35 +685,121 @@ enum PDFReportRenderer {
 
 	/// Measures every row, paginates, and draws the full report. Returns raw PDF data, or
 	/// `nil` if the underlying graphics context could not be created.
-	static func render(title: String, subtitle: String, columns: [PDFTableColumn], rows: [[PDFCell]], style: PDFReportStyle = .standard) -> Data? {
+	/// - Parameter summary: An optional totals block drawn after the last row — appended to the
+	///   final page if it fits in the remaining space, otherwise given a page of its own. Pass
+	///   `nil` (the default) for reports with nothing to total.
+	/// - Parameter footerNote: An optional small italic line drawn above the standard footer on
+	///   every page — e.g. a regulatory disclaimer for AeroTrax/NauticalTrax reports. `nil` (the
+	///   default) reproduces every existing report's footer exactly as before this parameter existed.
+	static func render(title: String, subtitle: String, columns: [PDFTableColumn], rows: [[PDFCell]], summary: PDFReportSummary? = nil, footerNote: String? = nil, style: PDFReportStyle = .standard) -> Data? {
 		let contentWidth = style.pageSize.width - 2 * style.margin
 		let columnWidths = columns.map { max(0, $0.weight * contentWidth) }
 
 		let columnHeaderHeight = measureColumnHeaders(columns: columns, columnWidths: columnWidths, style: style)
 		let rowHeights = rows.map { measureRow($0, columnWidths: columnWidths, columns: columns, style: style) }
 
+		let noteHeight = footerNoteHeight(footerNote, width: contentWidth, style: style)
 		let top = style.margin + style.headerHeight
-		let bottom = style.pageSize.height - style.margin - style.footerHeight
+		let bottom = style.pageSize.height - style.margin - style.footerHeight - noteHeight
 		let availableHeight = bottom - top - columnHeaderHeight
 
-		var pages: [[Int]] = []
+		var pages: [PageContent] = []
 		var current: [Int] = []
 		var currentHeight: CGFloat = 0
 		for (index, rowHeight) in rowHeights.enumerated() {
 			if !current.isEmpty && currentHeight + rowHeight > availableHeight {
-				pages.append(current)
+				pages.append(PageContent(rowIndices: current, showColumnHeaders: true, summaryStartY: nil))
 				current = []
 				currentHeight = 0
 			}
 			current.append(index)
 			currentHeight += rowHeight
 		}
-		pages.append(current) // always at least one page, even with zero rows
+		pages.append(PageContent(rowIndices: current, showColumnHeaders: true, summaryStartY: nil)) // always at least one page, even with zero rows
+
+		if let summary, !summary.groups.isEmpty {
+			let summaryHeight = measureSummary(summary, width: contentWidth, style: style)
+			let summaryGap: CGFloat = 12
+			let lastPageContentHeight = pages[pages.count - 1].rowIndices.reduce(0) { $0 + rowHeights[$1] }
+			let remainingOnLastPage = availableHeight - lastPageContentHeight
+			if remainingOnLastPage >= summaryHeight + summaryGap {
+				pages[pages.count - 1].summaryStartY = top + columnHeaderHeight + lastPageContentHeight + summaryGap
+			} else {
+				// Doesn't fit — give the summary a page of its own, with no repeated column headers.
+				let summaryOnlyTop = style.margin + style.headerHeight
+				pages.append(PageContent(rowIndices: [], showColumnHeaders: false, summaryStartY: summaryOnlyTop))
+			}
+		}
 
 		return renderPages(title: title, subtitle: subtitle, columns: columns, columnWidths: columnWidths,
 		                    columnHeaderHeight: columnHeaderHeight, rows: rows, rowHeights: rowHeights,
-		                    pages: pages, totalPages: pages.count, top: top, style: style)
+		                    pages: pages, top: top, summary: summary, footerNote: footerNote, style: style)
 	}
+}
+
+// MARK: - Report summary model
+
+/// A small totals block a report can append after its last row — e.g. Fuel Log's total fuel
+/// added, total cost, total DEF cost. Reuses `PDFFieldGroup` (the same type table cells use for
+/// "Label: value" groups) so a group's heading gets the same bold/accent-ruled treatment.
+///
+/// Each report builds its own summary from the same records it already fetched for its table —
+/// there is no cross-report/cross-category aggregation.
+///
+/// When the report's scope is a single vehicle, `groups` is typically one unheaded group with
+/// that vehicle's own totals. When scope is "All Vehicles", `groups` should be one heading-per-
+/// vehicle group per vehicle (heading = vehicle display name) followed by a final group headed
+/// "ALL VEHICLES" (or similar) with the same fields summed across every vehicle — the per-vehicle
+/// breakdown the totals are drawn from, not just the grand total alone.
+struct PDFReportSummary {
+	var title: String = "REPORT SUMMARY"
+	var groups: [PDFFieldGroup]
+}
+
+/// Builds `PDFReportSummary.groups` for a vehicle-scoped report: one group per vehicle (heading
+/// = vehicle display name, sorted alphabetically) plus a trailing "ALL VEHICLES" group with the
+/// same fields summed across every vehicle, when `scope` is "All Vehicles" (or empty) — or a
+/// single unheaded group with just this scope's own totals otherwise. `metrics` computes the
+/// same fields for any subset of records, so the per-vehicle breakdown and the grand total are
+/// always shaped identically. Shared by every vehicle-scoped report so this logic isn't
+/// duplicated in each one.
+///
+/// `metrics` returns `nil` for a field to drop it — e.g. a non-diesel vehicle's DEF total is 0,
+/// so that vehicle's group simply omits the DEF fields rather than showing "$0.00". A group that
+/// ends up with zero fields (every metric was 0/nil for that vehicle) is dropped entirely.
+func pdfVehicleScopedSummaryGroups<T>(scope: String, records: [T], vehicleId: (T) -> String,
+                                       context: ModelContext, metrics: ([T]) -> [(label: String, value: String?)]) -> [PDFFieldGroup] {
+	func resolvedFields(_ subset: [T]) -> [(label: String, value: String)] {
+		metrics(subset).compactMap { label, value in
+			guard let value else { return nil }
+			return (label, value)
+		}
+	}
+	guard scope == "All Vehicles" || scope.isEmpty else {
+		let fields = resolvedFields(records)
+		return fields.isEmpty ? [] : [PDFFieldGroup(fields: fields)]
+	}
+	let grouped = Dictionary(grouping: records, by: vehicleId)
+	let functions = Functions()
+	let perVehicle = grouped.compactMap { vid, recs -> (name: String, group: PDFFieldGroup)? in
+		let fields = resolvedFields(recs)
+		guard !fields.isEmpty else { return nil }
+		let name = vid.isEmpty ? "Unassigned" : functions.getVehicleDisplayName(vehicleId: vid, context: context)
+		return (name, PDFFieldGroup(heading: name, fields: fields))
+	}.sorted { $0.name < $1.name }.map(\.group)
+	let totalFields = resolvedFields(records)
+	guard !totalFields.isEmpty else { return perVehicle }
+	return perVehicle + [PDFFieldGroup(heading: FleetScope.allDisplayLabel.uppercased(), fields: totalFields)]
+}
+
+/// Formats a Float as US currency, matching `Functions.formatCurrency(dollars:)`. Kept here (not
+/// just in `Functions`) so report files building a `PDFReportSummary` don't need a `Functions`
+/// instance just for this.
+func pdfCurrencyString(_ value: Float) -> String {
+	let formatter = NumberFormatter()
+	formatter.numberStyle = .currency
+	formatter.locale = Locale(identifier: "en_US")
+	return formatter.string(from: NSNumber(value: value)) ?? "$0.00"
 }
 
 // MARK: - Shared PDFKit presentation
@@ -653,6 +834,13 @@ struct PDFKitView: NSViewRepresentable {
 	}
 
 	func updateNSView(_ nsView: PDFView, context: Context) {
+		// The SwiftUI view identity doesn't change between regenerations (same `if let doc =
+		// pdfDocument` branch), so this — not makeNSView — is where a newly generated document
+		// must be swapped in.
+		if nsView.document !== pdfDocument {
+			nsView.document = pdfDocument
+			nsView.autoScales = true
+		}
 		guard let action = zoomAction else { return }
 		switch action {
 			case .zoomIn: nsView.zoomIn(nil)
@@ -689,6 +877,15 @@ struct PDFKitView: UIViewRepresentable {
 	}
 
 	func updateUIView(_ uiView: PDFView, context: Context) {
+		// The SwiftUI view identity doesn't change between regenerations (same `if let doc =
+		// pdfDocument` branch), so this — not makeUIView — is where a newly generated document
+		// must be swapped in.
+		if uiView.document !== pdfDocument {
+			uiView.document = pdfDocument
+			uiView.autoScales = true
+			uiView.minScaleFactor = uiView.scaleFactorForSizeToFit
+			uiView.scaleFactor = uiView.minScaleFactor
+		}
 		guard let action = zoomAction else { return }
 		switch action {
 			case .zoomIn:
@@ -710,12 +907,64 @@ struct PDFKitView: UIViewRepresentable {
 }
 #endif
 
+// MARK: - Shared vehicle scope picker
+
+/// A toolbar control letting a report scope itself to "All Vehicles" or one specific vehicle.
+/// Every report's `scope`/`trackVehicleSelected` state should be driven by this instead of a
+/// one-off Menu, so vehicle filtering looks and behaves identically everywhere.
+///
+/// This only mutates `scope` — the report is still responsible for reacting to it (typically
+/// via `.onChange(of: scope) { regenerate() }`), since only the report knows how to re-fetch
+/// its own record type.
+struct VehicleScopePicker: View {
+	@Binding var scope: String
+	@Environment(\.modelContext) private var modelContext
+	@AppStorage("showInactiveVehicles") private var showInactiveVehicles: Bool = false
+
+	var body: some View {
+		Menu {
+			Button(FleetScope.allDisplayLabel) { scope = FleetScope.allSentinel }
+			ForEach(pickerVehicles, id: \.name) { vehicle in
+				Button(vehicle.displayName.isEmpty ? vehicle.name : vehicle.displayName) {
+					scope = vehicle.name
+				}
+			}
+		} label: {
+			Label(currentLabel, systemImage: Vertical.current.assetIcon)
+		}
+		.accessibilityLabel("\(Vertical.current.assetSingular) Filter")
+	}
+
+	/// Mirrors ChooseVehicle's own filtering, but always offers whatever vehicle is currently
+	/// selected even if it's since been deactivated — switching away from an inactive vehicle
+	/// shouldn't require re-enabling "Show Inactive" first.
+	private var pickerVehicles: [Vehicle8] {
+		allVehicles.filter { showInactiveVehicles || !$0.inactive || $0.name == scope }
+	}
+
+	private var allVehicles: [Vehicle8] {
+		let descriptor = FetchDescriptor<Vehicle8>(sortBy: [SortDescriptor(\.sortOrder, order: .forward)])
+		return (try? modelContext.fetch(descriptor)) ?? []
+	}
+
+	private var currentLabel: String {
+		guard !FleetScope.isAll(scope) else { return FleetScope.allDisplayLabel }
+		let selected = scope
+		let descriptor = FetchDescriptor<Vehicle8>(predicate: #Predicate<Vehicle8> { $0.name == selected })
+		guard let vehicle = try? modelContext.fetch(descriptor).first else { return scope }
+		return vehicle.displayName.isEmpty ? vehicle.name : vehicle.displayName
+	}
+}
+
 // MARK: - Shared file save / print
 
 enum PDFReportFile {
 	/// Saves the given PDF data into the app's Documents directory using the provided file name.
+	/// Not user-initiated — called from every `generateAndShowPDF()` purely to drop a copy
+	/// alongside viewing, so the trial gate here is silent (no paywall) rather than interactive.
 	@discardableResult
 	static func save(data: Data, fileName: String) -> URL? {
+		guard Entitlement.cachedIsFullVersion else { return nil }
 		guard let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
 			return nil
 		}
@@ -730,7 +979,9 @@ enum PDFReportFile {
 	}
 
 	/// Presents the platform print UI for the given PDF document.
+	@MainActor
 	static func printDocument(_ document: PDFDocument, jobName: String) {
+		guard EntitlementStore.shared.requestExport(.pdfPrint) else { return }
 		#if os(macOS)
 		let printInfo = NSPrintInfo.shared
 		printInfo.horizontalPagination = .automatic

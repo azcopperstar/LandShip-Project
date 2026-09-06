@@ -29,7 +29,14 @@ class MxParts1 {
 		var partStatus: String = ""
 		var partImage: Data? = nil
 		var partSupplier: String = ""
-	
+
+		// Inventory tracking. When `inventoryTracked` is false, the remaining fields are
+		// ignored everywhere else in the app (EditRecord consumption, DisplayParts, dashboard).
+		var inventoryTracked: Bool = false
+		var inventoryQuantityOnHand: Float = 0
+		var inventoryReorderPoint: Float = 0
+		var inventoryReorderQuantity: Float = 0
+
 	@Attribute(.externalStorage)
 	var image1: Data?
 	var image1Description: String = ""
@@ -60,6 +67,10 @@ class MxParts1 {
 		partStatus: String,
 		partImage: Data? = nil,
 		partSupplier: String,
+		inventoryTracked: Bool = false,
+		inventoryQuantityOnHand: Float = 0,
+		inventoryReorderPoint: Float = 0,
+		inventoryReorderQuantity: Float = 0,
 		image1: Data? = nil,
 		image1Description: String = "",
 		image2: Data? = nil,
@@ -86,6 +97,10 @@ class MxParts1 {
 		self.partStatus = partStatus
 		self.partImage = partImage
 		self.partSupplier = partSupplier
+		self.inventoryTracked = inventoryTracked
+		self.inventoryQuantityOnHand = inventoryQuantityOnHand
+		self.inventoryReorderPoint = inventoryReorderPoint
+		self.inventoryReorderQuantity = inventoryReorderQuantity
 		self.image1 = image1
 		self.image1Description = image1Description
 		self.image2 = image2

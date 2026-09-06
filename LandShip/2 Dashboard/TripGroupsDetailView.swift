@@ -85,7 +85,7 @@ struct TripGroupsDetailView: View {
                     statCell(
                         icon: "car.2.fill",
                         color: .indigo,
-                        title: "Vehicles",
+                        title: Vertical.current.assetPlural,
                         value: "\(group.vehicleCount)"
                     )
                 }

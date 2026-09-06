@@ -157,12 +157,12 @@ struct EditAdditions: View {
 					VStack {
 						SectionText(label: "GENERAL")
 						HStack{
-							Text("Vehicle")
+							Text(Vertical.current.assetSingular)
 								.textLabelModified()
 
 							ModelPicker(
 								selection: $selectedVehicle,
-								title: "Vehicle",
+								title: Vertical.current.assetSingular,
 								includeEmptyChoice: false,
 								emptyChoiceLabel: "—",
 								autoSelectFirst: false,
@@ -424,7 +424,7 @@ struct EditAdditions: View {
 				CardView {
 					VStack {
 						SectionText(label: "GENERAL")
-						HStack{LabelDataText(label: "Vehicle", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
+						HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						HStack{LabelDataText(label: "Status", data: dataSet.inactive ? "INACTIVE" : "ACTIVE")}
 						HStack{LabelDataCurrency(label: "Cost", data: Float(itemCost), unit: "")}
 					}

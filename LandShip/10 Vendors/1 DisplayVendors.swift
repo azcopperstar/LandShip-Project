@@ -47,6 +47,7 @@ import TipKit
 struct DisplayVendors: View {
 	/// SwiftData model context for fetching, inserting, and deleting Vendors1 records.
 	@Environment(\.modelContext) private var modelContext
+	@Environment(\.entitlements) private var entitlements
 
 	/// Selection binding for list rows (used to reflect the currently focused vendor).
 	@State private var selectedRecord: Vendors1?
@@ -299,6 +300,7 @@ struct DisplayVendors: View {
 	/// Selection is updated to reflect the inserted item.
 	@MainActor
 	private func addNewRecord() {
+		guard entitlements.requestCreate(Vendors1.self, in: modelContext) else { return }
 		let newRecord = makeNewVendor()
 		withAnimation {
 			// Persist the new record and trigger navigation on success.

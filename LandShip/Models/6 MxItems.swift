@@ -61,6 +61,39 @@ class MxItems3 {
 	@Attribute(.externalStorage)
 	var image3: Data?
 	var image3Description: String = ""
+	// Embedded sub service items: additional MxItems3 this item bundles together, so
+	// picking this item as a service record's master item imports all of its sub-items too.
+	// Description/laborCost are one-time snapshots taken when picked, independent of
+	// later edits to the source MxItems3.
+	var subItem1: String = ""
+	var subItem1Id: String = ""
+	var subItem1Description: String = ""
+	var subItem1LaborCost: Float = 0
+	var subItem1Comments: String = ""
+	var subItem2: String = ""
+	var subItem2Id: String = ""
+	var subItem2Description: String = ""
+	var subItem2LaborCost: Float = 0
+	var subItem2Comments: String = ""
+	var subItem3: String = ""
+	var subItem3Id: String = ""
+	var subItem3Description: String = ""
+	var subItem3LaborCost: Float = 0
+	var subItem3Comments: String = ""
+	var subItem4: String = ""
+	var subItem4Id: String = ""
+	var subItem4Description: String = ""
+	var subItem4LaborCost: Float = 0
+	var subItem4Comments: String = ""
+	var subItem5: String = ""
+	var subItem5Id: String = ""
+	var subItem5Description: String = ""
+	var subItem5LaborCost: Float = 0
+	var subItem5Comments: String = ""
+	// True when this item is meant to be used as a sub-item of other items/records rather
+	// than picked as a standalone master item. Purely advisory — surfaced as a label in
+	// picker dropdowns, never filters what can be picked.
+	var isSubItem: Bool = false
 
 
 	init(
@@ -162,5 +195,13 @@ class MxItems3 {
 		self.image3 = image3
 		self.image3Description = image3Description
 
+	}
+}
+
+extension MxItems3 {
+	/// Display label for picker dropdowns, flagging items marked `isSubItem` so they're
+	/// distinguishable from standalone master items in the same list.
+	var pickerLabel: String {
+		isSubItem ? "\(mxName) (Sub-Item)" : mxName
 	}
 }

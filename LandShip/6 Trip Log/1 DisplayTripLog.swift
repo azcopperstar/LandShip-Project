@@ -54,6 +54,7 @@ struct DisplayTripLog: View {
     @AppStorage("showInactiveVehicles") private var showInactiveVehicles: Bool = false
 	@Query var vehicles: [Vehicle8]
 	@Environment(\.modelContext) var modelContext
+	@Environment(\.entitlements) private var entitlements
 	@State private var selectedRecord: TripLog2?
 	let functions: Functions = Functions()
 	// Access settings (units) - loaded once and cached (see `loadUnits()`) instead of
@@ -96,7 +97,11 @@ struct DisplayTripLog: View {
 		case nameDesc = "Travel Log Z–A"
 		case updatedDesc = "Recently Updated"
 		var id: String { rawValue }
-		
+
+		/// Vertical-aware display text — the persisted rawValue stays "Vehicle ..." so
+		/// existing AppStorage selections keep decoding correctly.
+		var displayName: String { rawValue.replacingOccurrences(of: "Vehicle", with: Vertical.current.assetSingular) }
+
 		var descriptors: [SortDescriptor<TripLog2>] {
 			switch self {
 				case .dateDesc:
@@ -131,7 +136,7 @@ struct DisplayTripLog: View {
 				selection: $selectedVehicle,
 				title: "",
 				includeEmptyChoice: true,
-				emptyChoiceLabel: "All Vehicles",
+				emptyChoiceLabel: FleetScope.allDisplayLabel,
 				autoSelectFirst: false,
 				filter: showInactiveVehicles ? nil : #Predicate { !$0.inactive },
 				sort: [SortDescriptor(\.displayName, order: .forward)],
@@ -202,7 +207,7 @@ struct DisplayTripLog: View {
 						EmptyStateSection(
 							title: "Add your first Travel Log",
 							systemImage: "map",
-							description: "Create a Travel Log to track trips taken, fuel consumed and vehicle mileage.\n\nTo add additional logs after this first one, select the '+' button at the top of the form.",
+							description: "Create a Travel Log to track trips taken, fuel consumed and \(Vertical.current.assetSingular.lowercased()) \(Vertical.current.primaryMeterLabel.lowercased()).\n\nTo add additional logs after this first one, select the '+' button at the top of the form.",
 							actionTitle: "Add First Travel Log",
 							action: { addNewRecord() }
 						)
@@ -297,7 +302,7 @@ struct DisplayTripLog: View {
 								Menu {
 									Picker("Sort by", selection: $selectedSort) {
 										ForEach(PartsSort.allCases) { sortCase in
-											Text(sortCase.rawValue).tag(sortCase)
+											Text(sortCase.displayName).tag(sortCase)
 										}
 									}
 								} label: {
@@ -345,7 +350,7 @@ struct DisplayTripLog: View {
 						VStack(alignment: .leading, spacing: 2) {
 							HStack(spacing: 6) {
 								Image(systemName: "arrow.up.arrow.down")
-								Text("Sort: \(selectedSort.rawValue)")
+								Text("Sort: \(selectedSort.displayName)")
 							}
 							if totalMiles > 0 || totalFuel > 0 {
 								Text("Total Miles: \(totalMiles)\(unit(UnitIndex.distance)) · Total Fuel: \(fuelQuantityFormatted(totalFuel))\(unit(UnitIndex.fuel)) · Avg Economy: \(avgEconomy.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.distance))/\(unit(UnitIndex.fuel))")
@@ -387,9 +392,10 @@ struct DisplayTripLog: View {
 			EditTripLog(dataSet: record, startEditing: true)
 				.id(record.id)
 		}
+		// The report owns and re-fetches its own scope via an in-report vehicle picker,
+		// so no .id() here — that would reset the user's picker selection on navigation.
 		.navigationDestination(item: $reportDestination) { dest in
-			pdfReportTrip(trackVehicleSelected: .constant(dest.scope))
-				.id("TripReport-\(dest.scope)")
+			pdfReportTrip(trackVehicleSelected: dest.scope)
 				.ignoresSafeArea()
 		}
 	}
@@ -482,6 +488,7 @@ struct DisplayTripLog: View {
 	private func addNewRecord() {
 		// Only allow creating a record when a specific vehicle is selected
 		guard !trackVehicleSelected.isEmpty, trackVehicleSelected != "All Vehicles" else { return }
+		guard entitlements.requestCreate(TripLog2.self, in: modelContext) else { return }
 
 		let logName = "Travel Log: " + functions.formatDate_DDMMMyy_HHmm(date: Date())
 		var odometerStart: Int = 0

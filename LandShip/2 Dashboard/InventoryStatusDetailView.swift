@@ -28,13 +28,13 @@ struct InventoryStatusDetailView: View {
 							VStack(alignment: .leading) {
 								Text("Low Stock").bold()
 								Text("\(lowStock.count + outOfStock.count)")
-									.foregroundStyle(outOfStock.isEmpty && lowStock.isEmpty ? .primary : .orange)
+									.foregroundStyle((outOfStock.isEmpty && lowStock.isEmpty) ? Color.primary : Color.orange)
 							}
 							Spacer()
 							VStack(alignment: .leading) {
 								Text("Out of Stock").bold()
 								Text("\(outOfStock.count)")
-									.foregroundStyle(outOfStock.isEmpty ? .primary : .red)
+									.foregroundStyle(outOfStock.isEmpty ? Color.primary : Color.red)
 							}
 						}
 						.font(.subheadline)
