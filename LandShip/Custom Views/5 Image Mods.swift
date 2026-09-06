@@ -17,6 +17,12 @@ func formattedImageSize(from data: Data?) -> String {
 }
 
 #if os(iOS)
+typealias PlatformImage = UIImage
+#elseif os(macOS)
+typealias PlatformImage = NSImage
+#endif
+
+#if os(iOS)
 extension UIImage {
 	func resizeForCloudKit(maxDimension: CGFloat = 1024) -> UIImage? {
 		let size = self.size
@@ -396,19 +402,12 @@ struct Image_Edit: View {
 #endif
 }
 
-struct FuelStop_ImagePicker: View {
-	@Binding var imageData: Data?
+// Standalone (not a computed property on FuelStop_ImagePicker) so it can be built fresh from
+// inside PhotosPicker's label closure without crossing an actor-isolation boundary back to `self`.
+private struct FuelStopThumbnail: View {
+	let imageData: Data?
 
-#if os(macOS)
-	@State private var selectedPhoto: PhotosPickerItem?
-#elseif os(iOS)
-	@State private var isConfirmationDialogPresented = false
-	@State private var isImagePickerPresented = false
-	@State private var sourceType: UIImagePickerController.SourceType = .camera
-	@State private var pickedImage: UIImage?
-#endif
-
-	@ViewBuilder private var thumbnailContent: some View {
+	var body: some View {
 #if os(macOS)
 		if let imageData, let nsImage = NSImage(data: imageData) {
 			Image(nsImage: nsImage)
@@ -439,12 +438,28 @@ struct FuelStop_ImagePicker: View {
 		}
 #endif
 	}
+}
+
+struct FuelStop_ImagePicker: View {
+	@Binding var imageData: Data?
+
+#if os(macOS)
+	@State private var selectedPhoto: PhotosPickerItem?
+#elseif os(iOS)
+	@State private var isConfirmationDialogPresented = false
+	@State private var isImagePickerPresented = false
+	@State private var sourceType: UIImagePickerController.SourceType = .camera
+	@State private var pickedImage: UIImage?
+#endif
 
 	var body: some View {
 #if os(macOS)
+		// Captured into a local so the PhotosPicker label closure (Sendable) captures a plain
+		// value instead of reaching back into `self`, which is main-actor isolated.
+		let currentImageData = imageData
 		ZStack(alignment: .topTrailing) {
 			PhotosPicker(selection: $selectedPhoto, matching: .images, photoLibrary: .shared()) {
-				thumbnailContent
+				FuelStopThumbnail(imageData: currentImageData)
 			}
 			.buttonStyle(.plain)
 			if imageData != nil {
@@ -463,7 +478,7 @@ struct FuelStop_ImagePicker: View {
 		}
 #elseif os(iOS)
 		ZStack(alignment: .topTrailing) {
-			thumbnailContent
+			FuelStopThumbnail(imageData: imageData)
 				.contentShape(Rectangle())
 				.onTapGesture { isConfirmationDialogPresented = true }
 			if imageData != nil {
@@ -507,6 +522,59 @@ struct FuelStop_ImagePicker: View {
 		await MainActor.run { imageData = jpeg }
 	}
 #endif
+}
+
+/// Decodes and caches small thumbnails for picker rows so we don't re-decode the same
+/// externally-stored image data on every picker render. Keyed by a caller-supplied
+/// identity (e.g. persistentModelID) plus the data size, so an edited photo invalidates the cache.
+final class PickerThumbnailCache: @unchecked Sendable {
+	static let shared = PickerThumbnailCache()
+	private let cache = NSCache<NSString, PlatformImage>()
+
+	func image(for data: Data, key: String, maxDimension: CGFloat = 44) -> PlatformImage? {
+		let cacheKey = "\(key)-\(data.count)" as NSString
+		if let cached = cache.object(forKey: cacheKey) {
+			return cached
+		}
+#if os(iOS)
+		guard let decoded = UIImage(data: data) else { return nil }
+#elseif os(macOS)
+		guard let decoded = NSImage(data: data) else { return nil }
+#endif
+		let resized = decoded.resizeForCloudKit(maxDimension: maxDimension) ?? decoded
+		cache.setObject(resized, forKey: cacheKey)
+		return resized
+	}
+}
+
+/// A small square thumbnail used to adorn picker rows (e.g. the vehicle photo in vehicle pickers).
+/// Falls back to a placeholder glyph when there's no image data.
+struct PickerRowThumbnail: View {
+	var data: Data?
+	var cacheKey: String
+	var placeholderSystemImage: String = "car.fill"
+
+	var body: some View {
+		Group {
+			if let data, let image = PickerThumbnailCache.shared.image(for: data, key: cacheKey) {
+#if os(iOS)
+				Image(uiImage: image)
+					.resizable()
+#elseif os(macOS)
+				Image(nsImage: image)
+					.resizable()
+#endif
+			} else {
+				Image(systemName: placeholderSystemImage)
+					.resizable()
+					.foregroundStyle(.secondary)
+					.padding(4)
+			}
+		}
+		.scaledToFill()
+		.frame(width: 24, height: 24)
+		.clipShape(RoundedRectangle(cornerRadius: 4))
+	}
 }
 
 struct FuelStop_ImageThumb: View {

@@ -6,6 +6,7 @@ struct RecentServiceDetailView: View {
     let vehicleScope: String
     let distanceUnit: String
     let formatDate: (Date) -> String
+    let vehicleDisplayName: (String) -> String
 
     @Environment(\.modelContext) private var modelContext
     @State private var rows: [Row] = []
@@ -32,7 +33,7 @@ struct RecentServiceDetailView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(rec.mxName).font(.subheadline).bold()
-                            Text("\(Functions().getVehicleDisplayName(vehicleId: rec.vehicleId, context: modelContext)) • \(formatDate(rec.mxDate))")
+                            Text("\(vehicleDisplayName(rec.vehicleId)) • \(formatDate(rec.mxDate))")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

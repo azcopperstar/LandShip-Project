@@ -184,12 +184,6 @@ struct LiveCheckListView: View {
     }
 
     private func headerView(count: Int) -> some View {
-		// Debug: Check what the count represents
-		let totalForChecklist = items.filter { $0.checklistName == checklist.checklistName }
-		let parentCount = totalForChecklist.filter { $0.parentItemUUID == nil }.count
-		let subItemCount = totalForChecklist.filter { $0.parentItemUUID != nil }.count
-		print("[LiveCheckList] Header showing count: \(count), total in DB: \(totalForChecklist.count) (parents: \(parentCount), sub-items: \(subItemCount))")
-
 		return VStack(alignment: .leading) {
 			tipRowChecklist(icon: "checklist", text: "\(checklist.checklistName) Checklist")
 			tipRowVehicle(icon: "car", text: "\(checklist.vehicleId)")

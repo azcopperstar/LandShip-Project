@@ -104,6 +104,7 @@ struct ModelPicker<M: PersistentModel & Identifiable>: View {
 	private let autoSelectFirst: Bool
 
 	private let labelProvider: (M) -> String
+	private let thumbnailData: ((M) -> Data?)?
 	private let onSelectionChanged: ((M?) -> Void)?
 
 	// MARK: - App-wide setting
@@ -138,6 +139,7 @@ struct ModelPicker<M: PersistentModel & Identifiable>: View {
 		filter: Predicate<M>? = nil,
 		sort: [SortDescriptor<M>] = [],
 		labelProvider: @escaping (M) -> String,
+		thumbnailData: ((M) -> Data?)? = nil,
 		onSelectionChanged: ((M?) -> Void)? = nil
 	) {
 		self._selection = selection
@@ -146,6 +148,7 @@ struct ModelPicker<M: PersistentModel & Identifiable>: View {
 		self.emptyChoiceLabel = emptyChoiceLabel
 		self.autoSelectFirst = autoSelectFirst
 		self.labelProvider = labelProvider
+		self.thumbnailData = thumbnailData
 		self.onSelectionChanged = onSelectionChanged
 
 		if let filter {
@@ -166,7 +169,7 @@ struct ModelPicker<M: PersistentModel & Identifiable>: View {
 					.tag(Optional<PersistentIdentifier>.none)
 			}
 			ForEach(displayedItems) { item in
-				Text(labelProvider(item))
+				rowLabel(for: item)
 					.tag(Optional<PersistentIdentifier>(item.persistentModelID))
 			}
 		} label: {
@@ -222,6 +225,21 @@ struct ModelPicker<M: PersistentModel & Identifiable>: View {
 	}
 
 	// MARK: - Helpers
+
+	/// Builds the content for a single picker row, adorning it with a thumbnail when
+	/// `thumbnailData` is provided (e.g. the vehicle photo in vehicle pickers).
+	@ViewBuilder
+	private func rowLabel(for item: M) -> some View {
+		if let thumbnailData {
+			Label {
+				Text(labelProvider(item))
+			} icon: {
+				PickerRowThumbnail(data: thumbnailData(item), cacheKey: "\(item.persistentModelID)")
+			}
+		} else {
+			Text(labelProvider(item))
+		}
+	}
 
 	/// Returns (isInactive, pathDescription) for an item.
 	/// Prefers protocol access; falls back to reflection if needed.

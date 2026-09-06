@@ -293,7 +293,8 @@ struct FeedbackView: View {
 		guard sysctlbyname("hw.model", nil, &size, nil, 0) == 0, size > 0 else { return "Mac" }
 		var chars = [CChar](repeating: 0, count: size)
 		guard sysctlbyname("hw.model", &chars, &size, nil, 0) == 0 else { return "Mac" }
-		return String(cString: chars)
+		let nullIndex = chars.firstIndex(of: 0) ?? chars.count
+		return String(decoding: chars[..<nullIndex].map { UInt8(bitPattern: $0) }, as: UTF8.self)
 #else
 		var info = utsname()
 		guard uname(&info) == 0 else { return UIDevice.current.model }

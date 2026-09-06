@@ -148,6 +148,7 @@ struct EditParts: View {
 								autoSelectFirst: false,
 								sort: [SortDescriptor(\.name, order: .forward)],
 								labelProvider: { v in "\(v.year) \(v.displayName)"},
+								thumbnailData: { $0.image1 },
 								onSelectionChanged: { sel in
 									vehicleId = sel?.name ?? "All Vehicles"
 								}
@@ -453,7 +454,6 @@ struct EditParts: View {
 		dataSet.partQuantity = partQuantity
 		dataSet.partLocation = partLocation
 		dataSet.partStatus = partStatus
-		dataSet.inactive = inactive
 		dataSet.partSupplier = partSupplier
 		dataSet.image1 = image1
 		dataSet.image2 = image2
@@ -559,30 +559,6 @@ struct EditParts: View {
 		// when persistence fails.
 		dismiss()
 	}
-}
-
-/// Provides a safe subscript returning `nil` for out-of-bounds indices.
-///
-/// Useful for optional access when the count of an array may be unknown or dynamic.
-private extension Array {
-	subscript(safe index: Int) -> Element? {
-		indices.contains(index) ? self[index] : nil
-	}
-}
-
-// Provide a local shim for Functions.cleanOptional so this view compiles even if
-// the global Functions type doesn't define it. Returns a trimmed string or "—"
-// when the input is nil or empty.
-private extension Functions {
-    func cleanOptional(inputString: String?) -> String {
-        let trimmed = (inputString ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "—" : trimmed
-    }
-
-    func cleanOptional(inputString: String) -> String {
-        let trimmed = inputString.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "—" : trimmed
-    }
 }
 
 #Preview("EditParts Preview with sample MxParts1") {

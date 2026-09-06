@@ -56,13 +56,17 @@ struct DisplayTripLog: View {
 	@Environment(\.modelContext) var modelContext
 	@State private var selectedRecord: TripLog2?
 	let functions: Functions = Functions()
-	// Access settings (units) without storing them in @State
+	// Access settings (units) - loaded once and cached (see `loadUnits()`) instead of
+	// re-querying SwiftData every time `unit(_:)` is called, which happens per visible row.
 	let prefsFunc: PrefsFunctions = PrefsFunctions()
-	// Helper to read unit strings without @State
-	private func unit(_ index: Int) -> String {
-		let arr = prefsFunc.loadSettingsArray(context: modelContext, userName: "primary1")
+	@State private var unitStrings: [String] = Array(repeating: "", count: 13)
+	private func loadUnits() {
+		unitStrings = prefsFunc.loadSettingsArray(context: modelContext, userName: "primary1")
 			?? Array(repeating: "", count: 13)
-		return arr[safe: index] ?? ""
+	}
+	// Helper to read unit strings from the cached array
+	private func unit(_ index: Int) -> String {
+		unitStrings[safe: index] ?? ""
 	}
 	
 	@State private var allVehiclesSelected: Bool = true /// if all vehicles, disable save update button
@@ -132,6 +136,7 @@ struct DisplayTripLog: View {
 				filter: showInactiveVehicles ? nil : #Predicate { !$0.inactive },
 				sort: [SortDescriptor(\.displayName, order: .forward)],
 				labelProvider: { v in "\(v.year) \(v.displayName)"},
+				thumbnailData: { $0.image1 }
 			)
 			.frame(maxWidth: .infinity)
             .onChange(of: selectedVehicle) { _, newVehicle in
@@ -178,6 +183,8 @@ struct DisplayTripLog: View {
                         // Non-fatal: if lookup fails, keep the picker nil and proceed.
                     }
                 }
+                // Load settings once and cache them for `unit(_:)` lookups in row rendering.
+                loadUnits()
             }
 						.safeAreaInset(edge: .top) {
 							PageTitle_Col2_NoPhoto(label: "TRAVEL LOGS")
@@ -186,6 +193,10 @@ struct DisplayTripLog: View {
 
 			// MARK: - Trip Logs List
 			QueryView(for: TripLog2.self, sort: selectedSort.descriptors) { records in
+				// Precompute group totals once for this render instead of running a fresh
+				// FetchDescriptor per row (see `groupTotals(for:)` below, which now just
+				// looks this dictionary up by group name).
+				let groupTotalsByName = groupTotalsByGroupName()
 				if records.isEmpty {
 					List {
 						EmptyStateSection(
@@ -212,7 +223,7 @@ struct DisplayTripLog: View {
 										VStack(alignment: .leading, spacing: 1) {
 											Text("\(record.logName)")
 												.font(.headline)
-											let groupTotals = groupTotals(for: record)
+											let groupTotals = record.tripGroup.isEmpty ? nil : groupTotalsByName[record.tripGroup]
 											let rowDistance = groupTotals?.distance ?? (record.odometerEnd > record.odometerStart ? record.odometerEnd - record.odometerStart : 0)
 											let rowFuel = groupTotals?.fuel ?? totalFuelUsed(for: record)
 											if !record.tripGroup.isEmpty || rowDistance > 0 || rowFuel > 0 {
@@ -319,7 +330,6 @@ struct DisplayTripLog: View {
 									}
 #endif
 									}
-									.disabled(false)
 									.help("Add")
 									.accessibilityLabel("Add")
 								}
@@ -450,20 +460,17 @@ struct DisplayTripLog: View {
 		return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
 	}
 
-	/// Sums distance and fuel used across every leg sharing this trip's group, so the group
-	/// line shows the group's overall totals rather than just this one leg.
-	/// Returns `nil` if the trip isn't part of a group.
-	private func groupTotals(for record: TripLog2) -> (distance: Int, fuel: Float)? {
-		guard !record.tripGroup.isEmpty else { return nil }
-		let groupName = record.tripGroup
-		do {
-			let fd = FetchDescriptor<TripLog2>(predicate: #Predicate<TripLog2> { $0.tripGroup == groupName })
-			let trips = try modelContext.fetch(fd)
+	/// Builds a dictionary of trip-group name to summed distance/fuel across every leg sharing
+	/// that group, computed once per list render via a single fetch rather than running a
+	/// separate `FetchDescriptor` for every row belonging to a group.
+	private func groupTotalsByGroupName() -> [String: (distance: Int, fuel: Float)] {
+		let fd = FetchDescriptor<TripLog2>()
+		guard let allTrips = try? modelContext.fetch(fd) else { return [:] }
+		let grouped = Dictionary(grouping: allTrips.filter { !$0.tripGroup.isEmpty }, by: { $0.tripGroup })
+		return grouped.mapValues { trips in
 			let distance = trips.reduce(0) { $0 + max(0, $1.odometerEnd - $1.odometerStart) }
 			let fuel = trips.reduce(Float(0)) { $0 + totalFuelUsed(for: $1) }
 			return (distance, fuel)
-		} catch {
-			return nil
 		}
 	}
 
@@ -557,13 +564,6 @@ struct DisplayTripLog: View {
 		} catch {
 			print("Failed to save new trip log: \(error.localizedDescription)")
 		}
-	}
-}
-
-/// Safe index helper for arrays to avoid out-of-bounds crashes when settings are missing.
-private extension Array {
-	subscript(safe index: Int) -> Element? {
-		indices.contains(index) ? self[index] : nil
 	}
 }
 

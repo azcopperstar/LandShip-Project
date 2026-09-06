@@ -265,8 +265,8 @@ struct ChooseVehicle: View {
 			}
 		}
 
-		// Optional: Enable system search UI to pair with in-memory filtering.
-		// .searchable(text: $searchText, placement: .automatic, prompt: Text("Search vehicles"))
+		// Enable system search UI to pair with in-memory filtering.
+		.searchable(text: $searchText, placement: .automatic, prompt: Text("Search vehicles"))
 
 		// Navigation destination for the PDF report (boolean-driven).
 		.navigationDestination(item: $reportDestination) { dest in
@@ -386,15 +386,6 @@ struct ChooseVehicle: View {
 			try modelContext.save()
 		} catch {
 			print("Failed to delete vehicle(s): \(error.localizedDescription)")
-		}
-	}
-
-	/// Legacy deletion helper that assumes indices are from the unfiltered `vehicles` array.
-	/// Kept for compatibility in case other views call it directly.
-	func deleteVehicle(_ indexSet: IndexSet) {
-		for index in indexSet {
-			let vehicle = vehicles[index]
-			modelContext.delete(vehicle)
 		}
 	}
 }

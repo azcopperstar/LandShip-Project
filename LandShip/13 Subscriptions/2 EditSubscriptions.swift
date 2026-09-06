@@ -33,6 +33,12 @@ struct EditSubscriptions: View {
 	// UI state flags
 	@State private var isPresentingConfirm: Bool = false  // Controls delete confirmation dialog
 	@State private var isEditing: Bool = false            // Toggles between Edit and Details modes
+
+	// Save/Delete error feedback
+	@State private var showSubscriptionsSaveError = false
+	@State private var subscriptionsSaveErrorMessage: String?
+	@State private var showSubscriptionsDeleteError = false
+	@State private var subscriptionsDeleteErrorMessage: String?
 	
 	// Core fields mirrored from ServiceRecords1.
 	// These are edited in Edit mode and written back to dataSet on Save.
@@ -172,7 +178,8 @@ struct EditSubscriptions: View {
 								autoSelectFirst: false,
 								filter: nil,
 								sort: [SortDescriptor(\.name, order: .forward)],
-								labelProvider: { $0.displayName }
+								labelProvider: { $0.displayName },
+								thumbnailData: { $0.image1 }
 							)
 							.frame(maxWidth: .infinity, alignment: .trailing)
 							.onChange(of: selectedVehicle) { _, newVehicle in
@@ -447,6 +454,11 @@ struct EditSubscriptions: View {
 					.buttonStyle(GrowingButton(buttonColor: Color.red))
 				}
 			}
+			.alert("Couldn't Save", isPresented: $showSubscriptionsSaveError) {
+				Button("OK", role: .cancel) {}
+			} message: {
+				Text(subscriptionsSaveErrorMessage ?? "")
+			}
 
 		} else {
 
@@ -572,7 +584,7 @@ struct EditSubscriptions: View {
 					}
 					.confirmationDialog("Confirm action", isPresented: $isPresentingConfirm) {
 						Button("Delete record?", role: .destructive) {
-							DeleteRecord()
+							deleteRecord()
 						}
 						Button("Make Inactive") {
 							makeInactive()
@@ -583,16 +595,24 @@ struct EditSubscriptions: View {
 					.buttonStyle(GrowingButton(buttonColor: Color.gray))
 				}
 			}
+			.alert("Couldn't Delete", isPresented: $showSubscriptionsDeleteError) {
+				Button("OK", role: .cancel) {}
+			} message: {
+				Text(subscriptionsDeleteErrorMessage ?? "")
+			}
 		}
 	}
 
 	// Deletes the current record from SwiftData and dismisses the view.
-	private func DeleteRecord(){
+	private func deleteRecord(){
 		do {
 			modelContext.delete(dataSet)
 			try modelContext.save()
 		} catch {
+			subscriptionsDeleteErrorMessage = error.localizedDescription
+			showSubscriptionsDeleteError = true
 			print(error.localizedDescription)
+			return
 		}
 		dismiss()
 	}
@@ -659,12 +679,15 @@ struct EditSubscriptions: View {
 					loadAllVendors()
 				}
 			}
-			
+
 		} catch {
+			subscriptionsSaveErrorMessage = error.localizedDescription
+			showSubscriptionsSaveError = true
 			print(error.localizedDescription)
+			return
 		}
 
-		
+
 //		// Update the related vehicle's odometer and engine hours if the service record exceeds current values
 //		var fetchDescriptor = FetchDescriptor<Vehicle8>(
 //			predicate: #Predicate { $0.name == vehicleId }
@@ -996,12 +1019,6 @@ struct EditSubscriptions: View {
 	}
 }
 
-// Safe index helper for arrays to avoid out-of-bounds if settings are missing
-private extension Array {
-	subscript(safe index: Int) -> Element? {
-		indices.contains(index) ? self[index] : nil
-	}
-}
 
 #Preview("EditRecord - Populated Sample") {
 }

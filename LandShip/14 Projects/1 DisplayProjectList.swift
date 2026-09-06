@@ -67,6 +67,19 @@ struct DisplayProjectList: View {
 	
 	var body: some View {
 		Group {
+			ModelPicker(
+				selection: $selectedVehicle,
+				title: "",
+				includeEmptyChoice: true,
+				emptyChoiceLabel: "All Vehicles",
+				autoSelectFirst: false,
+				filter: showInactiveVehicles ? nil : #Predicate<Vehicle8> { $0.inactive == false },
+				sort: [SortDescriptor(\.displayName, order: .forward)],
+				labelProvider: { v in "\(v.year) \(v.displayName)"},
+				thumbnailData: { $0.image1 }
+			)
+			.frame(maxWidth: .infinity)
+
 			QueryView(for: ProjectList.self, sort: [
 				SortDescriptor(\.categoryOrder),
 				SortDescriptor(\.projectOrder)
@@ -95,10 +108,6 @@ struct DisplayProjectList: View {
 				} label: {
 					Label("Report", systemImage: "doc.text")
 				}
-			}
-
-			ToolbarItem(placement: .automatic) {
-				vehiclePicker
 			}
 
 			ToolbarItem(placement: .automatic) {
@@ -635,22 +644,6 @@ struct DisplayProjectList: View {
 		.foregroundStyle(.blue)
 	}
 
-	private var vehiclePicker: some View {
-		Menu {
-			Button("All Vehicles") {
-				selectedVehicle = nil
-			}
-			ForEach(vehicles.filter { !$0.inactive || showInactiveVehicles }, id: \.self) { vehicle in
-				Button(vehicle.displayName) {
-					selectedVehicle = vehicle
-				}
-			}
-		} label: {
-			Label("Vehicle", systemImage: "car")
-		}
-		.accessibilityLabel("Vehicle Filter")
-	}
-	
 	// MARK: - Helper Functions
 	
 	private struct CategoryGroup {

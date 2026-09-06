@@ -27,6 +27,8 @@ struct EditWarranty: View {
 	@State private var warrantyNotes: String = ""
 
 	@State private var isPresentingDeleteConfirm: Bool = false
+	@State private var showWarrantySaveError: Bool = false
+	@State private var warrantySaveErrorMessage: String?
 
 	init(vehicleId: String, warranty: VehicleWarranty? = nil) {
 		self.vehicleId = vehicleId
@@ -100,9 +102,16 @@ struct EditWarranty: View {
 								Button("Delete", role: .destructive) {
 									if let w = warranty {
 										modelContext.delete(w)
-										try? modelContext.save()
+										do {
+											try modelContext.save()
+											dismiss()
+										} catch {
+											warrantySaveErrorMessage = error.localizedDescription
+											showWarrantySaveError = true
+										}
+									} else {
+										dismiss()
 									}
-									dismiss()
 								}
 							} message: {
 								Text("This action cannot be undone.")
@@ -119,13 +128,17 @@ struct EditWarranty: View {
 				ToolbarItem(placement: .confirmationAction) {
 					Button("Save") {
 						saveWarranty()
-						dismiss()
 					}
 					.disabled(warrantyName.trimmingCharacters(in: .whitespaces).isEmpty)
 				}
 			}
 			.onChange(of: warrantyStartDate) { _, _ in recalculateExpiration() }
 			.onChange(of: warrantyLengthMonths) { _, _ in recalculateExpiration() }
+			.alert("Couldn't Save", isPresented: $showWarrantySaveError) {
+				Button("OK", role: .cancel) {}
+			} message: {
+				Text(warrantySaveErrorMessage ?? "")
+			}
 		}
 	}
 
@@ -163,6 +176,12 @@ struct EditWarranty: View {
 			)
 			modelContext.insert(newWarranty)
 		}
-		try? modelContext.save()
+		do {
+			try modelContext.save()
+			dismiss()
+		} catch {
+			warrantySaveErrorMessage = error.localizedDescription
+			showWarrantySaveError = true
+		}
 	}
 }

@@ -94,14 +94,15 @@ struct LivePunchListView: View {
     }
 
     private var contentList: some View {
-        Group {
-            if filteredItems().isEmpty {
+        let currentItems = filteredItems()
+        return Group {
+            if currentItems.isEmpty {
                 ContentUnavailableView("No items", systemImage: "checklist", description: Text("Try changing filters or creating new items."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
-                    Section(header: headerView(count: filteredItems().count)) {
-                        ForEach(filteredItems()) { item in
+                    Section(header: headerView(count: currentItems.count)) {
+                        ForEach(currentItems) { item in
                             rowView(item)
                         }
                         .onDelete(perform: delete)
@@ -126,19 +127,9 @@ struct LivePunchListView: View {
 
     private func headerView(count: Int) -> some View {
 			VStack(alignment: .leading, spacing: 0) {
-//					tipRow(icon: "car", text: "Vehicle: \(selectedVehicle)")
-//					if selectedSubcategory != "All Projects" {
-//						tipRow(icon: "folder", text: "Project: \(selectedSubcategory)")
-//					}
 					tipRow(icon: "hand.tap", text: "Tap chevron to expand/collapse item details")
-//				}
-//				.padding(.horizontal, 2)
-//				.padding(.vertical, 1)
 
-//				HStack() {
 					VStack(alignment: .leading, spacing: 1) {
-//						tipRow(icon: "hand.tap", text: "Long-press either category or checklist for edit options")
-//						tipRow(icon: "pencil", text: "Edit Mode: reorder categories and checklists by dragging/dropping handles")
 						if selectedSubcategory != "All Projects" {
 							tipRowChecklist(icon: "checklist", text: "\(selectedSubcategory)")
 						} else {
@@ -146,41 +137,13 @@ struct LivePunchListView: View {
 						}
 						tipRowVehicle(icon: "car", text: "\(selectedVehicle)")
 					}
-
-
-//					Text("Vehicle: \(selectedVehicle)")
-//						.font(.caption)
-//						.foregroundStyle(.blue)
-//					Text("Items: \(count)")
-//						.font(.caption)
-//						.foregroundStyle(.blue)
-//				}
-//				Spacer()
-//				HStack {
-//					Button(role: .none) {
-//						markAllComplete(false)
-//					} label: {
-//						Label("Reset All", systemImage: "circle")
-//					}
-//					Button(role: .none) {
-//						markAllComplete(true)
-//					} label: {
-//						Label("Complete All", systemImage: "checkmark.circle")
-//					}
-//				}
 			}
-//        }
     }
     
     // MARK: - Tips View
     
     private var tipsView: some View {
         VStack(alignment: .leading, spacing: 1) {
-//					tipRow(icon: "car", text: "Vehicle: \(selectedVehicle)")
-//            if selectedSubcategory != "All Projects" {
-//							tipRowChecklist(icon: "folder", text: "Project: \(selectedSubcategory)")
-//            }
-//            tipRow(icon: "hand.tap", text: "Tap chevron to expand/collapse item details")
         }
         .padding(.horizontal, 2)
         .padding(.vertical, 1)

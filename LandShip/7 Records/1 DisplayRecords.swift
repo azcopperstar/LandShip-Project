@@ -62,14 +62,21 @@ struct DisplayRecords: View {
 	// Shared utility helpers
 	let functions: Functions = Functions()
 	
-	// Access settings (units) without storing them in @State
+	// Access settings (units)
 	let prefsFunc: PrefsFunctions = PrefsFunctions()
-	
-	// Helper to read unit strings without @State; protects against missing settings
+
+	// Cached settings array (units), fetched once on appear rather than per-row.
+	@State private var cachedSettingsArray: [String] = Array(repeating: "", count: 13)
+
+	// Helper to read unit strings from the cached settings array.
 	private func unit(_ index: Int) -> String {
-		let arr = prefsFunc.loadSettingsArray(context: modelContext, userName: "primary1")
+		cachedSettingsArray[safe: index] ?? ""
+	}
+
+	// Loads (or refreshes) the cached settings array once.
+	private func loadCachedSettings() {
+		cachedSettingsArray = prefsFunc.loadSettingsArray(context: modelContext, userName: "primary1")
 			?? Array(repeating: "", count: 13)
-		return arr[safe: index] ?? ""
 	}
 	
 	// Tracks whether "All Vehicles" is selected; used to disable or alter certain UI affordances
@@ -93,6 +100,10 @@ struct DisplayRecords: View {
 	// Navigation to PDF report with a frozen scope to avoid feedback loops
 	private struct ReportDestination: Hashable { let scope: String }
 	@State private var reportDestination: ReportDestination?
+
+	// MARK: - Save error feedback
+	@State private var showRecordSaveError = false
+	@State private var recordSaveErrorMessage: String?
 
 	// MARK: - Sorting
 	
@@ -148,6 +159,7 @@ struct DisplayRecords: View {
 			filter: nil,
 			sort: [SortDescriptor(\.displayName, order: .forward)],
 			labelProvider: { v in "\(v.year) \(v.displayName)"},
+			thumbnailData: { $0.image1 }
 		)
 		.frame(maxWidth: .infinity)
 		.onChange(of: selectedVehicle) { _, newVehicle in
@@ -178,6 +190,8 @@ struct DisplayRecords: View {
 			} else {
 				selectedVehicle = nil
 			}
+			// Fetch unit settings once rather than per-row in `unit(_:)`
+			loadCachedSettings()
 		}
 		.safeAreaInset(edge: .top) {
 			PageTitle_Col2_NoPhoto(label: "SERVICE")
@@ -193,7 +207,7 @@ struct DisplayRecords: View {
 						title: "Add your first Service Record",
 						systemImage: "wrench.and.screwdriver.fill",
 						description: "Create a Service Record to track service, maintenance, and repairs.\n\nTo add additional records after this first one, select the '+' button at the top of the form.",
-						actionTitle: "Add First Fuel Log",
+						actionTitle: "Add First Service Record",
 						action: { addNewRecord() }
 					)
 				}
@@ -353,6 +367,11 @@ struct DisplayRecords: View {
 			pdfReportService(trackVehicleSelected: dest.scope)
 				.ignoresSafeArea()
 		}
+		.alert("Couldn't Save", isPresented: $showRecordSaveError) {
+			Button("OK", role: .cancel) {}
+		} message: {
+			Text(recordSaveErrorMessage ?? "")
+		}
 	}
 	
 	// MARK: - Record creation
@@ -423,18 +442,12 @@ struct DisplayRecords: View {
 			newRecordToEdit = newRecord
 		} catch {
 			print("Failed to save service record: \(error.localizedDescription)")
+			recordSaveErrorMessage = error.localizedDescription
+			showRecordSaveError = true
 		}
 	}
 }
 
-// MARK: - Helpers
-
-// Safe index helper for arrays to avoid out-of-bounds if settings are missing
-private extension Array {
-	subscript(safe index: Int) -> Element? {
-		indices.contains(index) ? self[index] : nil
-	}
-}
 
 // MARK: - Previews
 // Previews build an in-memory model container, seed sample data, and demonstrate the list

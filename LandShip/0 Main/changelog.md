@@ -3,7 +3,7 @@ VEHICLETRAX CHANGE LOG
 Send suggestions for features & improvements to: [info@aeronauticaltrax.com](mailto:info@aeronauticaltrax.com)
 
 ----------------------------------
-Version: 2026.09.01 Build: 86
+Version: 2026.09.01 Build: 88
 NOTES
 - This is a major revision with many new options added.  Updates were delayed due to mistaken update of xCode to beta version which App Connect would not accept.
 

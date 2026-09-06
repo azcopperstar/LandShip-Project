@@ -53,11 +53,17 @@ struct DisplayFuelLog: View {
 	let functions: Functions = Functions()
 	/// Preferences helper used to load settings (mirrors usage in pdfReportService).
 	let prefsFunc: PrefsFunctions = PrefsFunctions()
-	/// Helper to read unit strings without @State; protects against missing settings
-	private func unit(_ index: Int) -> String {
-		let arr = prefsFunc.loadSettingsArray(context: modelContext, userName: "primary1")
+	/// Cached unit strings, fetched once (see `loadUnits()`) instead of re-querying SwiftData
+	/// on every call to `unit(_:)`, which is invoked multiple times per visible row.
+	@State private var unitStrings: [String] = Array(repeating: "", count: 13)
+	/// Loads the settings array once and caches it in `unitStrings`.
+	private func loadUnits() {
+		unitStrings = prefsFunc.loadSettingsArray(context: modelContext, userName: "primary1")
 			?? Array(repeating: "", count: 13)
-		return arr[safe: index] ?? ""
+	}
+	/// Helper to read unit strings from the cached array; protects against missing settings.
+	private func unit(_ index: Int) -> String {
+		unitStrings[safe: index] ?? ""
 	}
 
 	/// True when "All Vehicles" is selected; used to disable actions that require a specific vehicle (e.g., Add).
@@ -134,6 +140,7 @@ struct DisplayFuelLog: View {
 				filter: showInactiveVehicles ? nil : #Predicate { !$0.inactive },
 				sort: [SortDescriptor(\.displayName, order: .forward)],
 				labelProvider: { v in "\(v.year) \(v.displayName)"},
+				thumbnailData: { $0.image1 }
 			)
 			.frame(maxWidth: .infinity)
 			// Keep the external binding (`trackVehicleSelected`) and the Add button state aligned with the picker selection.
@@ -188,9 +195,8 @@ struct DisplayFuelLog: View {
 						selectedVehicle = nil
 					}
 				}
-				// Load settings as an array (same approach as pdfReportService)
-				let _ = prefsFunc.loadSettingsArray(context: modelContext, userName: "primary1")
-					?? Array(repeating: "", count: 13)
+				// Load settings once and cache them for `unit(_:)` lookups in row rendering.
+				loadUnits()
 			}
 			.safeAreaInset(edge: .top) {
 				PageTitle_Col2_NoPhoto(label: "FUEL LOGS")
@@ -481,13 +487,6 @@ struct DisplayFuelLog: View {
 		} catch {
 			print("Failed to save new fuel log: \(error.localizedDescription)")
 		}
-	}
-}
-
-/// Safe index helper for arrays to avoid out-of-bounds crashes when settings are missing.
-private extension Array {
-	subscript(safe index: Int) -> Element? {
-		indices.contains(index) ? self[index] : nil
 	}
 }
 

@@ -33,17 +33,33 @@ struct CardStyle: ViewModifier {
         }
     }
 
+    // The noise pattern is a pure function of the canvas size (the LCG is seeded from
+    // size alone), so repeated renders at the same size would otherwise re-run the RNG
+    // loop and rebuild ~200+ dots every frame for an identical result. Cache by size.
+    private static var noiseCache: [String: [CGRect]] = [:]
+
+    private static func noiseDots(for size: CGSize) -> [CGRect] {
+        let key = "\(Int(size.width))x\(Int(size.height))"
+        if let cached = noiseCache[key] { return cached }
+
+        let count = max(200, Int((size.width * size.height) / 900))
+        var rng = LCG(seed: UInt64(size.width * size.height).nonzeroBitCount == 0 ? 1 : UInt64(size.width * size.height))
+        var dots: [CGRect] = []
+        dots.reserveCapacity(count)
+        for _ in 0..<count {
+            let x = CGFloat(rng.nextFraction()) * size.width
+            let y = CGFloat(rng.nextFraction()) * size.height
+            let d = CGFloat(rng.nextFraction()) * 1.2 + 0.2 // dot diameter 0.2–1.4
+            dots.append(CGRect(x: x, y: y, width: d, height: d))
+        }
+        noiseCache[key] = dots
+        return dots
+    }
+
     @ViewBuilder
     private func proceduralNoise() -> some View {
         Canvas { context, size in
-            // Density scales with area; tweak divisor to change noise amount
-            let count = max(200, Int((size.width * size.height) / 900))
-            var rng = LCG(seed: UInt64(size.width * size.height).nonzeroBitCount == 0 ? 1 : UInt64(size.width * size.height))
-            for _ in 0..<count {
-                let x = CGFloat(rng.nextFraction()) * size.width
-                let y = CGFloat(rng.nextFraction()) * size.height
-                let d = CGFloat(rng.nextFraction()) * 1.2 + 0.2 // dot diameter 0.2–1.4
-                let rect = CGRect(x: x, y: y, width: d, height: d)
+            for rect in Self.noiseDots(for: size) {
                 context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.06)))
             }
         }

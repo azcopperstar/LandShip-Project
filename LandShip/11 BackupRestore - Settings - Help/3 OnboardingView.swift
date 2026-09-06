@@ -268,12 +268,12 @@ struct OnboardingView: View {
 						didFinish()
 					}
 					// Hide Skip on the last page to reduce clutter.
-					.opacity(selectedPage == 4 ? 0 : 1)
-					
+					.opacity(selectedPage == 12 ? 0 : 1)
+
 					Spacer()
-					
+
 					// Next: Advances to the next page until the last page is reached.
-					if selectedPage < 13 {
+					if selectedPage < 12 {
 						Button("Next >") {
 							withAnimation { selectedPage += 1 }
 						}

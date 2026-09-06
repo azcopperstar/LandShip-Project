@@ -5,7 +5,7 @@ struct NextServiceDueCard: View {
     let nextTwoDue: [DashboardView.UpcomingDue]
     let distanceUnit: String
     let formatDate: (Date) -> String
-    @Environment(\.modelContext) private var modelContext
+    let vehicleDisplayName: (String) -> String
 
     private struct VehicleGroup: Identifiable {
         let vehicleId: String
@@ -80,7 +80,7 @@ struct NextServiceDueCard: View {
                             Divider().padding(.vertical, 2)
                         }
                         // Vehicle header
-                        Text(Functions().getVehicleDisplayName(vehicleId: group.vehicleId, context: modelContext))
+                        Text(vehicleDisplayName(group.vehicleId))
                             .font(.caption.bold())
                             .foregroundStyle(.blue)
                             .padding(.bottom, 2)

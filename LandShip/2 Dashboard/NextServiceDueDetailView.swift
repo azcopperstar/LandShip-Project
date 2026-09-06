@@ -6,6 +6,7 @@ struct NextServiceDueDetailView: View {
     let vehicleScope: String
     let distanceUnit: String
     let formatDate: (Date) -> String
+    let vehicleDisplayName: (String) -> String
 
     @Environment(\.modelContext) private var modelContext
     @State private var allDue: [DashboardView.UpcomingDue] = []
@@ -110,7 +111,7 @@ struct NextServiceDueDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
                         if showVehicleNames {
-                            Text(functions.getVehicleDisplayName(vehicleId: due.vehicleId, context: modelContext))
+                            Text(vehicleDisplayName(due.vehicleId))
                                 .font(.caption.bold())
                                 .foregroundStyle(.blue)
                         }

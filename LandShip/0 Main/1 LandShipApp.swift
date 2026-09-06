@@ -55,26 +55,17 @@ struct LandShipApp: App {
 	}
 	
 	init() {
-		// Define the SwiftData schema listing all @Model types.
-		let schema = Schema([
-			MxItems3.self,
-			MxParts1.self,
-			ServiceRecords1.self,
-			Vehicle8.self,
-			VehicleSystems1.self,
-			Vendors1.self,
-			Settings1.self,
-			FuelLog1.self,
-			TripLog2.self,
-			Additions.self,
-			Subscriptions.self,
-			ProjectList.self,
-			CheckList.self,
-			CheckListItem.self,
-			VehicleWarranty.self,
-			VehicleSerialItem.self,
-			VehicleScaleTicket.self
-		])
+		// Apply any restore staged by the Backup/Restore UI. This must happen before the
+		// ModelContainer below opens the store — swapping the database files while a live
+		// SQLite/CloudKit stack still has them open is what used to lose restored data
+		// (SQLite deletes the -wal/-shm sidecars at the store path on clean close).
+		if BackupService.applyPendingRestoreIfNeeded() {
+			print("[LandShip] Pending restore applied before store initialization")
+		}
+
+		// Define the SwiftData schema from the shared model list (AppSchema is also what the
+		// restore re-import walks, so the two can never drift apart).
+		let schema = Schema(AppSchema.modelTypes)
 		
 		// Attempt CloudKit first, then local-only.
 		switch Self.makeContainer(schema: schema) {
@@ -286,7 +277,7 @@ private extension LandShipApp {
 
 private struct LocalOnlyBanner: View {
 	@State private var visible = true
-	
+
 	var body: some View {
 		if visible {
 			HStack(spacing: 8) {
@@ -295,6 +286,17 @@ private struct LocalOnlyBanner: View {
 					.font(.callout)
 					.lineLimit(2)
 				Spacer()
+#if os(iOS)
+				Button {
+					if let url = URL(string: UIApplication.openSettingsURLString) {
+						UIApplication.shared.open(url)
+					}
+				} label: {
+					Text("Check Settings")
+						.font(.caption.weight(.semibold))
+				}
+				.buttonStyle(.plain)
+#endif
 				Button {
 					withAnimation { visible = false }
 				} label: {
@@ -318,7 +320,22 @@ private struct LocalOnlyBanner: View {
 
 private struct FatalStartupView: View {
 	let error: Error?
-	
+
+	private static let supportAddress = "info@aeronauticaltrax.com"
+
+	private var supportMailURL: URL? {
+		let subject = "\(AppInfo.displayName) couldn't start"
+		let body = "The app failed to initialize its data store with this error:\n\n\(error?.localizedDescription ?? "(no error details)")"
+		var components = URLComponents()
+		components.scheme = "mailto"
+		components.path = Self.supportAddress
+		components.queryItems = [
+			URLQueryItem(name: "subject", value: subject),
+			URLQueryItem(name: "body", value: body)
+		]
+		return components.url
+	}
+
 	var body: some View {
 		VStack(spacing: 16) {
 			Image(systemName: "exclamationmark.triangle.fill")
@@ -338,12 +355,14 @@ private struct FatalStartupView: View {
 					.foregroundStyle(.secondary)
 					.padding(.top, 4)
 			}
+			if let supportMailURL {
+				Link("Contact Support", destination: supportMailURL)
+					.padding(.top, 4)
+			}
 #if os(macOS)
 			Button("Quit") {
 				NSApp.terminate(nil)
 			}
-#else
-			EmptyView()
 #endif
 		}
 		.padding()

@@ -240,6 +240,7 @@ struct EditRecord: View {
 								filter: nil,
 								sort: [SortDescriptor(\.displayName, order: .forward)],
 								labelProvider: { v in "\(v.year) \(v.displayName)"},
+								thumbnailData: { $0.image1 }
 							)
 							.frame(maxWidth: .infinity, alignment: .trailing)
 							.onChange(of: selectedVehicle) { _, newVehicle in
@@ -1543,13 +1544,6 @@ struct EditRecord: View {
 		transferCategory = additions[0].category
 		transferSubCategory = additions[0].subCategory
 		linkedAdditionsCount = additions.count
-	}
-}
-
-// Safe index helper for arrays to avoid out-of-bounds if settings are missing
-private extension Array {
-	subscript(safe index: Int) -> Element? {
-		indices.contains(index) ? self[index] : nil
 	}
 }
 

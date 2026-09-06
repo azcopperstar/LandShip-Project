@@ -144,6 +144,7 @@ struct DisplayParts: View {
                 filter: nil,
                 sort: [SortDescriptor(\.displayName, order: .forward)],
 									labelProvider: { v in "\(v.year) \(v.displayName)"},
+                thumbnailData: { $0.image1 }
             )
             .frame(maxWidth: .infinity)
             // Keep the shared string binding and local object selection synchronized.
@@ -308,7 +309,6 @@ struct DisplayParts: View {
                                         }
 #endif
                                     }
-                                    .disabled(false)
                                     .help("Add")
                                     .accessibilityLabel("Add")
                                 }

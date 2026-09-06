@@ -246,6 +246,7 @@ struct EditFuelLog: View {
 								filter: nil,
 								sort: [SortDescriptor(\.displayName, order: .forward)],
 								labelProvider: { v in "\(v.year) \(v.displayName)"},
+								thumbnailData: { $0.image1 }
 							)
 							.onChange(of: selectedVehicle) { oldVehicle, newVehicle in
 								let name = newVehicle?.name ?? ""
@@ -1172,14 +1173,6 @@ struct EditFuelLog: View {
 				}
 			}
 		} catch {}
-	}
-}
-
-// MARK: - Safe Collection Helpers
-
-private extension Array {
-	subscript(safe index: Int) -> Element? {
-		indices.contains(index) ? self[index] : nil
 	}
 }
 

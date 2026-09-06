@@ -116,6 +116,7 @@ struct ContentView: View {
 	@State private var showingManageAutoBackups: Bool = false
 	@State private var pendingRestoreURL: URL?
 	@State private var showConfirmRestore: Bool = false
+	@State private var isRestoreInProgress: Bool = false
 	@State private var restoreErrorMessage: String?
 	@State private var restoreSuccessMessage: String?
 
@@ -191,7 +192,10 @@ struct ContentView: View {
             sidebarColumn
         } detail: {
             NavigationStack {
-                DashboardView()
+                DashboardView(onQuickAction: { section, vehicle in
+                    sidebarSelection = section
+                    if let vehicle { trackVehicleSelected = vehicle }
+                })
             }
         }
     }
@@ -258,13 +262,19 @@ struct ContentView: View {
 					}
 			}
 		}
+#endif
 		.sheet(isPresented: $showingChangelogSheet) {
 			ChangelogSheet { showingChangelogSheet = false }
+#if os(macOS)
+				.frame(minWidth: 560, minHeight: 620)
+#endif
 		}
 		.sheet(isPresented: $showingFeedbackSheet) {
 			FeedbackSheet { showingFeedbackSheet = false }
-		}
+#if os(macOS)
+				.frame(minWidth: 520, minHeight: 560)
 #endif
+		}
 		
 		// Removed the purchases sheet block as per instructions
 		
@@ -360,8 +370,8 @@ struct ContentView: View {
 			Button("Cancel", role: .cancel) {}
 		} message: {
 			Text(isCloudKitActive
-				? "\u{201C}Resync from iCloud\u{201D} restores your Documents (PDFs, etc.) from the backup and re-downloads your vehicle/service data fresh from iCloud — safe, but records already deleted from iCloud will stay deleted. \u{201C}Restore Exact Snapshot\u{201D} instead overwrites your local database with the backup exactly as saved; use this only if you're restoring onto a different iCloud account, or iCloud's data didn't come back correctly and you need to force the backup's data back in — it can conflict with your other devices on the same iCloud account until they resync. A restart is required after restoring either way."
-				: "This will overwrite your current data (Documents and Application Support) with the contents of the selected backup folder. A restart is required after restoring.")
+				? "\u{201C}Resync from iCloud\u{201D} restores your Documents (PDFs, etc.) from the backup and re-downloads your vehicle/service data fresh from iCloud — safe, but records already deleted from iCloud will stay deleted. \u{201C}Restore Exact Snapshot\u{201D} instead rebuilds your data from the backup and uploads it to iCloud, replacing what iCloud has now — use this if iCloud's data didn't come back correctly, or you're restoring onto a different iCloud account. Other devices on the same account will update to match once they sync. A restart is required after restoring either way."
+				: "This will replace your current data with the contents of the selected backup folder. A restart is required after restoring.")
 		}
 		
 		.alert("Backup Failed", isPresented: $isBackupErrorPresented) {
@@ -379,14 +389,29 @@ struct ContentView: View {
 		} message: {
 			Text(restoreErrorMessage ?? "")
 		}
-		.alert("Restore Complete", isPresented: $isRestoreSuccessPresented) {
+		.sheet(isPresented: $isRestoreSuccessPresented) {
+			RestoreReadySheet(message: restoreSuccessMessage ?? "") {
+				isRestoreSuccessPresented = false
 #if os(macOS)
-			Button("Quit Now") { NSApp.terminate(nil) }
+				// terminate(nil) is only a request and gets silently swallowed while the
+				// sheet's modal session is still winding down — so dismiss first, wait a
+				// beat, then quit. If something still blocks termination, hard-exit: the
+				// staged restore replaces the store at next launch, so there's nothing
+				// left in this process worth preserving.
+				DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+					NSApp.terminate(nil)
+					DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+						exit(0)
+					}
+				}
 #else
-			Button("OK") { restartRequiredAfterRestore = true }
+				restartRequiredAfterRestore = true
 #endif
-		} message: {
-			Text(restoreSuccessMessage ?? "")
+			}
+			.interactiveDismissDisabled(true)
+#if os(macOS)
+			.frame(minWidth: 520, minHeight: 480)
+#endif
 		}
 #if !os(macOS)
 		.fullScreenCover(isPresented: $restartRequiredAfterRestore) {
@@ -396,7 +421,25 @@ struct ContentView: View {
 #endif
 
 		.tint(.blue)
-		
+
+		// Progress dialog while a manual backup is being prepared or a restore is
+		// running — restores can take 30+ seconds, so make it clear work is happening.
+		.overlay {
+			if isRestoreInProgress {
+				BackupRestoreProgressOverlay(
+					title: "Restoring Backup…",
+					message: "Your data is being restored from the selected backup. This can take 30 seconds or more. Please keep \(AppInfo.displayName) open until it finishes."
+				)
+			} else if isBackupInProgress {
+				BackupRestoreProgressOverlay(
+					title: "Preparing Backup…",
+					message: "Gathering your data, documents, and photos into a backup. This can take a moment for large libraries — you'll be asked where to save it next."
+				)
+			}
+		}
+		.animation(.default, value: isRestoreInProgress)
+		.animation(.default, value: isBackupInProgress)
+
 		.onAppear {
 			// Log launch once per process
 			if !Self.didLogLaunch {
@@ -629,7 +672,9 @@ struct ContentView: View {
 
 	private func performRestore(forceExactSnapshot: Bool) {
 		guard let url = pendingRestoreURL else { return }
+		isRestoreInProgress = true
 		Task {
+			defer { isRestoreInProgress = false }
 			do {
 				let message = try await BackupService.restoreFromBackupFolder(url, forceExactSnapshot: forceExactSnapshot)
 				restoreSuccessMessage = message
@@ -919,6 +964,10 @@ private struct SidebarView: View {
 	@Binding var showingHelpSheet: Bool
 	@Binding var showingChangelogSheet: Bool
 	@Binding var showingFeedbackSheet: Bool
+#if os(macOS)
+	// Opens the standalone Help window declared in LandShipApp.
+	@Environment(\.openWindow) private var openWindow
+#endif
 	var isBackupInProgress: Bool
 	var onBackupTapped: () -> Void
 	var onRestoreTapped: () -> Void
@@ -1122,10 +1171,15 @@ private struct SidebarView: View {
 				.buttonStyle(.plain)
 			}
 			
-#if !os(macOS)
 			Section(header: CenteredSectionHeader(title: "Resources")) {
 				Button {
+					// On macOS, Help is a standalone window (also reachable from the
+					// Help menu); on iOS/iPadOS it presents as a sheet.
+#if os(macOS)
+					openWindow(id: "help")
+#else
 					showingHelpSheet = true
+#endif
 					InAppLogger.shared.log("Opened Help")
 				} label: {
 					Label("Help", systemImage: "questionmark.circle")
@@ -1151,7 +1205,6 @@ private struct SidebarView: View {
 				}
 				.buttonStyle(.plain)
 			}
-#endif
 		}
 #if !os(macOS)
 		.sheet(isPresented: Binding(
@@ -1224,10 +1277,16 @@ struct MiddleColumnView: View {
                 if UIDevice.current.userInterfaceIdiom == .pad {
                     Color.clear  // Dashboard shown full-width in detail column on iPad
                 } else {
-                    DashboardView()
+                    DashboardView(onQuickAction: { section, vehicle in
+                        sidebarSelection = section
+                        if let vehicle { trackVehicleSelected = vehicle }
+                    })
                 }
 #else
-                DashboardView()
+                DashboardView(onQuickAction: { section, vehicle in
+                    sidebarSelection = section
+                    if let vehicle { trackVehicleSelected = vehicle }
+                })
 #endif
             case .vehicles:
                 ChooseVehicle(trackVehicleSelected: $trackVehicleSelected)

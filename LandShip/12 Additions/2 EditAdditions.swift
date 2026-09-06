@@ -33,6 +33,12 @@ struct EditAdditions: View {
 	// UI state flags
 	@State private var isPresentingConfirm: Bool = false  // Controls delete confirmation dialog
 	@State private var isEditing: Bool = false            // Toggles between Edit and Details modes
+
+	// Save/Delete error feedback
+	@State private var showAdditionsSaveError = false
+	@State private var additionsSaveErrorMessage: String?
+	@State private var showAdditionsDeleteError = false
+	@State private var additionsDeleteErrorMessage: String?
 	
 	// Core fields mirrored from ServiceRecords1.
 	// These are edited in Edit mode and written back to dataSet on Save.
@@ -162,7 +168,8 @@ struct EditAdditions: View {
 								autoSelectFirst: false,
 								filter: nil,
 								sort: [SortDescriptor(\.name, order: .forward)],
-								labelProvider: { $0.displayName }
+								labelProvider: { $0.displayName },
+								thumbnailData: { $0.image1 }
 							)
 							.frame(maxWidth: .infinity, alignment: .trailing)
 							.onChange(of: selectedVehicle) { _, newVehicle in
@@ -400,6 +407,11 @@ struct EditAdditions: View {
 					.buttonStyle(GrowingButton(buttonColor: Color.red))
 				}
 			}
+			.alert("Couldn't Save", isPresented: $showAdditionsSaveError) {
+				Button("OK", role: .cancel) {}
+			} message: {
+				Text(additionsSaveErrorMessage ?? "")
+			}
 
 		} else {
 
@@ -510,7 +522,7 @@ struct EditAdditions: View {
 					}
 					.confirmationDialog("Confirm action", isPresented: $isPresentingConfirm) {
 						Button("Delete record?", role: .destructive) {
-							DeleteRecord()
+							deleteRecord()
 						}
 						Button("Make Inactive") {
 							makeInactive()
@@ -521,16 +533,24 @@ struct EditAdditions: View {
 					.buttonStyle(GrowingButton(buttonColor: Color.gray))
 				}
 			}
+			.alert("Couldn't Delete", isPresented: $showAdditionsDeleteError) {
+				Button("OK", role: .cancel) {}
+			} message: {
+				Text(additionsDeleteErrorMessage ?? "")
+			}
 		}
 	}
 
 	// Deletes the current record from SwiftData and dismisses the view.
-	private func DeleteRecord(){
+	private func deleteRecord(){
 		do {
 			modelContext.delete(dataSet)
 			try modelContext.save()
 		} catch {
+			additionsDeleteErrorMessage = error.localizedDescription
+			showAdditionsDeleteError = true
 			print(error.localizedDescription)
+			return
 		}
 		dismiss()
 	}
@@ -593,10 +613,13 @@ struct EditAdditions: View {
 				}
 			}
 		} catch {
+			additionsSaveErrorMessage = error.localizedDescription
+			showAdditionsSaveError = true
 			print(error.localizedDescription)
+			return
 		}
 
-		
+
 //		// Update the related vehicle's odometer and engine hours if the service record exceeds current values
 //		var fetchDescriptor = FetchDescriptor<Vehicle8>(
 //			predicate: #Predicate { $0.name == vehicleId }
@@ -895,12 +918,6 @@ struct EditAdditions: View {
 	}
 }
 
-// Safe index helper for arrays to avoid out-of-bounds if settings are missing
-private extension Array {
-	subscript(safe index: Int) -> Element? {
-		indices.contains(index) ? self[index] : nil
-	}
-}
 
 #Preview("EditRecord - Populated Sample") {
 	// In-memory container to preview a fully populated record

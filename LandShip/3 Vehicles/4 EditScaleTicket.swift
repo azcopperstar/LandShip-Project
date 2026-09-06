@@ -34,6 +34,8 @@ struct EditScaleTicket: View {
 
 	@State private var isPresentingDeleteConfirm: Bool = false
 	@State private var isPresentingTransferConfirm: Bool = false
+	@State private var showTicketSaveError: Bool = false
+	@State private var ticketSaveErrorMessage: String?
 
 	private var grossWeight: Int { steerAxleWeight + driveAxleWeight + trailerAxleWeight }
 
@@ -124,9 +126,16 @@ struct EditScaleTicket: View {
 								Button("Delete", role: .destructive) {
 									if let t = ticket {
 										modelContext.delete(t)
-										try? modelContext.save()
+										do {
+											try modelContext.save()
+											dismiss()
+										} catch {
+											ticketSaveErrorMessage = error.localizedDescription
+											showTicketSaveError = true
+										}
+									} else {
+										dismiss()
 									}
-									dismiss()
 								}
 							} message: {
 								Text("This action cannot be undone.")
@@ -143,9 +152,13 @@ struct EditScaleTicket: View {
 				ToolbarItem(placement: .confirmationAction) {
 					Button("Save") {
 						saveTicket()
-						dismiss()
 					}
 				}
+			}
+			.alert("Couldn't Save", isPresented: $showTicketSaveError) {
+				Button("OK", role: .cancel) {}
+			} message: {
+				Text(ticketSaveErrorMessage ?? "")
 			}
 		}
 	}
@@ -189,7 +202,13 @@ struct EditScaleTicket: View {
 			)
 			modelContext.insert(newTicket)
 		}
-		try? modelContext.save()
+		do {
+			try modelContext.save()
+			dismiss()
+		} catch {
+			ticketSaveErrorMessage = error.localizedDescription
+			showTicketSaveError = true
+		}
 	}
 
 	private func transferToVehicle() {
@@ -201,6 +220,11 @@ struct EditScaleTicket: View {
 		let vehicleTotal = steerAxleWeight + driveAxleWeight
 		if vehicleTotal > 0 { vehicle.weight = vehicleTotal }
 		vehicle.dateWeighed = date
-		try? modelContext.save()
+		do {
+			try modelContext.save()
+		} catch {
+			ticketSaveErrorMessage = error.localizedDescription
+			showTicketSaveError = true
+		}
 	}
 }

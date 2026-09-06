@@ -223,7 +223,8 @@ struct EditProjectList: View {
 								autoSelectFirst: false,
 								filter: nil,
 								sort: [SortDescriptor(\.name, order: .forward)],
-								labelProvider: { $0.displayName }
+								labelProvider: { $0.displayName },
+								thumbnailData: { $0.image1 }
 							)
 							.frame(maxWidth: .infinity, alignment: .trailing)
 							.onChange(of: selectedVehicle) { _, newVehicle in
@@ -910,7 +911,7 @@ struct EditProjectList: View {
 									LabelDataCurrency(label: "Parts Cost", data: Float(total), unit: "")
 								}
 								HStack{LabelDataText(label: "Shop", data: dataSet.itemVendor)}
-								HStack{LabelDataCurrency(label: "Labor Cost", data: Float(itemCost), unit: "")}
+								HStack{LabelDataCurrency(label: "Labor Cost", data: Float(laborCost), unit: "")}
 								// Total cost including parts and labor
 								HStack {
 									let partsTotal = (Double(part1Quantity) * Double(part1cost)) +
@@ -1591,12 +1592,6 @@ private struct PriorityBadge: View {
     }
 }
 
-// Safe index helper for arrays to avoid out-of-bounds if settings are missing
-private extension Array {
-	subscript(safe index: Int) -> Element? {
-		indices.contains(index) ? self[index] : nil
-	}
-}
 
 #Preview("EditRecord - Populated Sample") {
 }

@@ -85,16 +85,10 @@ class Additions {
 			self.image2Description = image2Description
 			self.image3 = image3
 			self.image3Description = image3Description
-			self.image1 = image1
-			self.image1Description = image1Description
-			self.image2 = image2
-			self.image2Description = image2Description
-			self.image3 = image3
-			self.image3Description = image3Description
-			self.image4 = image3
-			self.image4Description = image3Description
-			self.image5 = image3
-			self.image5Description = image3Description
+			self.image4 = image4
+			self.image4Description = image4Description
+			self.image5 = image5
+			self.image5Description = image5Description
 
     }
 }

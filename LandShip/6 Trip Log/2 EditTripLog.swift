@@ -583,6 +583,7 @@ struct EditTripLog: View {
 								filter: showInactiveVehicles ? nil : #Predicate<Vehicle8> { $0.inactive == false },
 								sort: [SortDescriptor(\.displayName, order: .forward)],
 								labelProvider: { v in "\(v.year) \(v.displayName)"},
+								thumbnailData: { $0.image1 }
 							)
 							.onChange(of: selectedVehicle) { oldVehicle, newVehicle in
 								let name = newVehicle?.name ?? ""
@@ -651,7 +652,8 @@ struct EditTripLog: View {
 									autoSelectFirst: false,
 									filter: towedFilter,
 									sort: [SortDescriptor(\.name, order: .forward)],
-									labelProvider: { $0.displayName }
+									labelProvider: { $0.displayName },
+									thumbnailData: { $0.image1 }
 								)
 								.onChange(of: selectedTowedVehicle) { _, newVehicle in
 									let name = newVehicle?.name ?? ""
@@ -2296,15 +2298,11 @@ struct EditTripLog: View {
 		var logId: String = ""
 		
 		// get vehicle details (via Vehicle8)
-		var fuelCapacityVehicle: Int = 0
-		var defCapacityVehicle: Int = 0
 		var fuelTypeVehicle: String = ""
 		do {
 			var fd = FetchDescriptor<Vehicle8>(predicate: #Predicate { $0.name == vehicleId })
 			fd.fetchLimit = 1
 			if let v = try modelContext.fetch(fd).first {
-				fuelCapacityVehicle = v.fuelCapacity
-				defCapacityVehicle = v.defCapacity
 				fuelTypeVehicle = v.fuelType
 			}
 		} catch {}
@@ -2869,13 +2867,6 @@ struct EditTripLog: View {
 	private func nearestFuelEighth(_ ratio: Float) -> Float {
 		let clamped = min(1, max(0, ratio))
 		return (clamped * 8).rounded() / 8
-	}
-}
-
-/// Safe index helper for arrays to avoid out-of-bounds crashes when settings are missing.
-private extension Array {
-	subscript(safe index: Int) -> Element? {
-		indices.contains(index) ? self[index] : nil
 	}
 }
 

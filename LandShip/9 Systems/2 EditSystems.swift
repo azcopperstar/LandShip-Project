@@ -69,6 +69,10 @@ struct EditSystems: View {
 	// MARK: - View mode & flow control
 	@State private var isPresentingConfirm: Bool = false
 	@State private var isEditing: Bool = false
+
+	// MARK: - Save error feedback
+	@State private var showSystemSaveError = false
+	@State private var systemSaveErrorMessage: String?
 	
 	// MARK: - Local editable copies of model fields (not persisted until Save)
 	@State fileprivate var inactive: Bool = false
@@ -144,6 +148,11 @@ struct EditSystems: View {
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.toolbar { toolbarContent }
+		.alert("Couldn't Save", isPresented: $showSystemSaveError) {
+			Button("OK", role: .cancel) {}
+		} message: {
+			Text(systemSaveErrorMessage ?? "")
+		}
 	}
 
 	/// Edit-mode content with form controls bound to local @State mirrors.
@@ -165,6 +174,7 @@ struct EditSystems: View {
 							filter: nil,
 							sort: [SortDescriptor(\.displayName, order: .forward)],
 							labelProvider: { v in "\(v.year) \(v.displayName)"},
+							thumbnailData: { $0.image1 }
 						)
 						.onChange(of: selectedVehicle) { _, newVehicle in
 							let name = newVehicle?.name ?? ""
@@ -176,29 +186,6 @@ struct EditSystems: View {
 							.textLabelModified()
 					}
 
-					
-//					HStack{
-//						Text("Vehicle")
-//							.textLabelModified()
-//						// Replaced VehiclePickerSystems with ModelPicker<Vehicle8>
-//						ModelPicker(
-//							selection: $selectedVehicle,
-//							title: "Vehicle",
-//							includeEmptyChoice: false,
-//							emptyChoiceLabel: "—",
-//							autoSelectFirst: false,
-//							filter: nil,
-//							sort: [SortDescriptor(\.name, order: .forward)],
-//							labelProvider: { $0.displayName }
-//						)
-//						.onChange(of: selectedVehicle) { _, newVehicle in
-//							let name = newVehicle?.name ?? ""
-//							vehicleId = name
-//							dataSet.vehicleId = name
-//						}
-//						.frame(maxWidth: .infinity, alignment: .trailing)
-//					}
-	
 					HStack{LabelDataTextview(label: "System Name", data: $systemName)}
 					HStack{LabelDataTextview(label: "Description", data: $systemDescription)}
 					HStack{LabelDataText(label: "Status", data: inactive ? "Inactive" : "Active")}
@@ -433,7 +420,7 @@ struct EditSystems: View {
 						makeInactive()
 					}
 				} message: {
-					Text("Confirm either deletion or deactivation of this service record.  Deactivated records will still be available for reference, but will not be included in any reports or calculations.")
+					Text("Confirm either deletion or deactivation of this system.  Deactivated systems will still be available for reference, but will not be included in any reports or calculations.")
 				}
 				.buttonStyle(GrowingButton(buttonColor: Color.gray))
 			}
@@ -529,6 +516,8 @@ struct EditSystems: View {
 			try modelContext.save()
 		} catch {
 			print(error.localizedDescription)
+			systemSaveErrorMessage = error.localizedDescription
+			showSystemSaveError = true
 		}
 	}
 

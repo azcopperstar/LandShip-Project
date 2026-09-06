@@ -136,11 +136,13 @@ struct pdfReportPunchList: View {
 			let title = "PUNCH LIST — \(self.projectSubcategory.uppercased())"
 			let rows = self.fetchFilteredData().map { PunchListRow(from: $0) }
 			guard let data = Self.renderPDFData(title: title, rows: rows, vehicle: self.trackVehicleSelected, subcat: self.projectSubcategory, debug: self.debugLayout) else {
-				self.diagStatus = "FAIL:renderPDFData=nil"
+				print("[PunchListPDF] FAIL: renderPDFData returned nil")
+				self.diagStatus = "Couldn't generate PDF. Please try again."
 				return
 			}
 			guard let doc = PDFDocument(data: data) else {
-				self.diagStatus = "FAIL:PDFDocument=nil"
+				print("[PunchListPDF] FAIL: PDFDocument(data:) returned nil")
+				self.diagStatus = "Couldn't generate PDF. Please try again."
 				return
 			}
 			self.pdfDocument = doc

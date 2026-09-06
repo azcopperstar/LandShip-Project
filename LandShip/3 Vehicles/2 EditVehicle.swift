@@ -90,6 +90,8 @@ struct EditVehicle: View {
 	/// on a brand-new record's initial save, since nothing can yet reference its placeholder name.
 	@State private var isNewUnsavedRecord: Bool = false
 	@State private var nameValidationError: String? = nil
+	@State private var showVehicleSaveError: Bool = false
+	@State private var vehicleSaveErrorMessage: String? = nil
 	@State private var manufacturer: String = ""
 	@State private var model: String = ""
 	@State private var year: Int = 0
@@ -471,7 +473,12 @@ struct EditVehicle: View {
 										serialNumber: newSerialItemSerial
 									)
 									modelContext.insert(item)
-									try? modelContext.save()
+									do {
+										try modelContext.save()
+									} catch {
+										vehicleSaveErrorMessage = error.localizedDescription
+										showVehicleSaveError = true
+									}
 									newSerialItemName = ""
 									newSerialItemSerial = ""
 									showingAddSerialItem = false
@@ -490,7 +497,12 @@ struct EditVehicle: View {
 									Button("Save") {
 										item.itemName = editSerialItemName
 										item.serialNumber = editSerialItemSerial
-										try? modelContext.save()
+										do {
+											try modelContext.save()
+										} catch {
+											vehicleSaveErrorMessage = error.localizedDescription
+											showVehicleSaveError = true
+										}
 										editingSerialItem = nil
 										loadSerialItems()
 									}
@@ -518,7 +530,12 @@ struct EditVehicle: View {
 									.buttonStyle(.plain)
 									Button {
 										modelContext.delete(item)
-										try? modelContext.save()
+										do {
+											try modelContext.save()
+										} catch {
+											vehicleSaveErrorMessage = error.localizedDescription
+											showVehicleSaveError = true
+										}
 										loadSerialItems()
 									} label: {
 										Image(systemName: "trash").foregroundStyle(.red)
@@ -971,8 +988,13 @@ struct EditVehicle: View {
 					}
 				}
 			}//end of form/list
-			
-			
+			.alert("Couldn't Save", isPresented: $showVehicleSaveError) {
+				Button("OK", role: .cancel) {}
+			} message: {
+				Text(vehicleSaveErrorMessage ?? "")
+			}
+
+
 		} else {
 			
 			// display data
@@ -1462,6 +1484,11 @@ struct EditVehicle: View {
 					.buttonStyle(GrowingButton(buttonColor: Color.gray))
 				}
 			}
+			.alert("Couldn't Save", isPresented: $showVehicleSaveError) {
+				Button("OK", role: .cancel) {}
+			} message: {
+				Text(vehicleSaveErrorMessage ?? "")
+			}
 		}
 	}
 
@@ -1572,7 +1599,12 @@ struct EditVehicle: View {
 			didChange = true
 		}
 		if didChange {
-			try? modelContext.save()
+			do {
+				try modelContext.save()
+			} catch {
+				vehicleSaveErrorMessage = error.localizedDescription
+				showVehicleSaveError = true
+			}
 		}
 	}
 
@@ -1593,10 +1625,11 @@ struct EditVehicle: View {
 		do {
 			modelContext.delete(dataSet)
 			try modelContext.save()
+			dismiss()
 		} catch {
-			print(error.localizedDescription)
+			vehicleSaveErrorMessage = error.localizedDescription
+			showVehicleSaveError = true
 		}
-		dismiss()
 	}
 	/// Soft-deletes the record by marking it inactive and updating `updatedAt`.
 	/// Saves the change and then dismisses the view.
@@ -1606,10 +1639,11 @@ struct EditVehicle: View {
 		dataSet.updatedAt = Date()
 		do {
 			try modelContext.save()
+			dismiss()
 		} catch {
-			print("Failed to mark inactive: \(error.localizedDescription)")
+			vehicleSaveErrorMessage = "Failed to mark inactive: \(error.localizedDescription)"
+			showVehicleSaveError = true
 		}
-		dismiss()
 	}
 
 	/// Writes all editable @State fields back into the bound Vehicle8 model and saves.
@@ -1711,7 +1745,8 @@ struct EditVehicle: View {
 			try modelContext.save()
 			originalName = name
 		} catch {
-			print(error.localizedDescription)
+			vehicleSaveErrorMessage = error.localizedDescription
+			showVehicleSaveError = true
 		}
 
 		// Push this vehicle's readings out to any linked aspect vehicles that sync to it.
@@ -1931,18 +1966,6 @@ private struct LinkedFieldsPickerSheet: View {
 					Button("Done") { dismiss() }
 				}
 			}
-		}
-	}
-}
-
-/// Safe indexing helper to avoid out-of-bounds access when reading unit strings or other arrays.
-/// Returns `nil` for invalid indices instead of trapping.
-private extension Array {
-	subscript(safe index: Int) -> Element? {
-		if indices.contains(index) {
-			return self[index]
-		} else {
-			return nil
 		}
 	}
 }

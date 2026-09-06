@@ -10,6 +10,35 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 import ImageIO
+import CoreData
+import CloudKit
+
+// MARK: - AppSchema (single source of truth for the model list)
+
+/// Every @Model type in the app. LandShipApp builds its SwiftData Schema from this same
+/// list, and the restore re-import walks it entity by entity — sharing one list keeps the
+/// two from ever drifting apart.
+enum AppSchema {
+	static let modelTypes: [any PersistentModel.Type] = [
+		MxItems3.self,
+		MxParts1.self,
+		ServiceRecords1.self,
+		Vehicle8.self,
+		VehicleSystems1.self,
+		Vendors1.self,
+		Settings1.self,
+		FuelLog1.self,
+		TripLog2.self,
+		Additions.self,
+		Subscriptions.self,
+		ProjectList.self,
+		CheckList.self,
+		CheckListItem.self,
+		VehicleWarranty.self,
+		VehicleSerialItem.self,
+		VehicleScaleTicket.self
+	]
+}
 
 // MARK: - BackupDocument (FileDocument exporting a folder)
 
@@ -455,7 +484,48 @@ enum BackupService {
 		UserDefaults.standard.string(forKey: "StartupStoreMode") == "cloud"
 	}
 
-	/// Returns a success message on completion.
+	/// Describes what a staged restore should do when applied at the next launch.
+	struct PendingRestoreManifest: Codable {
+		enum SupportAction: String, Codable {
+			/// Exact snapshot: rebuild the store by copying every record out of the backup's
+			/// database into a brand-new store. The records get fresh identities and no
+			/// CloudKit sync metadata, so when CloudKit mirroring next runs it uploads them
+			/// as new — instead of reconciling the backup's stale sync state against the
+			/// server and deleting the restored records again (which is what a raw file
+			/// swap of a CloudKit-mirrored store leads to).
+			case reimport
+			/// Clear the local store so CloudKit re-imports fresh on this launch.
+			case clearForCloudRepopulation
+			/// Leave Application Support untouched (Documents-only restore).
+			case none
+		}
+		var restoreDocuments: Bool
+		var supportAction: SupportAction
+	}
+
+	private static let pendingManifestFilename = "manifest.json"
+
+	/// App-private folder (outside both Documents and Application Support, so it's never
+	/// part of a backup) holding a staged restore waiting to be applied at next launch.
+	private static func pendingRestoreFolder() throws -> URL {
+		guard let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else {
+			throw NSError(domain: "Restore", code: 3, userInfo: [NSLocalizedDescriptionKey: "Unable to resolve the Library directory."])
+		}
+		return library.appendingPathComponent("PendingRestore", isDirectory: true)
+	}
+
+	/// Stages a restore from the given backup folder and returns a success message.
+	///
+	/// This deliberately does NOT touch the live Documents or Application Support
+	/// directories. The app's SwiftData store is still open (and CloudKit mirroring still
+	/// running) while this executes — swapping the database files underneath them is what
+	/// used to silently lose restored data: on quit, SQLite's clean close deletes the
+	/// `-wal`/`-shm` sidecar files at the store path, destroying the freshly restored
+	/// copies and with them most of the restored records. Instead, the backup is copied
+	/// into Library/PendingRestore together with a manifest, and
+	/// `applyPendingRestoreIfNeeded()` applies it at the next launch, before the
+	/// ModelContainer opens the store.
+	///
 	/// - Parameter forceExactSnapshot: When iCloud sync is active, restoring normally skips the
 	///   raw local database (letting CloudKit repopulate it fresh) to avoid pushing stale/deleted
 	///   data back out to every synced device. Pass `true` to override that and force an exact
@@ -472,13 +542,6 @@ enum BackupService {
 
 		let fm = FileManager.default
 
-		// Resolve target locations
-		guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first,
-		      let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-		else {
-			throw NSError(domain: "Restore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to resolve app directories."])
-		}
-
 		// Locate expected subfolders in backup
 		let backupDocs = folderURL.appendingPathComponent("Documents", isDirectory: true)
 		let backupSupport = folderURL.appendingPathComponent("Application Support", isDirectory: true)
@@ -494,35 +557,300 @@ enum BackupService {
 			])
 		}
 
-		if hasDocs {
-			try replaceContents(of: docs, with: backupDocs)
-		}
-
-		guard hasSupport || isCloudKitActive() else {
-			return "Your Documents have been restored. \(AppInfo.displayName) must restart now to finish loading them."
-		}
-
+		// Decide what applying this restore should do to Application Support.
+		//
 		// The local SwiftData store carries its own CloudKit mirroring metadata (change tokens,
 		// per-record sync state). Overwriting it with an old snapshot restores that stale belief
 		// about what's already synced too — on relaunch the mirroring engine can reconcile against
 		// it and push old/deleted records back out to every other device on the account.
 		//
-		// So by default, when iCloud sync is active, don't touch the local store from the backup
-		// at all. Instead, clear it so SwiftData does a full, fresh import from CloudKit on
-		// relaunch — CloudKit's current state is treated as authoritative. `forceExactSnapshot`
+		// So by default, when iCloud sync is active, don't restore the local store from the
+		// backup at all. Instead, clear it so SwiftData does a full, fresh import from CloudKit
+		// on relaunch — CloudKit's current state is treated as authoritative. `forceExactSnapshot`
 		// opts out of that and restores the raw snapshot anyway (see the doc comment above).
+		let supportAction: PendingRestoreManifest.SupportAction
 		if isCloudKitActive() && !forceExactSnapshot {
-			try resetLocalStoreForCloudKitRepopulation(appSupportDir: appSupport)
-			return "Your Documents have been restored. Because iCloud sync is active, your vehicle and service data will re-download fresh from iCloud instead of the backup snapshot. \(AppInfo.displayName) must restart now to begin that."
+			supportAction = .clearForCloudRepopulation
 		} else if hasSupport {
-			try replaceContents(of: appSupport, with: backupSupport)
-			if isCloudKitActive() {
-				return "Your data has been restored exactly as saved in the backup, overriding iCloud sync. This can conflict with other devices signed into the same iCloud account until they resync. \(AppInfo.displayName) must restart now to finish loading it."
-			} else {
-				return "Your data has been restored. \(AppInfo.displayName) must restart now to finish loading it safely."
-			}
+			supportAction = .reimport
 		} else {
-			return "Your Documents have been restored. \(AppInfo.displayName) must restart now to finish loading them."
+			supportAction = .none
+		}
+
+		// Stage into a fresh Library/PendingRestore folder.
+		let pending = try pendingRestoreFolder()
+		if fm.fileExists(atPath: pending.path) {
+			try fm.removeItem(at: pending)
+		}
+		try fm.createDirectory(at: pending, withIntermediateDirectories: true, attributes: nil)
+
+		do {
+			if hasDocs {
+				try fm.copyItem(at: backupDocs, to: pending.appendingPathComponent("Documents", isDirectory: true))
+			}
+			if supportAction == .reimport {
+				let stagedSupport = pending.appendingPathComponent("Application Support", isDirectory: true)
+				try fm.copyItem(at: backupSupport, to: stagedSupport)
+				// Catch cloud-storage placeholder files (Dropbox/iCloud Drive folders that were
+				// never downloaded copy "successfully" as stubs) before reporting success —
+				// otherwise the next launch would quietly start with an empty database.
+				try validateStagedStore(in: stagedSupport)
+			}
+
+			let manifest = PendingRestoreManifest(restoreDocuments: hasDocs, supportAction: supportAction)
+			let manifestData = try JSONEncoder().encode(manifest)
+			try manifestData.write(to: pending.appendingPathComponent(pendingManifestFilename), options: [.atomic])
+		} catch {
+			// Leave no half-staged restore behind for the next launch to trip over.
+			try? fm.removeItem(at: pending)
+			throw error
+		}
+
+		let baseMessage: String
+		switch supportAction {
+			case .clearForCloudRepopulation:
+				baseMessage = "Your restore is ready. When \(AppInfo.displayName) restarts, your Documents will be restored from the backup, and because iCloud sync is active your vehicle and service data will re-download fresh from iCloud instead of the backup snapshot. \(AppInfo.displayName) must restart now to begin."
+			case .reimport:
+				if isCloudKitActive() {
+					baseMessage = "Your restore is ready. When \(AppInfo.displayName) restarts, your data will be rebuilt from the backup and uploaded to iCloud, replacing what iCloud has now. Other devices signed into the same iCloud account will update to match once they sync. \(AppInfo.displayName) must restart now to finish."
+				} else {
+					baseMessage = "Your restore is ready. Your data will be rebuilt from the backup when \(AppInfo.displayName) restarts. \(AppInfo.displayName) must restart now to finish."
+				}
+			case .none:
+				baseMessage = "Your restore is ready. Your Documents will be restored from the backup when \(AppInfo.displayName) restarts. \(AppInfo.displayName) must restart now to finish."
+		}
+		return baseMessage + "\n\n" + stagedRestoreSummary(pending: pending, restoreDocuments: hasDocs, supportAction: supportAction)
+	}
+
+	/// Human-readable list of what a staged restore will bring back, appended to the
+	/// restart dialog — the restore-side counterpart of the post-backup summary sheet.
+	private static func stagedRestoreSummary(pending: URL, restoreDocuments: Bool, supportAction: PendingRestoreManifest.SupportAction) -> String {
+		var lines: [String] = ["What will be restored:"]
+		if restoreDocuments {
+			lines.append("")
+			lines.append("Documents:")
+			let docLines = describeFolder(url: pending.appendingPathComponent("Documents", isDirectory: true), depth: 0, maxDepth: 2, maxItems: 50)
+			lines.append(contentsOf: docLines.isEmpty ? ["  (empty)"] : docLines)
+		}
+		switch supportAction {
+			case .reimport:
+				lines.append("")
+				lines.append("Database (vehicles, records, photos, settings):")
+				let supportLines = describeFolder(url: pending.appendingPathComponent("Application Support", isDirectory: true), depth: 0, maxDepth: 2, maxItems: 50)
+				lines.append(contentsOf: supportLines.isEmpty ? ["  (empty)"] : supportLines)
+			case .clearForCloudRepopulation:
+				lines.append("")
+				lines.append("Database (vehicles, records, photos, settings): will re-download fresh from iCloud.")
+			case .none:
+				break
+		}
+		return lines.joined(separator: "\n")
+	}
+
+	/// Verifies the staged Application Support copy actually contains a usable SwiftData
+	/// database (a non-empty `*.store` file). Cloud-synced source folders (Dropbox,
+	/// iCloud Drive) can hand over undownloaded placeholder stubs that copy without error;
+	/// this turns that into a visible failure instead of a silent empty restore.
+	private static func validateStagedStore(in stagedSupport: URL) throws {
+		let fm = FileManager.default
+		let items = (try? fm.contentsOfDirectory(at: stagedSupport, includingPropertiesForKeys: [.fileSizeKey], options: [])) ?? []
+		let hasUsableStore = items.contains { url in
+			guard url.lastPathComponent.hasSuffix(".store") else { return false }
+			let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+			return size > 0
+		}
+		guard hasUsableStore else {
+			throw NSError(domain: "Restore", code: 4, userInfo: [
+				NSLocalizedDescriptionKey: "The backup's database file is missing or empty. If the backup folder is stored in Dropbox or iCloud Drive, make sure its contents are fully downloaded to this device (not online-only), then try again. Nothing was changed."
+			])
+		}
+	}
+
+	/// Applies a restore staged by `restoreFromBackupFolder`, if one is waiting.
+	///
+	/// Must be called at app launch BEFORE the ModelContainer is created, so the store
+	/// files are swapped while nothing has them open. Attempted exactly once — the staged
+	/// folder is removed whether or not applying succeeds, so a bad restore can't put the
+	/// app into a failure loop. Returns true if a staged restore was applied.
+	@discardableResult
+	static func applyPendingRestoreIfNeeded() -> Bool {
+		let fm = FileManager.default
+		guard let pending = try? pendingRestoreFolder(), fm.fileExists(atPath: pending.path) else {
+			return false
+		}
+		// If the process died mid-apply on a previous launch, the marker file is still here —
+		// allow exactly one retry (the import is idempotent), then give up rather than
+		// crash-looping the app on a bad backup.
+		let attemptMarker = pending.appendingPathComponent("attempted")
+		let isRetry = fm.fileExists(atPath: attemptMarker.path)
+		if isRetry {
+			print("[LandShip] PendingRestore: retrying once after an interrupted apply")
+		}
+		defer { try? fm.removeItem(at: pending) }
+
+		guard let manifestData = try? Data(contentsOf: pending.appendingPathComponent(pendingManifestFilename)),
+		      let manifest = try? JSONDecoder().decode(PendingRestoreManifest.self, from: manifestData) else {
+			print("[LandShip] PendingRestore folder found but its manifest is unreadable — skipping restore")
+			return false
+		}
+
+		guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first,
+		      let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+			print("[LandShip] PendingRestore: unable to resolve app directories — skipping restore")
+			return false
+		}
+
+		do {
+			if !isRetry {
+				fm.createFile(atPath: attemptMarker.path, contents: nil)
+			}
+			switch manifest.supportAction {
+				case .reimport:
+					let stagedSupport = pending.appendingPathComponent("Application Support", isDirectory: true)
+					try importBackupIntoLiveStore(stagedSupport: stagedSupport, appSupport: appSupport)
+				case .clearForCloudRepopulation:
+					try resetLocalStoreForCloudKitRepopulation(appSupportDir: appSupport)
+				case .none:
+					break
+			}
+			if manifest.restoreDocuments {
+				try replaceContents(of: docs, with: pending.appendingPathComponent("Documents", isDirectory: true))
+			}
+			print("[LandShip] Applied pending restore (documents: \(manifest.restoreDocuments), support: \(manifest.supportAction.rawValue))")
+			return true
+		} catch {
+			// replaceContents rolls itself back on failure, so the previous data is intact.
+			print("[LandShip] Failed to apply pending restore: \(error.localizedDescription)")
+			return false
+		}
+	}
+
+	/// Applies an exact-snapshot restore by rewriting the contents of the LIVE store through
+	/// ordinary Core Data operations: delete every existing record, then insert a copy of
+	/// every record from the backup's database.
+	///
+	/// Why not swap store files or purge the CloudKit zone? Both fight the sync engine and
+	/// lose. A swapped-in store file carries stale CloudKit metadata, and the reconcile
+	/// silently deletes the restored records again. Purging the zone is worse: other devices
+	/// on the account discover their zone is gone and re-upload their entire local database
+	/// as new records, duplicating every record fleet-wide. Deleting and re-inserting through
+	/// the store's persistent history is the one path the sync engine understands: when
+	/// CloudKit mirroring next runs it sends per-record deletions and insertions to the
+	/// server, and every other device applies those same changes and converges — no
+	/// duplicates, no re-upload storm. It also works across CloudKit environments (a
+	/// production backup restored into a development build).
+	///
+	/// Runs before the ModelContainer is created, so nothing else has the store open. If the
+	/// process dies mid-way, the whole operation is retried once on the next launch —
+	/// delete-all-then-reinsert is idempotent.
+	private static func importBackupIntoLiveStore(stagedSupport: URL, appSupport: URL) throws {
+		let fm = FileManager.default
+		let sourceStoreURL = try locateStoreFile(in: stagedSupport)
+
+		guard let model = NSManagedObjectModel.makeManagedObjectModel(for: AppSchema.modelTypes) else {
+			throw NSError(domain: "Restore", code: 5, userInfo: [
+				NSLocalizedDescriptionKey: "Unable to build the data model needed to read the backup."
+			])
+		}
+
+		try fm.createDirectory(at: appSupport, withIntermediateDirectories: true, attributes: nil)
+		let liveStoreURL = appSupport.appendingPathComponent("default.store")
+
+		let source = try loadPlainContainer(model: model, storeURL: sourceStoreURL)
+		let live = try loadPlainContainer(model: model, storeURL: liveStoreURL)
+		defer {
+			closeStores(of: source)
+			closeStores(of: live)
+		}
+
+		let sourceContext = source.viewContext
+		let liveContext = live.viewContext
+		liveContext.mergePolicy = NSMergePolicy.mergeByPropertyObjectTrump
+
+		// Phase 1: delete every existing record (as faults — no need to load photo blobs).
+		// These deletions land in persistent history, so CloudKit mirroring propagates them
+		// to the server and to every other device.
+		var totalDeleted = 0
+		for entity in model.entities {
+			guard let entityName = entity.name else { continue }
+			let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
+			request.includesPropertyValues = false
+			let existing = try liveContext.fetch(request)
+			for object in existing {
+				liveContext.delete(object)
+			}
+			totalDeleted += existing.count
+			if liveContext.hasChanges {
+				try liveContext.save()
+			}
+			liveContext.reset()
+		}
+
+		// Phase 2: insert a copy of every record from the backup.
+		var totalCopied = 0
+		for entity in model.entities {
+			guard let entityName = entity.name else { continue }
+			let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
+			request.returnsObjectsAsFaults = false
+			let rows = try sourceContext.fetch(request)
+			for row in rows {
+				let clone = NSEntityDescription.insertNewObject(forEntityName: entityName, into: liveContext)
+				for attributeName in entity.attributesByName.keys {
+					clone.setValue(row.value(forKey: attributeName), forKey: attributeName)
+				}
+			}
+			totalCopied += rows.count
+			if liveContext.hasChanges {
+				try liveContext.save()
+			}
+			// Release fetched objects (image blobs can be large) before the next entity.
+			liveContext.reset()
+			sourceContext.reset()
+		}
+
+		print("[LandShip] Restore replaced \(totalDeleted) records with \(totalCopied) from the backup")
+	}
+
+	/// Finds the SwiftData database file inside a backup's Application Support copy.
+	private static func locateStoreFile(in folder: URL) throws -> URL {
+		let fm = FileManager.default
+		let preferred = folder.appendingPathComponent("default.store")
+		if fm.fileExists(atPath: preferred.path) { return preferred }
+		let items = (try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil, options: [])) ?? []
+		if let store = items.first(where: { $0.lastPathComponent.hasSuffix(".store") }) {
+			return store
+		}
+		throw NSError(domain: "Restore", code: 6, userInfo: [
+			NSLocalizedDescriptionKey: "The backup doesn't contain a database file to restore."
+		])
+	}
+
+	/// Opens a store with a plain Core Data container (no CloudKit mirroring). History
+	/// tracking is enabled to match what SwiftData requires of the live store — and recording
+	/// the restore's inserts in persistent history is what lets the CloudKit engine discover
+	/// and upload them on the next sync-enabled launch. Automatic lightweight migration is on
+	/// so a backup made by an older app version can still be read.
+	private static func loadPlainContainer(model: NSManagedObjectModel, storeURL: URL) throws -> NSPersistentContainer {
+		let description = NSPersistentStoreDescription(url: storeURL)
+		description.shouldMigrateStoreAutomatically = true
+		description.shouldInferMappingModelAutomatically = true
+		description.shouldAddStoreAsynchronously = false
+		description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+
+		let container = NSPersistentContainer(name: "LandShipRestore", managedObjectModel: model)
+		container.persistentStoreDescriptions = [description]
+		var loadError: Error?
+		container.loadPersistentStores { _, error in loadError = error }
+		if let loadError { throw loadError }
+		return container
+	}
+
+	/// Detaches all stores from the container's coordinator (idempotent), so SQLite closes
+	/// and checkpoints the files before they're moved or reopened by SwiftData.
+	private static func closeStores(of container: NSPersistentContainer) {
+		let coordinator = container.persistentStoreCoordinator
+		for store in coordinator.persistentStores {
+			try? coordinator.remove(store)
 		}
 	}
 
@@ -912,6 +1240,84 @@ struct BackupSummarySheet: View {
     }
 }
 
+// MARK: - RestoreReadySheet (pre-restart dialog listing what will be restored)
+
+/// Scrollable presentation of the staged-restore summary, shown after staging succeeds.
+/// The only way forward is the restart button — a restore in this state must not be
+/// casually dismissed and forgotten.
+struct RestoreReadySheet: View {
+	var message: String
+	var onRestart: () -> Void
+
+	var body: some View {
+		NavigationStack {
+			ScrollView {
+				Text(message)
+					.font(.callout)
+					.textSelection(.enabled)
+					.frame(maxWidth: .infinity, alignment: .leading)
+					.padding()
+			}
+			.navigationTitle("Restart to Finish Restore")
+			// Pinned to the bottom rather than placed in the toolbar — toolbar items in this
+			// sheet don't reliably render on macOS, and this button must never be missing.
+			.safeAreaInset(edge: .bottom) {
+				Button {
+					onRestart()
+				} label: {
+#if os(macOS)
+					Text("Quit \(AppInfo.displayName) Now")
+						.frame(maxWidth: .infinity)
+#else
+					Text("OK")
+						.frame(maxWidth: .infinity)
+#endif
+				}
+				.buttonStyle(.borderedProminent)
+				.controlSize(.large)
+				.keyboardShortcut(.defaultAction)
+				.padding()
+				.background(.regularMaterial)
+			}
+		}
+	}
+}
+
+// MARK: - BackupRestoreProgressOverlay (in-progress dialog)
+
+/// Blocking overlay shown while a manual backup is being prepared or a restore is running,
+/// so the user isn't left staring at a frozen-looking screen wondering what's happening
+/// (a restore can take 30 seconds or more). Covers the whole window and swallows taps
+/// so nothing else can be triggered mid-operation.
+struct BackupRestoreProgressOverlay: View {
+	var title: String
+	var message: String
+
+	var body: some View {
+		ZStack {
+			Color.black.opacity(0.35)
+				.ignoresSafeArea()
+			VStack(spacing: 16) {
+				ProgressView()
+					.controlSize(.large)
+				Text(title)
+					.font(.headline)
+				Text(message)
+					.font(.callout)
+					.foregroundStyle(.secondary)
+					.multilineTextAlignment(.center)
+			}
+			.padding(24)
+			.frame(maxWidth: 360)
+			.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+			.padding(40)
+		}
+		.transition(.opacity)
+		.accessibilityElement(children: .combine)
+		.accessibilityAddTraits(.updatesFrequently)
+	}
+}
+
 // MARK: - RestartRequiredView (post-restore enforcement, non-macOS)
 
 #if !os(macOS)
@@ -927,7 +1333,7 @@ struct RestartRequiredView: View {
                 .foregroundStyle(.orange)
             Text("Restart Required")
                 .font(.title2.bold())
-            Text("Your data has been restored. To finish loading it safely, please close \(AppInfo.displayName) completely — swipe it up from the App Switcher — then reopen it.")
+            Text("Your restore is ready. To finish restoring your data safely, please close \(AppInfo.displayName) completely — swipe it up from the App Switcher — then reopen it.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 32)

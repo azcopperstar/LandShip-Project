@@ -1,0 +1,28 @@
+{
+  "identifier" : "4A9E9B9A-9B1F-4B7C-8B3A-1C7B2F6E9A21",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : true,
+      "internalID" : "8C3E2E10-4B93-4C77-9E5A-2E6F0B9C5B4E",
+      "localizations" : [
+        {
+          "description" : "Unlocks unlimited vehicles and records, PDF export and printing, and automatic scheduled backups. One-time purchase, no subscription.",
+          "displayName" : "Full Version",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.aeronauticaltrax.LandShip.fullversion",
+      "referenceName" : "VehicleTrax Full Version",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

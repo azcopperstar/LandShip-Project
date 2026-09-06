@@ -110,6 +110,7 @@ struct DisplayItems: View {
             autoSelectFirst: false,
             sort: [SortDescriptor(\.displayName, order: .forward)],
             labelProvider: { v in "\(v.year) \(v.displayName)"},
+            thumbnailData: { $0.image1 },
             onSelectionChanged: { sel in
                 trackVehicleSelected = sel?.name ?? "All Vehicles"
             }
@@ -145,7 +146,7 @@ struct DisplayItems: View {
 						title: "Add your first Service Item",
 						systemImage: "folder.badge.gearshape",
 						description: "Create a Service Item to be used as service templates when creating service records.\n\nTo add additional items after this first one, select the '+' button at the top of the form.",
-						actionTitle: "Add First Fuel Log",
+						actionTitle: "Add First Item",
 						action: { addNewRecord() }
 					)
 				}

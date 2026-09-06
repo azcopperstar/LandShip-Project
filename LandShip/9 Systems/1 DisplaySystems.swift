@@ -147,7 +147,8 @@ struct DisplaySystems: View {
 			autoSelectFirst: false,
 			filter: nil,
 			sort: [SortDescriptor(\.displayName, order: .forward)],
-			labelProvider: { v in "\(v.year) \(v.displayName)" }
+			labelProvider: { v in "\(v.year) \(v.displayName)" },
+			thumbnailData: { $0.image1 }
 		)
 		.onChange(of: selectedVehicle) { _, newVehicle in
 			// Keep the cross-view binding in sync with the local selection.
@@ -291,7 +292,7 @@ struct DisplaySystems: View {
 						true
 					} else {
 						// Scoped to the selected vehicle by name match.
-						item.vehicleId.contains(trackVehicleSelected)
+						item.vehicleId == trackVehicleSelected
 					}
 				} else {
 					// No vehicle scoping — show all.
@@ -301,7 +302,7 @@ struct DisplaySystems: View {
 					} else {
 						// Scoped to the selected vehicle by name match.
 						// Exclude inactive items when preference is OFF.
-						item.vehicleId.contains(trackVehicleSelected) && item.inactive == false
+						item.vehicleId == trackVehicleSelected && item.inactive == false
 					}
 				}
 			}

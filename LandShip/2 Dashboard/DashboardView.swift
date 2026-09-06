@@ -56,6 +56,10 @@ struct DashboardView: View {
 	let functions: Functions = Functions()
 	// Utility for loading user/unit preferences.
 	let prefsFunc: PrefsFunctions = PrefsFunctions()
+	// Lets embedded cards (e.g. Quick Actions, "Vehicle: X" taps) request a sidebar navigation
+	// change, optionally scoping the destination list to one vehicle. Nil when the Dashboard is
+	// shown somewhere that has no sidebar to drive (e.g. a preview).
+	var onQuickAction: ((SidebarItem, String?) -> Void)? = nil
 
 	// Cards enabled by the user's saved scheme, in display order. Falls back to the original hardcoded set.
 	var enabledCards: [DashboardCard] { settings?.dashCards ?? DashboardCard.defaultOrder }
@@ -75,6 +79,16 @@ struct DashboardView: View {
 		return ids.contains(vehicleId)
 	}
 	var scopedVehicles: [Vehicle8] { vehicles.filter { includesVehicle($0.name) } }
+	// Builds a vehicleId -> display-name lookup once from the already-fetched `vehicles` query,
+	// so per-row card/detail views can look a name up in O(1) instead of each issuing its own
+	// SwiftData fetch (see Functions.getVehicleDisplayName) for every visible row.
+	func buildVehicleDisplayNameLookup() -> (String) -> String {
+		let dict = Dictionary(uniqueKeysWithValues: vehicles.map { ($0.name, $0.displayName.isEmpty ? $0.name : $0.displayName) })
+		return { id in
+			guard id != "All Vehicles" && !id.isEmpty else { return id }
+			return dict[id] ?? id
+		}
+	}
 	// True when a saved vehicle subset (not the toolbar picker) is limiting the "All Vehicles" totals.
 	var isVehicleScopeLimited: Bool {
 		trackVehicleSelected == "All Vehicles" || trackVehicleSelected.isEmpty
@@ -100,30 +114,6 @@ struct DashboardView: View {
 		return false
 #endif
 	}
-
-    // Safe reflection helpers to avoid KVC and Objective-C exceptions on SwiftData models
-    private func reflectedString(_ value: Any, keys: [String]) -> String? {
-        let mirror = Mirror(reflecting: value)
-        for key in keys {
-            if let child = mirror.children.first(where: { $0.label == key }) {
-                if let s = child.value as? String, !s.isEmpty { return s }
-            }
-        }
-        return nil
-    }
-
-    private func reflectedDouble(_ value: Any, keys: [String]) -> Double {
-        let mirror = Mirror(reflecting: value)
-        for key in keys {
-            if let child = mirror.children.first(where: { $0.label == key }) {
-                if let d = child.value as? Double { return d }
-                if let f = child.value as? Float { return Double(f) }
-                if let i = child.value as? Int { return Double(i) }
-                if let n = child.value as? NSNumber { return n.doubleValue }
-            }
-        }
-        return 0
-    }
 
 	// Backing state for each dashboard card. These are derived/aggregated values computed in `refreshAll()`.
 	@State var nextTwoDue: [UpcomingDue] = []
@@ -271,7 +261,8 @@ struct DashboardView: View {
 						emptyChoiceLabel: "All Vehicles",
 						autoSelectFirst: false,
 						sort: [SortDescriptor(\.name, order: .forward)],
-						labelProvider: { $0.displayName }
+						labelProvider: { $0.displayName },
+						thumbnailData: { $0.image1 }
 					)
 					.fixedSize(horizontal: true, vertical: true)
 				} label: {
@@ -299,7 +290,8 @@ struct DashboardView: View {
 						emptyChoiceLabel: "All Vehicles",
 						autoSelectFirst: false,
 						sort: [SortDescriptor(\.name, order: .forward)],
-						labelProvider: { $0.displayName }
+						labelProvider: { $0.displayName },
+						thumbnailData: { $0.image1 }
 					)
 					.fixedSize(horizontal: true, vertical: true)
 				} label: {
@@ -413,17 +405,20 @@ struct DashboardView: View {
 	}
 
 	@ViewBuilder private var nextServiceDueCard: some View {
+		let vehicleDisplayName = buildVehicleDisplayNameLookup()
 		NavigationLink {
 			NextServiceDueDetailView(
 				vehicleScope: trackVehicleSelected,
 				distanceUnit: unit(UnitIndex.distance),
-				formatDate: { functions.formatDate_DDMMMyy(date: $0) }
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) },
+				vehicleDisplayName: vehicleDisplayName
 			)
 		} label: {
 			NextServiceDueCard(
 				nextTwoDue: nextTwoDue,
 				distanceUnit: unit(UnitIndex.distance),
-				formatDate: { functions.formatDate_DDMMMyy(date: $0) }
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) },
+				vehicleDisplayName: vehicleDisplayName
 			)
 		}
 		.buttonStyle(.plain)
@@ -514,17 +509,20 @@ struct DashboardView: View {
 	}
 
 	@ViewBuilder private var recentServiceCard: some View {
+		let vehicleDisplayName = buildVehicleDisplayNameLookup()
 		NavigationLink {
 			RecentServiceDetailView(
 				vehicleScope: trackVehicleSelected,
 				distanceUnit: unit(UnitIndex.distance),
-				formatDate: { functions.formatDate_DDMMMyy(date: $0) }
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) },
+				vehicleDisplayName: vehicleDisplayName
 			)
 		} label: {
 			RecentServiceCard(
 				recentServices: recentServices,
 				distanceUnit: unit(UnitIndex.distance),
-				formatDate: { functions.formatDate_DDMMMyy(date: $0) }
+				formatDate: { functions.formatDate_DDMMMyy(date: $0) },
+				vehicleDisplayName: vehicleDisplayName
 			)
 		}
 		.buttonStyle(.plain)
@@ -537,9 +535,7 @@ struct DashboardView: View {
 				distanceUnit: unit(UnitIndex.distance),
 				formatDate: { functions.formatDate_DDMMMyy(date: $0) },
 				onTapVehicle: { name in
-					filterTitle = "Vehicle: " + name
-					filterDetails = "Would navigate to this vehicle's service history."
-					showingFilterSheet = true
+					onQuickAction?(.records, name)
 				}
 			)
 		} label: {
@@ -548,9 +544,7 @@ struct DashboardView: View {
 				distanceUnit: unit(UnitIndex.distance),
 				formatDate: { functions.formatDate_DDMMMyy(date: $0) },
 				onTapVehicle: { name in
-					filterTitle = "Vehicle: " + name
-					filterDetails = "Would navigate to this vehicle's service history."
-					showingFilterSheet = true
+					onQuickAction?(.records, name)
 				}
 			)
 		}
@@ -627,7 +621,7 @@ struct DashboardView: View {
 		case .fleetSnapshot: fleetSnapshotCard
 		case .insurance: insuranceCard
 		case .warranty: warrantyCard
-		case .quickActions: QuickActionsCard()
+		case .quickActions: QuickActionsCard(onNavigate: { section in onQuickAction?(section, nil) })
 		case .recentService: recentServiceCard
 		case .usageSinceLast: usageSinceLastCard
 		case .systemHotlist: systemHotlistCard

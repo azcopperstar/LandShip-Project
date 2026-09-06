@@ -34,7 +34,7 @@ struct RecentServiceCard: View {
 	let recentServices: [DashboardView.RecentService]
 	let distanceUnit: String
 	let formatDate: (Date) -> String
-	@Environment(\.modelContext) private var modelContext
+	let vehicleDisplayName: (String) -> String
 
 	var body: some View {
 		CardView {
@@ -55,7 +55,7 @@ struct RecentServiceCard: View {
 						HStack {
 							VStack(alignment: .leading, spacing: 2) {
 								Text(rec.mxName).font(.subheadline).bold()
-								Text("\(Functions().getVehicleDisplayName(vehicleId: rec.vehicleId, context: modelContext)) • \(formatDate(rec.mxDate))")
+								Text("\(vehicleDisplayName(rec.vehicleId)) • \(formatDate(rec.mxDate))")
 									.font(.caption)
 									.foregroundStyle(.secondary)
 							}

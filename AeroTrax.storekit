@@ -1,0 +1,28 @@
+{
+  "identifier" : "6F2A8C31-7D4E-4A9B-9C1D-3E8F5A2B7C6D",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "19.99",
+      "familyShareable" : true,
+      "internalID" : "1B4D6E92-3A7C-4F8E-9D2B-6C1A9F5E8B3D",
+      "localizations" : [
+        {
+          "description" : "Unlocks unlimited aircraft and records, PDF export and printing, and automatic scheduled backups. One-time purchase, no subscription.",
+          "displayName" : "Full Version",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.aeronauticaltrax.aerotraxapp.fullversion",
+      "referenceName" : "AeroTrax Full Version",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

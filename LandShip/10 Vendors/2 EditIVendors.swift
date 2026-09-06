@@ -61,9 +61,13 @@ struct EditIVendors: View {
 
 	// Controls presentation of confirmation dialogs for destructive actions.
 	@State private var isPresentingConfirm: Bool = false
-	
+
 	// Toggles between details and edit modes.
 	@State private var isEditing: Bool = false
+
+	// MARK: - Save error feedback
+	@State private var showVendorSaveError = false
+	@State private var vendorSaveErrorMessage: String?
 	
 	// MARK: - Editable field buffer (mirrors `dataSet` so edits can be canceled)
 	@State private var createdAt = Date()
@@ -279,7 +283,12 @@ struct EditIVendors: View {
 					.disabled(vendorName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 				}
 			}
-			
+			.alert("Couldn't Save", isPresented: $showVendorSaveError) {
+				Button("OK", role: .cancel) {}
+			} message: {
+				Text(vendorSaveErrorMessage ?? "")
+			}
+
 		// Branch 3: Details mode — read-only presentation of vendor data.
 		} else {
 			ScrollView {
@@ -401,7 +410,7 @@ struct EditIVendors: View {
 							makeInactive()
 						}
 					} message: {
-						Text("Confirm either deletion or deactivation of this service record.  Deactivated records will still be available for reference, but will not be included in any reports or calculations.")
+						Text("Confirm either deletion or deactivation of this vendor.  Deactivated vendors will still be available for reference, but will not be included in any reports or calculations.")
 					}
 					.buttonStyle(GrowingButton(buttonColor: Color.gray))
 				}
@@ -484,9 +493,11 @@ struct EditIVendors: View {
 			try modelContext.save()
 		} catch {
 			print(error.localizedDescription)
+			vendorSaveErrorMessage = error.localizedDescription
+			showVendorSaveError = true
 		}
 	}
-	
+
 	/// Permanently deletes the current `Vendors1` record from the model context and dismisses the view.
 	/// Use with care — this action cannot be undone.
 	private func DeleteRecord(){

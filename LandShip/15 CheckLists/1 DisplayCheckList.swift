@@ -85,16 +85,28 @@ struct DisplayCheckList: View {
 	}
 
 	var body: some View {
-		checklistsList(records: filteredChecklists)
-			.animation(.none, value: filteredChecklists.count)
-			.transaction { transaction in
-				transaction.animation = nil
-				transaction.disablesAnimations = true
-			}
+		Group {
+			ModelPicker(
+				selection: $selectedVehicle,
+				title: "",
+				includeEmptyChoice: true,
+				emptyChoiceLabel: "All Vehicles",
+				autoSelectFirst: false,
+				filter: showInactiveVehicles ? nil : #Predicate<Vehicle8> { $0.inactive == false },
+				sort: [SortDescriptor(\.displayName, order: .forward)],
+				labelProvider: { v in "\(v.year) \(v.displayName)"},
+				thumbnailData: { $0.image1 }
+			)
+			.frame(maxWidth: .infinity)
+
+			checklistsList(records: filteredChecklists)
+				.animation(.none, value: filteredChecklists.count)
+				.transaction { transaction in
+					transaction.animation = nil
+					transaction.disablesAnimations = true
+				}
+		}
 		.toolbar {
-			ToolbarItem(placement: .automatic) {
-				vehiclePicker
-			}
 			ToolbarItem(placement: .automatic) {
 				Button {
 					withAnimation {
@@ -478,26 +490,6 @@ struct DisplayCheckList: View {
 		.foregroundStyle(.blue)
 	}
 
-	private var vehiclePicker: some View {
-		Menu {
-			Button("All Vehicles") {
-				selectedVehicle = nil
-			}
-			ForEach(vehicles.filter { !$0.inactive || showInactiveVehicles }, id: \.self) { vehicle in
-				Button(vehicle.displayName) {
-					selectedVehicle = vehicle
-				}
-			}
-		} label: {
-			VStack {
-				Image(systemName: "car")
-				Text("Vehicle")
-					.font(.caption2)
-			}
-		}
-		.accessibilityLabel("Vehicle Filter")
-	}
-	
 	// MARK: - Helper Functions
 	
 	private struct CategoryGroup {

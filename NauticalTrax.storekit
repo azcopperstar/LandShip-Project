@@ -1,0 +1,28 @@
+{
+  "identifier" : "EB653A4A-C2A4-43E9-8EEA-04B4D6AC23E9",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "19.99",
+      "familyShareable" : true,
+      "internalID" : "5E92A917-3E2B-4644-8105-6E8D5CA083CA",
+      "localizations" : [
+        {
+          "description" : "Unlocks unlimited vessels and records, PDF export and printing, and automatic scheduled backups. One-time purchase, no subscription.",
+          "displayName" : "Full Version",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.aeronauticaltrax.nauticaltrax.fullversion",
+      "referenceName" : "NauticalTrax Full Version",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

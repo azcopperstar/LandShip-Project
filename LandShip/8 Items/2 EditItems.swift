@@ -318,6 +318,7 @@ struct EditItems: View {
 									filter: nil,
 									sort: [SortDescriptor(\.displayName, order: .forward)],
 									labelProvider: { v in "\(v.year) \(v.displayName)"},
+									thumbnailData: { $0.image1 }
 								)
 								.onChange(of: selectedVehicle) { _, newVehicle in
 									let name = newVehicle?.name ?? ""
@@ -371,37 +372,11 @@ struct EditItems: View {
 									vendor = sel?.vendorName ?? ""
 								}
 							)
-//							.onChange(of: selectedVendor) { _, newVendor in
-//								let name = newVendor?.vendorName ?? ""
-//								vendor = name
-//								dataSet.vendor = name
-//							}
 							.fixedSize(horizontal: true, vertical: true)
 						} label: {
 							Text("Supplier")
 								.textLabelModified()
 						}
-
-//						HStack{
-//							Text("Shop")
-//								.textLabelModified()
-//							ModelPicker(
-//								selection: $selectedVendor,
-//								title: "Vendor",
-//								includeEmptyChoice: true,
-//								emptyChoiceLabel: "—",
-//								autoSelectFirst: false,
-//								filter: nil,
-//								sort: [SortDescriptor(\.vendorName, order: .forward)],
-//								labelProvider: { $0.vendorName }
-//							)
-//							.onChange(of: selectedVendor) { _, newVendor in
-//								let name = newVendor?.vendorName ?? ""
-//								vendor = name
-//								dataSet.vendor = name
-//							}
-//							.frame(maxWidth: .infinity, alignment: .trailing)
-//						}
 					}
 				}
 				

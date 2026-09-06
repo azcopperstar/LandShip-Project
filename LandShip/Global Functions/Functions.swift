@@ -178,10 +178,9 @@ struct QueryView<Model: PersistentModel, Content: View>: View {
 	}
 }
 
-// Provide a local shim for Functions.cleanOptional so this view compiles even if
-// the global Functions type doesn't define it. Returns a trimmed string or "—"
-// when the input is nil or empty.
-private extension Functions {
+// Returns a trimmed string or "—" when the input is nil or empty. Used by editor
+// views to render a friendly placeholder for empty optional/string fields.
+extension Functions {
 	func cleanOptional(inputString: String?) -> String {
 		let trimmed = (inputString ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
 		return trimmed.isEmpty ? "—" : trimmed
@@ -525,5 +524,14 @@ extension Color {
             Int((r * 255).rounded()), Int((g * 255).rounded()),
             Int((b * 255).rounded()), Int((a * 255).rounded()))
     }
+}
+
+// MARK: - Array Safe Index
+
+extension Array {
+	/// Safe index helper for arrays to avoid out-of-bounds if settings are missing
+	subscript(safe index: Int) -> Element? {
+		indices.contains(index) ? self[index] : nil
+	}
 }
 

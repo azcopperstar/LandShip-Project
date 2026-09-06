@@ -101,7 +101,8 @@ struct DisplaySubscriptions: View {
 			autoSelectFirst: false,
 			filter: nil,
 			sort: [SortDescriptor(\.displayName, order: .forward)],
-			labelProvider: { v in "\(v.year) \(v.displayName)" }
+			labelProvider: { v in "\(v.year) \(v.displayName)" },
+			thumbnailData: { $0.image1 }
 		)
 		.frame(maxWidth: .infinity)
 		.onChange(of: selectedVehicle) { _, newVehicle in
@@ -552,15 +553,6 @@ struct DisplaySubscriptions: View {
 		} catch {
 			print("Failed to save subscription record: \(error.localizedDescription)")
 		}
-	}
-}
-
-// MARK: - Helpers
-
-// Safe index helper for arrays to avoid out-of-bounds if settings are missing
-private extension Array {
-	subscript(safe index: Int) -> Element? {
-		indices.contains(index) ? self[index] : nil
 	}
 }
 

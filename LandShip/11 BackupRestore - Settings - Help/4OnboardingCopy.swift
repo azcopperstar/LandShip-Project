@@ -8,33 +8,45 @@ enum OnboardingCopy {
 
 		static var header1: String { "What is \(AppInfo.displayName)" }
 		static var message1: String {
-			"\(AppInfo.displayName) has been designed to work with both iOS (iPhone/iPad) and macOS (Macbook Pro/Air).  Data for the application is hosted on your iCloud account and is synchonized between all of the devices on that specific Apple account.  This means that you can install \(AppInfo.displayName) on multiple devices (Mac, iPad, iPhone) and they will all be in sync.\nMost preferences & settings are also synced between devices.  They only need to be entered once."
+			"Works on iPhone, iPad, and Mac. Your data lives in iCloud, so every device stays in sync automatically — enter preferences once and they carry across all your devices."
 		}
 
 		static let header2 = "Application Structure"
 		static var message2: String {
-			"\(AppInfo.displayName) is a database application.  All entered data is stored in a single SQLite (SwiftData) database on your device and is synced to your iCloud account.  The ability also exists to backup and restore your data to a folder on device, in Files, or in iCloud Drive.\nThe sidebar (left‑most column on Mac/iPad, home screen on iPhone) opens on a Dashboard that summarizes your whole fleet, then groups the rest of the app into: Garage (Vehicles, Parts), Data Tracking (Fuel Log, Travel Log), Vehicle Service (Records, Items), Vehicle Financials (Improvements, Expenditures), Projects/Checklists (Projects, Checklists), Setup (Systems, Vendors/Shops, Settings), and Data Management (Backup…, Restore…). On iPhone and iPad a Resources section adds a Help button; on macOS, Help lives in the system Help menu instead.\nSeveral tables interact with relationships between each other (e.g., adding entries to the Parts table will provide dropdown selections for the Service Items table, which will then be used as dropdown selections in the Service Records table)."
+			let fleetWord = Vertical.current.id == .land ? "fleet" : Vertical.current.assetPlural.lowercased()
+			return "All your data lives in a single SQLite (SwiftData) database, synced to iCloud, with backup/restore to a folder on device, in Files, or iCloud Drive.\nThe sidebar opens on a Dashboard summarizing your \(fleetWord), then groups the rest into: a Full Version section (trial only), \(Vertical.current.garageSectionTitle) (\(Vertical.current.assetPlural), Parts), Data Tracking (Fuel Log, \(Vertical.current.travelLogLabel)), \(Vertical.current.assetSingular) Service (Records, Items), \(Vertical.current.assetSingular) Financials (Improvements, Expenditures), Projects/Checklists, Setup (Systems, Vendors/Shops, Settings), and Data Management (Backup…, Restore…), plus a Resources section (Help, Getting Started, What's New, Send Feedback).\nTables link together — e.g. Parts feeds pickers in Service Items, which feeds Service Records."
 		}
 
-		static let header3 = "How \(AppInfo.displayName) is used throughout the application"
+		static let header3 = "How it's used throughout the application"
 		static var message3: String {
-			"• Start at the Dashboard: The app’s home screen (the default Launch Screen, configurable in Setup → Settings) summarizes fleet maintenance status, upcoming service, trip groups, fleet snapshot and maintenance costs, recurring costs and insurance expirations, and tracked warranties—filterable to one vehicle or all vehicles.\n\n• Vehicles as the anchor: Begin by defining your vehicles in the Garage → Vehicles table. Nearly every other table references a vehicle so you can filter, report, and analyze per‑vehicle or across your entire garage. Each vehicle can also store CAT Scale weigh tickets and warranty records.\n\n• Consistent dropdowns from shared catalogs: Setup → Systems provides the controlled vocabularies (systems, categories) that appear in pickers across the app. Garage → Parts is your single source of truth for consumables and components; those parts are reused in Vehicle Service → Items (maintenance templates) and Vehicle Service → Records (work performed) so names and costs stay consistent.\n\n• Day‑to‑day logging: Use Data Tracking → Fuel Log to capture each fill‑up (volume, price, DEF, odometer, fluid checks, receipts) and Data Tracking → Travel Log to record trips (start/end odometer, en‑route stops, time statistics, purpose, attachments). These entries drive fuel economy, utilization, and cost‑per‑distance metrics on a per‑vehicle basis, and related trips can be grouped together with a shared Trip Group name.\n\n• Planning vs. doing: Vehicle Service → Items defines the reusable templates for recurring jobs (e.g., oil & filter). When work is actually performed, create a Vehicle Service → Record. Selecting a Service Item will prefill description, vendor, labor, and the parts bundle so entry is fast and consistent. Parts or labor from a completed record (or a completed Project punch‑list item) can also be transferred into Vehicle Financials → Improvements when the work doubles as an upgrade.\n\n• Unified navigation and context: On macOS and iPadOS, navigation uses a three‑column layout—sidebar (tables), list (filtered by vehicle), and details. On iPhone, the same flow is presented as swipeable pages. A vehicle filter at the top of most lists—and the Dashboard—lets you switch context quickly between “All Vehicles” and a specific vehicle.\n\n• Units and formatting: Setup → Settings defines the units of measure (fuel, oil, DEF, distance, mass, pressure, speed, temperature, and vehicle dimensions) used to display and calculate values throughout the app; each vehicle’s own units drive its specific calculations.\n\n• Attachments everywhere: Photos and documents can be attached to vehicles, scale tickets, fuel logs, trips, parts, service items, and service records. Attachments sync via iCloud and can be included in reports or exported with backups.\n\n• Reporting and exports: PDF reports are available for Vehicles, Trips, Fuel, Service, Parts, Improvements, Expenditures, Projects, and Checklists, scoped to a single vehicle or all vehicles. These reports are ideal for reimbursement, audits, tax documentation, and resale records.\n\n• Backup and restore: Data Management → Backup/Restore lets you export a folder containing your database and documents to Files/iCloud Drive and restore it if needed. This complements iCloud sync by providing point‑in‑time archives for safety and portability.\n\n• iCloud sync and multi‑device use: Your database is stored locally and synced via iCloud so your vehicles, logs, service history, parts, systems, vendors, projects, checklists, and settings stay aligned across all your devices using the same Apple ID."
+			let fleetWord = Vertical.current.id == .land ? "fleet" : Vertical.current.assetPlural.lowercased()
+			let recordMention = Vertical.current.id == .land ? ", and each can also hold CAT Scale tickets and warranty records" : ", and each can also hold warranty records"
+			return "• Start at the Dashboard for an at‑a‑glance \(Vertical.current.id == .land ? "fleet" : Vertical.current.assetSingular.lowercased()) summary, filterable to one \(Vertical.current.assetSingular.lowercased()) or all.\n\n• \(Vertical.current.assetPlural) are the anchor — nearly every other table references one\(recordMention).\n\n• Systems and Parts are your shared catalogs: Systems defines the vocabularies used in pickers; Parts feeds Service Items and Service Records so names and costs stay consistent.\n\n• Log Fuel and \(Vertical.current.travelLogLabel) entries as you go; group related trips with a shared Trip Group name.\n\n• Plan with Service Items, then record the actual work as a Service Record — completed work (or a Project punch‑list item) can be transferred into Improvements when it's also an upgrade.\n\n• Reports, backups, and iCloud sync tie it together: PDF reports per \(Vertical.current.assetSingular.lowercased()) or \(fleetWord)‑wide, manual or automatic backups, and continuous sync across your devices."
 		}
 
 		static let header4 = "Quick start and typical workflow"
 		static var message4: String {
-			"1) Open Setup → Settings and choose your preferred units of measure and Launch Screen. These control how values are displayed across the app and which screen greets you on launch.\n\n2) Add vehicles in Garage → Vehicles. Set the odometer and any key specs (fuel type, tank size, economy unit) to enable accurate calculations, and add warranty or CAT Scale ticket records as they come up.\n\n3) Define your controlled vocabularies in Setup → Systems (e.g., Engine, Brakes, Tires) to keep pickers and reports tidy.\n\n4) Build your Parts catalog in Garage → Parts for commonly used items (filters, fluids, pads). Include vendor, cost, and package quantity so costs roll up correctly.\n\n5) Create Service Items (templates) in Vehicle Service → Items for recurring jobs. Link parts, set intervals (miles/months/hours), and choose a default vendor.\n\n6) Log daily usage in Data Tracking → Fuel Log and Travel Log. Attach receipts or notes for context and reimbursements, and use Trip Groups to tie multi‑day trips together.\n\n7) When work is performed, create a Vehicle Service → Record. Select a Service Item to prefill the entry, add actual parts and labor, attach invoices/photos, and save. If the work also amounts to an upgrade, transfer the relevant line to Improvements.\n\n8) Check the Dashboard regularly for maintenance status, upcoming service, insurance expirations, and warranty coverage across your fleet.\n\n9) Generate reports (PDF) for a single vehicle or all vehicles. Share or archive them as needed for audits, taxes, or resale.\n\n10) Periodically create a Backup from Data Management → Backup/Restore, especially before big edits or device changes.\n\nFollowing this loop—configure → catalog → plan → log → service → report—keeps your data consistent, searchable, and ready for decision‑making."
+			"1) Set units and Launch Screen in Setup → Settings.\n2) Add your \(Vertical.current.assetPlural.lowercased()) in \(Vertical.current.garageSectionTitle) → \(Vertical.current.assetPlural).\n3) Define vocabularies in Setup → Systems.\n4) Build your Parts catalog.\n5) Create Service Items for recurring jobs.\n6) Log Fuel and \(Vertical.current.travelLogLabel) entries as you go.\n7) Record completed work as Service Records.\n8) Check the Dashboard regularly for what's due.\n9) Generate PDF reports as needed.\n10) Back up periodically, especially before big changes.\n\nThis configure → catalog → plan → log → service → report loop keeps your data consistent and ready for decisions."
 		}
-
 	}
 
 	enum SettingsIntro {
 		static let icon = "gearshape.fill"
 		static let title = "Set Up Shared Preferences"
 		static let message =
-		"Set up your preferences first. Choose the 'units of measure' that will be used throughout the application.\n\nYou can make changes at anytime by selecting 'Settings' on the Setup sidebar.\n\nTo get started, select the 'Open Settings' button below.\n\nAfter saving your settings changes, select the 'Save' button and you will be returned to this screen for the 'Next >' step."
+		"Choose your units of measure and other preferences — you can change them anytime from Setup → Settings.\n\nTap 'Open Settings' below, then 'Save' when you're done to return here."
 		static let buttonLabel = "Open Settings"
 		static let buttonIcon = "slider.horizontal.3"
+	}
+
+	enum TrialIntro {
+		static let icon = "gift.fill"
+		static let title = "Free Trial"
+		static var message: String {
+			"\(AppInfo.displayName) is free to try: up to 2 \(Vertical.current.assetPlural.lowercased()) and 10 records in every table — Parts, Fuel Log, \(Vertical.current.travelLogLabel), Service Records, and more.\n\nWhen you're ready for unlimited \(Vertical.current.assetPlural.lowercased()) and records, PDF export and printing, and automatic backups, unlock the full version with a single one-time purchase. No subscription, and Restore Purchases is always available from Settings."
+		}
+		static let buttonLabel = "See Full Version Options"
+		static let buttonIcon = "lock.open"
 	}
 
 	enum Navigation {
@@ -43,20 +55,22 @@ enum OnboardingCopy {
 
 		static let header1 = "Overview"
 		static var message1: String {
-			"The \(AppInfo.displayName) application uses a three column split view on MacOS and iPadOS to display information.  iPhoneOS does not support this feature and will present the same information flow as swipeable pages.  The Dashboard is a special case: on iPad it fills the entire detail area edge‑to‑edge instead of sitting alongside a middle list column."
+			"\(AppInfo.displayName) uses a three‑column layout on Mac and iPad (sidebar, list, detail); iPhone shows the same flow as swipeable pages. The Dashboard is a special case on iPad — it fills the whole detail area instead of sitting beside a list column."
 		}
 
 		static let header2 = "First Column (home screen on iPhone)"
-		static let message2 =
-		"Contains the sidebar, arranged top to bottom as: Dashboard (a standalone summary screen, not part of a group), Garage (Vehicles, Parts), Data Tracking (Fuel Log, Travel Log), Vehicle Service (Records, Items), Vehicle Financials (Improvements, Expenditures), Projects/Checklists (Projects, Checklists), Setup (Systems, Vendors/Shops, and a Settings button), and Data Management (Backup…, Restore…, with the date of your last backup shown underneath). On iPhone and iPad a Resources section adds a Help button; on macOS use the system Help menu instead."
+		static var message2: String {
+			"Contains the sidebar, arranged top to bottom as: a Full Version section (only shown while on the free trial, with an Unlock Full Version row and a reminder of the trial limits—this disappears once you unlock), Dashboard (a standalone summary screen, not part of a group), \(Vertical.current.garageSectionTitle) (\(Vertical.current.assetPlural), Parts), Data Tracking (Fuel Log, \(Vertical.current.travelLogLabel)), \(Vertical.current.assetSingular) Service (Records, Items), \(Vertical.current.assetSingular) Financials (Improvements, Expenditures), Projects/Checklists (Projects, Checklists), Setup (Systems, Vendors/Shops, and a Settings button), and Data Management (Backup…, Restore…, with the date of your last backup shown underneath). A Resources section at the bottom adds Help, Getting Started (re‑opens this walkthrough), What's New, and Send Feedback; on macOS, Help also lives in the system Help menu."
+		}
 
 		static let header3 = "Second Column"
-		static let message3 =
-		"Contains the catagories for the selected table (e.g, if Vehicles is selected in the first column, then the second column will display a list of entered vehicles in the 'Vehicles' table).  At the top of second column (unless 'Vehicles' is selected in the first column, or the Dashboard is showing) is a dropdown that allows you to filter the displayed items by vehicles present in the Vehicles database.  There is also an 'All Vehicles' option to view the records of all vehicles in the database."
+		static var message3: String {
+			"Shows the list for whatever's selected in the first column (e.g. selecting \(Vertical.current.assetPlural) shows your \(Vertical.current.assetPlural.lowercased()) here). A \(Vertical.current.assetSingular.lowercased()) filter at the top lets you narrow most lists to one \(Vertical.current.assetSingular.lowercased()) or '\(FleetScope.allDisplayLabel)'."
+		}
 
 		static let header4 = "Third Column"
 		static let message4 =
-		"Used to display the details for the selected item (details of selected vehicle in our example)."
+		"Shows details for whatever's selected in the second column."
 	}
 
 	enum Dashboard {
@@ -65,49 +79,88 @@ enum OnboardingCopy {
 
 		static let header1 = "Overview"
 		static var message1: String {
-			"The Dashboard is \(AppInfo.displayName)'s home screen and, by default, the screen the app opens to (this is configurable in Setup → Settings under Launch Screen). It gives you an at‑a‑glance summary of your entire fleet in a scrolling set of cards. A Vehicle filter at the top of the Dashboard scopes every card to a single vehicle or to “All Vehicles” for fleet‑wide totals, the same way the filter works on other list screens."
+			let fleetWord = Vertical.current.id == .land ? "fleet" : Vertical.current.assetPlural.lowercased()
+			return "The Dashboard is the app's home screen (configurable in Setup → Settings) — a scrolling set of cards summarizing your \(fleetWord). A \(Vertical.current.assetSingular) filter at the top scopes every card to one \(Vertical.current.assetSingular.lowercased()) or '\(FleetScope.allDisplayLabel)'."
 		}
 
 		static let header2 = "Dashboard cards"
-		static let message2 =
-		"  • Fleet Maintenance Status: A colored status dot per vehicle (red = overdue, orange = due soon, green = OK), overdue/due‑soon counts, the single most urgent upcoming item, and the last three completed service records. Tap for a detailed view, including a System Hotlist chart of overdue/due‑soon counts by vehicle system.\n  • Next Service Due: The most urgent upcoming maintenance items (across the fleet or for the selected vehicle), each showing remaining miles, hours, or days and an overdue flag. Tap for the full list.\n  • Trip Groups: A summary of Travel Log entries that share a Trip Group name—trip count, total distance, total fuel added, date range, and vehicle count. Tap for details.\n  • Fleet Snapshot: A chart of active vs. inactive vehicles, average mileage/hours, per‑vehicle odometer readings, and an embedded Maintenance Costs breakdown (month‑to‑date, last 90 days, year‑to‑date, and top cost items). Tap for details.\n  • Recurring Costs & Insurance Expirations: Recurring charges from Vehicle Financials → Expenditures rolled up into a monthly/annual total, plus any vehicle whose insurance expires within 90 days, color‑coded by urgency. Tap for details.\n  • Warranties: A color‑coded list (green/yellow/red) of tracked warranties, based on whichever is closer to running out—the expiration date or the remaining mileage.\n  • Quick Actions: Shortcuts for common tasks."
+		static var message2: String {
+			let fleetWord = Vertical.current.id == .land ? "Fleet" : Vertical.current.assetPlural
+			let fleetWordLower = fleetWord.lowercased()
+			return "• \(fleetWord) Maintenance Status: Status dot per \(Vertical.current.assetSingular.lowercased()), overdue/due‑soon counts, and recent service. Tap for a System Hotlist chart.\n• Next Service Due: Most urgent upcoming items \(fleetWordLower)‑wide or per \(Vertical.current.assetSingular.lowercased()).\n• Trip Groups: Trip count, distance, fuel, and date range for grouped trips.\n• \(fleetWord) Snapshot: Active/inactive counts, \(Vertical.current.primaryMeterLabel.lowercased()), and a maintenance cost breakdown.\n• Recurring Costs & Insurance Expirations: Monthly/annual recurring spend plus insurance expiring within 90 days.\n• Warranties: Color‑coded by whichever is closer to running out — date or usage.\n• Quick Actions: Shortcuts for common tasks."
+		}
 
 		static let header3 = "Filtering and context"
-		static let message3 =
-		"Use the Vehicle picker at the top of the Dashboard to narrow every card to one vehicle, or choose “All Vehicles” to see fleet‑wide totals. This is the same filter concept used throughout the rest of the app, so switching between a single vehicle and the whole fleet feels consistent whether you’re on the Dashboard or in a list view."
+		static var message3: String {
+			let fleetWord = Vertical.current.id == .land ? "fleet" : Vertical.current.assetPlural.lowercased()
+			return "Use the \(Vertical.current.assetSingular) picker at the top to narrow every card to one \(Vertical.current.assetSingular.lowercased()), or '\(FleetScope.allDisplayLabel)' for \(fleetWord)‑wide totals — the same filter concept used throughout the app."
+		}
 
 		static let header4 = "Tips"
-		static let message4 =
-		"  • Make the Dashboard your habit: Check it first when you open the app to catch overdue maintenance, expiring insurance, or lapsing warranties before they become a problem.\n  • Set it as your Launch Screen: It's the default, but you can change or restore this in Setup → Settings if you prefer to open directly to a specific table.\n  • Drill in for detail: Most cards are tappable and open a detail view with more context than the card summary shows.\n  • Keep the data behind it current: The Dashboard is only as useful as the Vehicles, Service Records/Items, Travel Log, Expenditures, and Warranty records feeding it—keeping those up to date keeps the summary accurate."
+		static var message4: String {
+			"• Check it first when you open the app to catch overdue maintenance or expiring coverage.\n• It's the default Launch Screen — change it in Setup → Settings if you prefer another table.\n• Most cards are tappable for more detail.\n• It's only as useful as the data feeding it — keep \(Vertical.current.assetPlural), Records, \(Vertical.current.travelLogLabel), and Warranties current."
+		}
 	}
 
 	enum GarageVehicles {
-		static let title = "Garage Group: Vehicles Table"
+		static var title: String { "\(Vertical.current.garageSectionTitle) Group: \(Vertical.current.assetPlural) Table" }
 		static let systemImage = "car.2.fill"
 
 		static let header1 = "Overview"
-		static let message1 =
-		"The Vehicles table is the foundation of the app’s data model. Each row represents one vehicle you own or track (cars, trucks, motorcycles, etc.) and serves as the primary reference for most other records in the app. By defining your vehicles first, you unlock vehicle-specific filtering, reporting, and relationships across all other tables."
+		static var message1: String {
+			"Each row in \(Vertical.current.assetPlural) is one \(Vertical.current.assetSingular.lowercased()) you track — the foundation the rest of the app references. Define \(Vertical.current.assetPlural.lowercased()) first to unlock \(Vertical.current.assetSingular.lowercased())‑specific filtering, reporting, and relationships everywhere else."
+		}
 
 		static let header2 = "Best practices"
-		static let message2 =
-		"• Create vehicles first: Add your vehicles before logging trips, fuel, service items, or parts usage so relationships are established from the start.\n   • Keep odometer current: Update the odometer periodically so service intervals and cost-per-distance metrics remain accurate.  The odometer reading is automatically updated when you log trips or complete fuel refill logs.\n   • Attach documentation: Add photos of receipts, registrations, and key service events directly to the vehicle or related records for a complete history.\n   • Review per-vehicle reports: Use vehicle-specific reports to understand total cost of ownership, fuel economy trends, and maintenance schedules.\n   • Weigh in and log it: After a trip across a CAT Scale, add a Scale Ticket and transfer the readings straight into the vehicle’s stored weights.\n   • Track warranties as they start: Add a Warranty record whenever a factory, extended, or component warranty begins so the Dashboard can warn you before it lapses."
+		static var message2: String {
+			let recordTip = Vertical.current.id == .land
+				? "Add a Warranty record when coverage starts, and a Scale Ticket after weighing in, so the Dashboard can track both."
+				: "Add a Warranty record when coverage starts, so the Dashboard can track it."
+			return "• Create \(Vertical.current.assetPlural.lowercased()) first, before logging trips, fuel, or service.\n• Keep the \(Vertical.current.primaryMeterLabel.lowercased()) current — it updates automatically from trip and fuel logs.\n• Attach photos of receipts, registration, and key events.\n• \(recordTip)"
+		}
 
-		static let header3 = "What the Vehicles table stores"
-		static let message3 =
-		"• Identity and basics: A friendly name, year, make, model, trim, and a unique identifier.\n   • Registration and VIN: VIN, license plate, and other registration details to uniquely identify the vehicle.\n   • Odometer details: Current odometer reading (updated as you log trips and fuel), reading date, and odometer unit (miles or kilometers) used for cost-per-distance and service interval calculations.  There is also a Virtual Odometer feature that estimates the vehicle’s true mileage based on historical trip data.  If the vehicle tracked is a trailor or vehicle towed behind an RV (Toad), this feature will automatically adjust the odometer reading to reflect the true mileage of the towed vehicle.\n   • Fuel/efficiency settings: Fuel type, tank size, and preferred consumption/efficiency unit (MPG, L/100km, etc.).\n   • Tires and fluids (optional): Tire sizes/pressures and fluid specs if you want quick reference for service.\n   • Wheel and fastener specs (optional): Wheel stud size, wheel nut socket size, and wheel nut torque, for quick reference during tire service.\n   • Weight and scale readings: Front/rear axle weights and total vehicle/rolling weight—entered manually or transferred from a CAT Scale Ticket—plus the date the vehicle was last weighed.\n   • Photos and notes: Attachments and free-form notes for quick context.\n   • Status and organization: Active/inactive flag, ownership status, and optional tags to group or archive."
+		static var header3: String { "What the \(Vertical.current.assetPlural) table stores" }
+		static var message3: String {
+			let meterLine = Vertical.current.id == .land
+				? "• \(Vertical.current.primaryMeterLabel): current reading, unit, and an optional Virtual Odometer for towed vehicles/trailers.\n"
+				: "• \(Vertical.current.primaryMeterLabel): current reading and unit.\n"
+			let optionalLine = Vertical.current.id == .land
+				? "• Optional: tire/fluid specs, wheel/fastener specs, weight readings, photos, notes, active status."
+				: "• Optional: photos, notes, active status."
+			return "• Identity: name, year, make, model, trim, \(Vertical.current.registrationLabel), \(Vertical.current.plateLabel).\n" + meterLine + "• Fuel settings: type, tank size, and economy unit.\n" + optionalLine
+		}
 
-		static let header4 = "How it’s used throughout the application"
-		static let message4 =
-		"• Global filter and context: Most lists in the second column—and the Dashboard—can be filtered by a specific vehicle or “All Vehicles.” Choosing a vehicle limits what you see in Trips, Fuel Logs, Service Items, Service Records, and Parts usage to that vehicle.\n   • Service Records: Each service record links to a vehicle and optionally to Service Items and Parts. Vehicle settings (like odometer units) drive how service intervals and mileage are displayed.\n   • Service Items (maintenance plans): Recurring or scheduled maintenance items can be created per vehicle (or shared patterns applied to multiple vehicles). The vehicle’s odometer and time settings determine when items are due.\n   • Parts: Parts are cataloged once but are referenced by Service Items and Service Records. Vehicle context helps you see which parts were used on which vehicle and the total cost of ownership.\n   • Fuel/Trip Tracking: Fuel logs and trip entries are recorded against a vehicle. The vehicle’s selected units determine how distance, fuel volume, and consumption are calculated and displayed. This powers per-vehicle fuel economy, cost per mile/km, and trip summaries.\n   • Reports and exports: PDF reports (Vehicles, Trips, Fuel, Service) can be generated per vehicle or for all vehicles. The vehicle’s identity and settings are used to format headers, units, and summary metrics.\n   • Vendors/Shops: When you record service for a vehicle, you can associate a vendor or shop. Over time this builds a per-vehicle service history and cost breakdown by vendor.\n   • Systems and setup: System definitions (like categories or custom fields) can apply across vehicles, but the Vehicles table remains the anchor for how those systems are experienced in filters and views.\n   • Attachments and galleries: Photos or documents you add to service work or inspections are linked to the vehicle, creating a consolidated vehicle history.\n   • Defaults and quick entry: You can set a “default” or “most used” vehicle to speed up new entries. The app can pre-fill the vehicle on new fuel logs, trips, or service items based on your last selection.\n   • Lifecycle and archiving: If you sell or retire a vehicle, you can mark it inactive. It won’t appear in quick-pick lists by default, but its historical data (service, fuel, trips) remains intact for reporting.\n   • Validation and unit consistency: The vehicle’s selected units (distance, volume, economy) ensure entries and calculations are consistent across the app, even if your global Settings use different display units.\n   • Sync and portability: Vehicle records live in your local database and sync via iCloud so the same vehicle list and linked data are available across your devices."
+		static var header4: String { "How it's used throughout the application" }
+		static var message4: String {
+			let fleetWord = Vertical.current.id == .land ? "fleet" : Vertical.current.assetPlural.lowercased()
+			return "• Global filter: Most lists and the Dashboard can be scoped to one \(Vertical.current.assetSingular.lowercased()) or '\(FleetScope.allDisplayLabel)'.\n• Anchors Service Records, Service Items, Parts usage, Fuel, and \(Vertical.current.travelLogLabel) entries — each \(Vertical.current.assetSingular.lowercased())'s units drive its own calculations.\n• Reports: PDF exports per \(Vertical.current.assetSingular.lowercased()) or \(fleetWord)‑wide use the \(Vertical.current.assetSingular.lowercased())'s identity and settings.\n• Lifecycle: Mark a sold/retired \(Vertical.current.assetSingular.lowercased()) inactive — its history stays intact for reporting, just hidden from quick‑pick lists."
+		}
 
-		static let header5 = "CAT Scale Tickets"
-		static let message5 =
-		"Each vehicle can store an unlimited number of weigh‑station (CAT Scale) tickets, accessed from the vehicle’s detail screen. A ticket captures the date, ticket and weigh numbers, location, company, and cost; tractor/trailer license plates and unit numbers; and individual axle weights (steer, drive, trailer), with gross weight calculated automatically as their sum. Attach a photo of the physical receipt for your records. When a ticket includes steer and/or drive axle weight, use “Transfer Weights to Vehicle Record” to copy those readings directly into the vehicle’s stored front/rear axle weights, total weight, and date‑weighed fields—handy right after a fresh weigh‑in."
+		// Land: CAT Scale weigh-station tickets. Aviation/marine: their own regulatory-adjacent
+		// records instead, surfaced the same way (a Logbook report button on the detail screen).
+		static var header5: String {
+			switch Vertical.current.id {
+				case .land: return "CAT Scale Tickets"
+				case .aviation: return "Airworthiness Directives & Inspections"
+				case .marine: return "Haul-Out & Survey Records"
+			}
+		}
+		static var message5: String {
+			switch Vertical.current.id {
+				case .land:
+					return "Each vehicle can store unlimited weigh‑station (CAT Scale) tickets — date, location, cost, and axle weights, with gross weight calculated automatically. Use “Transfer Weights to Vehicle Record” to copy steer/drive readings straight into the vehicle's stored weights."
+				case .aviation:
+					return "Each aircraft can track Airworthiness Directives, Inspection Cycles (annual, 100‑hour, and more), and Component Times (airframe, engine, prop). Tap the Logbook button on the aircraft's detail screen for a combined PDF covering all three."
+				case .marine:
+					return "Each vessel can track Haul-Out records (bottom paint, zincs, running gear) and Survey records (insurance, pre‑purchase, damage, condition & value). Tap the Logbook button on the vessel's detail screen for a combined PDF covering both."
+			}
+		}
 
 		static let header6 = "Warranty Tracking"
-		static let message6 =
-		"Track unlimited warranties per vehicle—factory, extended, or component‑specific (engine, transmission, powertrain, chassis, electrical, body/paint, interior, tires, battery, or general). Each warranty records a name, provider, component type, start date, and length in months, which automatically calculates the expiration date; an optional mileage limit and free‑form description/notes round it out. Warranties feed the Dashboard’s Warranties card, which flags each entry in green, yellow, or red based on whichever is closer to running out—the expiration date or the remaining mileage."
+		static var message6: String {
+			let limitWord = Vertical.current.id == .land ? "mileage" : "usage"
+			return "Track unlimited warranties per \(Vertical.current.assetSingular.lowercased()) — factory, extended, or component‑specific — each with a start date and length (which calculates the expiration) plus an optional \(limitWord) limit. The Dashboard's Warranties card flags each in green/yellow/red based on whichever is closer to running out."
+		}
 	}
 
 	enum GarageParts {
@@ -115,16 +168,17 @@ enum OnboardingCopy {
 		static let systemImage = "gearshape.2.fill"
 		static let header1 = "Overview"
 		static let message1 =
-		"The Parts table is your centralized catalog of components, consumables, and materials used to service or maintain your vehicles. Each part is defined once and then referenced by Service Items (planned maintenance) and Service Records (actual work performed). Centralizing parts enables consistent naming, pricing, inventory awareness, and reporting of total cost of ownership across vehicles."
+		"Parts is your catalog of components and consumables. Define each part once, then reuse it in Service Items and Service Records for consistent naming, pricing, and cost reporting."
 		static let header2 = "Best practices"
-		static let message2 =
-		"   • Define common parts once: Create a single entry for frequently used items (oil filter, air filter, brake pads, bulbs, fluids) and reuse them across vehicles.\n  • Use clear, searchable names: Include brand, series, size, and key specs (e.g., “Oil Filter – Toyota 90915‑YZZF2”). Add alternate part numbers in notes for cross-references.\n   • Track unit cost and quantity: Enter the purchase price and package quantity (e.g., 5 qt jug, 1 filter, set of 4 pads) to improve cost calculations and reports.\n   • Capture vendor and SKU: Link a preferred vendor/shop and store their SKU to speed reordering and improve receipts/exports.\n   • Attach documentation: Add photos of labels, spec sheets, or installation guides for quick reference during service.\n   • Tag and categorize: Use categories/tags (e.g., “fluids,” “filters,” “brakes”) to organize your catalog and make filtering easier.\n   • Keep status current: Mark parts active/inactive as they’re superseded or no longer used, without losing history."
+		static var message2: String {
+			"• Define common parts once and reuse them across \(Vertical.current.assetPlural.lowercased()).\n• Use clear, searchable names (brand, series, size).\n• Track unit cost and package quantity for accurate cost rollups.\n• Link a preferred vendor and SKU to speed reordering."
+		}
 		static let header3 = "What the Parts table stores"
 		static let message3 =
-		"   • Identity: Name, brand/manufacturer, model/series, and optional part numbers/alternate numbers.\n   • Fitment and specs: Descriptions, dimensions, sizes, viscosity/grade, or compatibility notes (vehicle model years, engine types).\n   • Pricing and units: Unit cost, currency, package size/quantity, and an optional default tax rate.\n• Inventory hints (optional): A target/on‑hand quantity field for awareness; actual stock tracking can be done via notes or custom fields if enabled.\n   • Vendor linkage: Preferred vendor/shop reference and vendor SKU to streamline purchasing and reporting.\n   • Media and notes: Photos of packaging or installation, PDFs, and free‑form notes for tips or torque values.\n   • Status and organization: Active/inactive flag, category, and tags to keep the catalog tidy."
-		static let header4 = "How it’s used throughout the application"
+		"• Identity: name, brand, model/series, part numbers.\n• Pricing: unit cost, package size/quantity.\n• Vendor: preferred vendor and SKU.\n• Optional: photos, notes, category/tags, active status."
+		static let header4 = "How it's used throughout the application"
 		static let message4 =
-		"   • Service Items (maintenance plans): Parts can be associated with a Service Item to define what will be needed when the item is performed (e.g., oil, filter, drain plug washer). This enables consistent parts lists and estimated costs.\n   • Service Records (work performed): When you log a service, you can add the actual parts used, their quantities, unit costs, and vendor. This drives accurate cost-per-service and cost-per-mile/km metrics.\n   • Vehicle context and filtering: While parts are defined globally, they’re shown in context when filtering by a specific vehicle. You can see which parts were used on which vehicle and the total spend per vehicle.\n   • Reports and exports: Parts usage rolls up into service reports and exports (PDF), including quantities, costs, and vendors. This supports warranty claims, budgeting, and tax/expense tracking.\n   • Vendor integration: Linking parts to vendors streamlines reordering and helps analyze spending by vendor over time.\n   • Consistency across entries: By selecting from the Parts catalog instead of typing free‑form text, you maintain consistent naming and pricing across Service Items and Service Records.\n   • Attachments everywhere: Photos or documents stored on a part can be referenced during service entry, ensuring you have the correct specifications on hand.\n   • Global edits: Updating a part’s name or vendor information improves future entries while preserving historical records and costs already captured."
+		"• Service Items and Records reference Parts for consistent names and costs.\n• Usage rolls up into cost‑per‑service and cost‑per‑mile metrics, and into PDF reports.\n• Editing a part updates future entries; past records keep their original values."
 	}
 
 	enum DataTracking_Fuel {
@@ -132,100 +186,117 @@ enum OnboardingCopy {
 		static let systemImage = "fuelpump.arrowtriangle.left"
 
 		static let header1 = "Overview"
-		static let message1 =
-		"The Fuel Log table records every fill-up for your vehicles. Each entry captures the date/time, location, odometer, fuel volume, price, and optional notes or images. Consistent fuel logging powers accurate fuel economy metrics (MPG, L/100km, km/L), cost-per-distance, and long-term operating cost analysis per vehicle or across your entire fleet.  When a fuel log is created or updated, the odometer and engine hours associated with the vehicle are automatically adjusted to reflect the new fill-up values."
+		static var message1: String {
+			let secondary = Vertical.current.secondaryMeterLabel.isEmpty ? "" : " and \(Vertical.current.secondaryMeterLabel.lowercased())"
+			return "Fuel Log records every fill‑up — date, location, \(Vertical.current.primaryMeterLabel.lowercased()), volume, price, and notes. It powers fuel economy, cost‑per‑distance, and long‑term cost analysis, and automatically updates the \(Vertical.current.assetSingular.lowercased())'s \(Vertical.current.primaryMeterLabel.lowercased())\(secondary)."
+		}
 
 		static let header2 = "Best practices"
-		static let message2 =
-		"   • Log every fill-up: Even partial fills improve trend accuracy over time.\n   • Use the same pump units you purchase in: Enter gallons or liters to match your receipt; the app converts to your preferred display units automatically.\n   • Record the odometer at the pump: Accurate odometer readings produce reliable consumption and cost-per-mile/km metrics and updated the associated odometer automatically.\n• Note conditions: Use notes/tags for highway vs. city, towing, winter fuel, or tire/roof-rack changes that affect economy.\n   • Attach receipts: Photos of receipts help with reimbursement, taxes, and audits.\n   • Keep vehicle settings consistent: Ensure each vehicle’s fuel type and economy units are set correctly so calculations and reports are meaningful.\n   • Use the Fluid Checks popup: While logging a fill-up, open the built-in Fluid Checks popup to quickly confirm and record fluid levels (engine oil, coolant, power steering, brake, transmission, axle, fuel/water separator, and more). Choose exactly which checks appear in the popup from Setup → Settings.\n   • Log DEF if you run diesel: If your vehicle uses Diesel Exhaust Fluid, record the DEF price and remaining level alongside the fuel entry."
+		static var message2: String {
+			"• Log every fill‑up, even partial ones.\n• Enter volume in the units on your receipt — the app converts for display.\n• Record the \(Vertical.current.primaryMeterLabel.lowercased()) at the pump for accurate economy metrics.\n• Attach receipts, and use the Fluid Checks popup (customize which checks appear in Settings)."
+		}
 
 		static let header3 = "What the Fuel Log stores"
-		static let message3 =
-		"   • Identity and timing: Vehicle reference, log name (optional), date/time of fill-up, and location.\n   • Odometer and distance: Odometer reading at fill-up (miles or kilometers based on the vehicle), with automatic distance calculations between fills for economy metrics.\n   • Fuel details: Volume purchased (gal/L), price per unit, total cost, and optional fuel grade/type.\n   • Diesel Exhaust Fluid (optional): DEF price and remaining/level fields for diesel vehicles that top off DEF at the pump.\n   • Fluid checks (optional): Results from the Fluid Checks popup—engine oil, engine coolant, secondary coolant, power steering, brake, transmission, rear axle, front axle, fuel/water separator, and air system water bleed—based on which checks you’ve enabled in Settings.\n   • Vendor and payment (optional): Station/vendor reference and optional payment method in notes for expense tracking.\n   • Media and notes: Receipt photos and free-form notes (e.g., tire pressure change, cargo, weather).\n   • Tags and status: Tags for categorization and an active flag for quick filtering or cleanup."
+		static var message3: String {
+			"• \(Vertical.current.assetSingular), date/time, and location.\n• \(Vertical.current.primaryMeterLabel) reading and computed distance since the last fill.\n• Volume, price, and total cost; optional DEF price/level for diesel.\n• Optional fluid‑check results, receipt photos, and notes."
+		}
 
-		static let header4 = "How it’s used throughout the application"
-		static let message4 =
-		"   • Vehicle dashboards: Recent fuel economy, average consumption, and cost-per-mile/km are derived from Fuel Log entries per vehicle.\n   • Reports and exports: Generate PDF reports for a single vehicle or all vehicles, including totals, averages, and trends (consumption, spend, and unit price over time).\n   • Trip and service context: Fuel entries appear alongside Trip Logs and Service Records in per-vehicle timelines, giving a complete view of usage vs. maintenance.\n   • Unit consistency: Calculations respect each vehicle’s configured distance and fuel units; display formatting follows your global Settings.\n   • Budgeting and forecasting: Track monthly or annual fuel spend and price-per-unit trends to anticipate costs.\n   • Attachments and audits: Receipt photos and notes support reimbursements, tax reporting, and warranty documentation.\n   • iCloud sync: Fuel logs are stored locally and synced via iCloud so your entries and metrics stay consistent across devices."
+		static let header4 = "How it's used throughout the application"
+		static var message4: String {
+			"• Drives per‑\(Vertical.current.assetSingular.lowercased()) fuel economy and cost‑per‑mile on the Dashboard and in PDF reports.\n• Appears alongside \(Vertical.current.travelLogLabel) and Service Records in each \(Vertical.current.assetSingular.lowercased())'s timeline.\n• Calculations respect each \(Vertical.current.assetSingular.lowercased())'s configured units."
+		}
 	}
 
 	enum DataTracking_Travel {
-		static let title = "Data Tracking: Travel Log"
+		static var title: String { "Data Tracking: \(Vertical.current.travelLogLabel)" }
 		static let systemImage = "map"
 
 		static let header1 = "Overview"
-		static let message1 =
-		"The Travel Log table captures trips taken by your vehicles. Each entry can include start/end date and time, starting/ending odometer (or engine hours if applicable), distance traveled, purpose/category, origin/destination, en-route stops, route notes, and optional attachments. Keeping detailed trip history enables mileage reimbursement, tax reporting, utilization analysis, and a clear picture of how each vehicle is used over time."
+		static var message1: String {
+			"\(Vertical.current.travelLogLabel) captures trips — start/end \(Vertical.current.primaryMeterLabel.lowercased()), distance, purpose, en‑route stops, and attachments. It supports mileage reimbursement, tax reporting, and utilization analysis."
+		}
 
 		static let header2 = "Best practices"
 		static let message2 =
-		"  • Record trips consistently: Log both business and personal trips; use categories/tags to separate them for reporting.\n  • Capture start and end odometer: Accurate odometer readings ensure reliable mileage totals and cost-per-mile/km analysis.\n  • Add purpose and context: Note client/project, cargo/towing, or special conditions (traffic, weather) that affect timing and fuel usage.\n  • Use templates for recurring trips: Save time by duplicating a prior entry and adjusting dates/notes.\n  • Attach supporting documents: Photos of toll receipts, parking, or gate tickets help with reimbursement and audits.\n• Keep units aligned: Ensure each vehicle’s distance unit matches your preference; the app formats displays per your global Settings.\n  • Log en-route stops as you go: Record date/time, up to three photos, arrival/departure and time-moving details, and a Stop Reason for each stop along the way.\n  • Group related trips: Give multi-day or multi-leg trips a shared Trip Group name so you can see combined totals for the whole trip, both in the trip detail screen and on the Dashboard."
+		"• Log both business and personal trips; tag them to separate for reporting.\n• Capture accurate start/end readings.\n• Note purpose, cargo, or conditions that affect the trip.\n• Give multi‑leg trips a shared Trip Group name to see combined totals."
 
-		static let header3 = "What the Travel Log stores"
-		static let message3 =
-		"  • Identity and timing: Vehicle reference, optional log name, start/end date and time, and trip duration.\n  • Odometer and distance: Starting and ending odometer readings with computed distance (mi/km). Engine hours may be recorded if your workflow uses them.\n  • Time statistics: Total Elapsed time, Time Underway, and Engine Time for the trip, with matching Vehicle Totals that accumulate across all of a vehicle’s trips.\n  • En-route stops: Any number of stops with their own date/time, up to three photos, exit time, “Departed” flag, stop time, time moving, a Stop Reason picker (with a custom “Other” option), and comments.\n  • Trip Group: An optional shared name that ties related trips together for combined totals (trip count, distance, fuel, date range).\n  • Locations and route: Origin/destination fields, intermediate stops, and optional location labels for quick filtering.\n  • Purpose and classification: Business vs. personal, client/project, billing code, reimbursable flag, and custom tags/categories.\n  • Costs and incidentals (optional): Tolls, parking, per‑diem or other expenses captured in notes or custom fields.\n  • Media and notes: Photos (receipts, cargo, site conditions) and free‑form notes for context.\n• Status and organization: Active/inactive flag for cleanup without deleting history."
+		static var header3: String { "What the \(Vertical.current.travelLogLabel) stores" }
+		static var message3: String {
+			"• \(Vertical.current.assetSingular), start/end date/time, and computed distance.\n• Time stats: elapsed, underway, and engine time.\n• En‑route stops with photos, time, and a Stop Reason.\n• Trip Group name, purpose/classification, and notes."
+		}
 
-		static let header4 = "How it’s used throughout the application"
-		static let message4 =
-		"  • Mileage reporting and reimbursement: Generate per‑vehicle or all‑vehicles PDF reports with totals grouped by category, client/project, or tag.\n  • Tax and compliance: Maintain defensible business mileage logs with timestamps, origins/destinations, and receipts.\n  • Utilization insights: Analyze how much and how far each vehicle travels to plan service intervals and lifecycle decisions.\n  • Trip Groups on the Dashboard: Trips sharing a Trip Group name roll up into the Dashboard’s Trip Groups card—trip count, total distance, total fuel, date range, and vehicle count—and into a Group Totals card on the trip detail screen.\n  • Correlation with fuel and service: View Travel Logs alongside Fuel Logs and Service Records for a full timeline; distance and utilization trends inform maintenance planning and fuel economy interpretation.\n  • Filtering and dashboards: Filter by vehicle, date range, purpose, tags, or reimbursable status to focus on what matters.\n• Unit consistency and formatting: Distance is calculated using each vehicle’s configured units; display follows global Settings.\n  • Exports and sharing: Produce PDFs for accounting, client billing, audits, or records.\n  • iCloud sync: Trip entries are stored locally and synced via iCloud, keeping your mileage history consistent across devices."
+		static let header4 = "How it's used throughout the application"
+		static var message4: String {
+			"• Generates mileage reports for reimbursement, tax, or client billing.\n• Trips sharing a Trip Group name roll up on the Dashboard's Trip Groups card.\n• Appears alongside Fuel Log and Service Records for a full per‑\(Vertical.current.assetSingular.lowercased()) timeline."
+		}
 	}
 
 	enum VehicleService_Records {
-		static let title = "Vehicle Service: Records"
+		static var title: String { "\(Vertical.current.assetSingular) Service: Records" }
 		static let systemImage = "wrench.and.screwdriver.fill"
 
 		static let header1 = "Overview"
-		static let message1 =
-		"The Service Records table is where you document all maintenance and repair work performed on your vehicles—everything from routine oil changes and inspections to major component replacements. Each record ties together the vehicle, the work performed (optionally referencing a Service Item/maintenance plan), the vendor/shop, the parts and labor used, and the resulting costs. A complete service history supports maintenance scheduling, warranty claims, resale value, and a true total cost of ownership."
+		static var message1: String {
+			"Service Records document maintenance and repairs — the \(Vertical.current.assetSingular.lowercased()), work performed, vendor, parts, labor, and cost. This is your true maintenance history and total cost of ownership."
+		}
 
 		static let header2 = "Best practices"
-		static let message2 =
-		"  • Log work as it happens: Capture date, odometer/engine hours, and a clear description immediately after the job to keep history accurate.\n  • Reference Service Items when applicable: Linking a Service Record to a planned item (e.g., “Engine Oil & Filter”) ensures due‑date tracking and closes out the plan instance.\n  • Itemize parts and labor: Add parts from the catalog and record labor time/cost so reports reflect true maintenance expenses.\n  • Attach documentation: Photos of receipts, invoices, and work areas (before/after) help with warranties and resale.\n  • Track vendor details: Link the vendor/shop to analyze reliability, costs, and warranty coverage over time.\n• Use tags and categories: Group records by system (engine, brakes, tires), season, or project to make filtering and reporting easier.\n• Record next‑due hints: If the service establishes a new interval (time or mileage), note it so future reminders are accurate.\n  • Transfer upgrades to Improvements: If a repair also amounts to a modification or upgrade (e.g., swapping in a performance part), transfer that line item to Vehicle Financials → Improvements so it’s reflected in your modification history and cost totals."
+		static var message2: String {
+			"• Log work right after it's done, with \(Vertical.current.primaryMeterLabel.lowercased()) and a clear description.\n• Link a Service Item when applicable to close out the plan and track due dates.\n• Itemize parts and labor for accurate cost totals.\n• Attach receipts/invoices, and transfer upgrade work to Improvements."
+		}
 
-		static let header3 = "What the Service Records table stores"
-		static let message3 =
-		"  • Identity and timing: Vehicle reference, record name/summary, service date, created/updated timestamps.\n  • Usage context: Odometer reading and/or engine hours at time of service (units respect vehicle settings).\n  • Work performed: Detailed description of tasks completed; optional link to a Service Item (maintenance plan) to mark the plan occurrence complete.\n  • Parts and labor: Line items for parts (from the Parts catalog) with quantity and unit cost; labor hours/rate; taxes/fees; and computed totals.\n  • Vendor/shop: Reference to the vendor or shop that performed the work, including contact info or invoice number in notes.\n  • Warranty and return info (optional): Warranty period, claim notes, or return authorizations for defective parts.\n• Media and notes: Photos/PDFs of receipts, diagrams, or the serviced area; free‑form notes for torque values and follow‑ups.\n  • Organization and status: Category/system tags (engine, brakes, tires), active/inactive flag, and optional reminder/next‑due hints."
+		static var header3: String { "What the Service Records table stores" }
+		static var message3: String {
+			let meters = Vertical.current.secondaryMeterLabel.isEmpty ? Vertical.current.primaryMeterLabel : "\(Vertical.current.primaryMeterLabel)/\(Vertical.current.secondaryMeterLabel)"
+			return "• \(Vertical.current.assetSingular), date, \(meters.lowercased()), and description.\n• Optional link to a Service Item.\n• Parts and labor line items with costs.\n• Vendor, photos, notes, and system/category tags."
+		}
 
-		static let header4 = "How it’s used throughout the application"
-		static let message4 =
-		"  • Maintenance history: Service Records form the definitive history for each vehicle. They appear in per‑vehicle timelines alongside Fuel and Travel logs, and recent records surface on the Dashboard’s Fleet Maintenance Status card.\n  • Cost tracking and TCO: Itemized parts and labor roll up to per‑vehicle and all‑vehicles totals, enabling total cost of ownership analysis and budgeting.\n  • Service Items integration: When linked to a Service Item, completing a record can reset due counters (time and/or mileage) and mark the plan instance complete.\n  • Parts usage and inventory: Selecting parts from the catalog standardizes names and costs and shows where each part was used across vehicles.\n  • Vendor analytics: Reports can group by vendor/shop to understand spend, reliability, and warranty claims.\n  • Transfer to Improvements: Individual parts or labor lines can be pushed into the Improvements tracker with a category/sub‑category assignment; later cost or vendor edits stay in sync between the two records.\n  • Reports and exports: Generate PDF service histories with filters by vehicle, date range, system, vendor, or tag for audits and resale documentation.\n  • Reminders and planning: Next‑due hints derived from completed work help you anticipate upcoming maintenance windows.\n  • Unit consistency: Odometer/engine‑hour values respect vehicle settings; display formatting follows global Settings.\n  • iCloud sync: Records are stored locally and synced via iCloud to keep your maintenance history consistent across devices."
+		static let header4 = "How it's used throughout the application"
+		static var message4: String {
+			"• Forms each \(Vertical.current.assetSingular.lowercased())'s maintenance history, shown on the Dashboard's Maintenance Status card.\n• Rolls up parts/labor into cost and total‑cost‑of‑ownership tracking.\n• Completing a linked Service Item resets its due counters.\n• Transfer parts or labor into Improvements when the work is also an upgrade."
+		}
 	}
 
 	enum VehicleService_Items {
-		static let title = "Vehicle Service: Items"
+		static var title: String { "\(Vertical.current.assetSingular) Service: Items" }
 		static let systemImage = "folder.badge.gearshape"
 
 		static let header1 = "Overview"
 		static let message1 =
-		"The Service Items table is your library of repeatable maintenance templates. Each entry defines a task (for example, “Engine Oil & Filter” or “Front Brake Pads”) with the default details you typically reuse: a description of the work, an optional preferred vendor/shop, an estimated labor cost, scheduling intervals (miles, months, or engine hours), and the parts commonly needed with their quantities, units, and costs. When you create a new Service Record, selecting a Service Item instantly pre‑fills those fields, speeding up entry and ensuring consistent naming and costing. Service Items can be scoped to a specific vehicle and system so your templates match the equipment they apply to."
+		"Service Items are reusable maintenance templates (e.g. 'Engine Oil & Filter') with a default vendor, labor estimate, interval, and parts bundle. Selecting one on a new Service Record pre‑fills all of it."
 
 		static let header2 = "Best practices"
 		static let message2 =
-		"  • One template per recurring job: Create clear, reusable items for oil service, tire rotation, coolant flush, battery replacement, inspections, etc.\n  • Be specific and searchable: Include the system or variant in the name (e.g., “Oil & Filter – 2.5L” vs. “Oil & Filter – 3.6L”) so pickers are unambiguous.\n• Capture realistic defaults: Set the vendor, labor cost, and typical parts bundle (names, units, quantities, and costs) so new records are nearly one‑tap.\n  • Use intervals as planning hints: Enter miles, months, and/or engine hours to reflect how often the job should occur; these values provide guidance when reviewing service needs and feed the Dashboard’s Next Service Due card.\n  • Link to your parts catalog: Choose parts from the Parts table so names, units, and costs are consistent across items and records.\n  • Iterate over time: As pricing or preferred parts change, update the template—future records will use the latest defaults while past records remain unchanged.\n• Organize by vehicle/system: Assign a vehicle and system so filtering and reporting remain tidy, especially when managing multiple vehicles."
+		"• One template per recurring job, named specifically enough to be unambiguous.\n• Set realistic defaults — vendor, labor cost, and typical parts — for near one‑tap entry.\n• Use intervals (miles/months/hours) as planning hints; they feed the Dashboard's Next Service Due card.\n• Update the template as pricing changes — past records keep their original values."
 
-		static let header3 = "What the Service Items table stores"
-		static let message3 =
-		"  • Identity and scope: Vehicle (optional), vehicle system (engine, brakes, tires, etc.), and a unique item name.\n• Description and notes: A concise description of the work plus free‑form notes for instructions or torque values.\n  • Vendor and labor: Default vendor/shop and a labor cost estimate for the job.\n  • Intervals: Suggested schedule fields—intervalMiles, intervalMonths, and intervalHours—to guide when the task should be performed next.\n  • Parts bundle (up to five): For each part—name, optional ID, quantity, unit, and cost per unit. These defaults become line items on new Service Records.\n  • Media: Up to three images with captions for diagrams, checklists, or reference photos.\n  • Timestamps: Created/updated dates for auditing and sorting."
+		static var header3: String { "What the Service Items table stores" }
+		static var message3: String {
+			"• \(Vertical.current.assetSingular)/system scope and item name.\n• Default vendor, labor estimate, and interval fields.\n• Up to five parts (name, quantity, unit, cost) and up to three reference images."
+		}
 
-		static let header4 = "How it’s used throughout the application"
-		static let message4 =
-		"  • Prefill new Service Records: In a new Service Record, pick a Service Item (via the Items picker). The app copies its defaults—description, vendor, labor, intervals, and parts (names, quantities, units, and costs)—into the record, which you can edit before saving.\n  • Consistent parts and costs: Because items pull parts from the Parts catalog, usage and costs remain consistent across vehicles and reports.\n  • Vendor workflows: Setting a default vendor on an item helps standardize shop selection and enables vendor‑based analysis later.\n  • Vehicle/system filtering: Items can be scoped to a vehicle and system, making it easy to focus on the correct templates while editing or reporting.\n  • Reporting context: The Service Item name appears on Service Records and in PDF reports, making histories easier to scan by task.\n  • Independence of history: Editing a Service Item updates future records; existing Service Records keep the values that were applied at the time.\n  • Dashboard integration: Interval fields drive the Fleet Maintenance Status and Next Service Due cards, which highlight items that are due soon or overdue.\n  • Backup and sync: Items are stored locally in your database and synced via iCloud so your templates are available on all your devices."
+		static let header4 = "How it's used throughout the application"
+		static var message4: String {
+			"• Prefills new Service Records — description, vendor, labor, parts — which you can still edit.\n• Keeps parts and costs consistent across \(Vertical.current.assetPlural.lowercased()) and reports.\n• Interval fields drive the Dashboard's Maintenance Status and Next Service Due cards."
+		}
 	}
 
 	enum Setup_Systems {
 		static let title = "Setup: Systems"
 		static let systemImage = "glowplug"
 		static let header1 = "Overview"
-		static let message1 =
-		"The Systems table centralizes the controlled vocabularies that power pickers, filters, and classifications across the app. Use it to define consistent names for vehicle systems (engine, brakes, tires), service categories, parts categories, and other organizational labels the app relies on. Centralizing these definitions prevents typos and duplicates, keeps lists tidy, and ensures reports and exports group your data correctly. Changes you make here immediately improve data entry and filtering everywhere else."
+		static var message1: String {
+			"Systems centralizes the controlled vocabularies used in pickers across the app — \(Vertical.current.assetSingular.lowercased()) systems, service categories, parts categories, and more. Keeping these consistent prevents typos and duplicate entries."
+		}
 		static let header2 = "Best practices"
 		static let message2 =
-		"  • Keep names concise and specific: Short, unambiguous names work best in pickers and report groupings (e.g., “Engine,” “Brakes,” “Cooling”).\n  • Prefer editing over deleting: If a term is already used in records, rename it to correct spelling or clarify meaning. Delete only unused terms; otherwise use the Inactive flag.\n  • Use categories consistently: Decide on a small, stable set of systems and categories before heavy data entry to avoid later cleanup.\n• Leverage sort order: Assign an explicit sort index so your most-used systems appear first in pickers.\n  • Scope where appropriate: If your workflow distinguishes by vehicle or subsystem, create separate entries (e.g., “Brakes – Front,” “Brakes – Rear”) rather than overloading a single label.\n  • Document with notes: Add brief descriptions so collaborators (or future you) understand how each term should be used.\n  • Review periodically: As your parts and service libraries grow, prune unused or redundant terms and inactivate those you no longer want offered by default."
+		"• Keep names short and specific (e.g. 'Engine,' 'Brakes').\n• Rename instead of deleting terms already in use; inactivate unused ones.\n• Decide on a stable set before heavy data entry.\n• Set sort order so common terms appear first in pickers."
 		static let header3 = "What the Systems table stores"
-		static let message3 =
-		"  • Type/domain: The purpose of the entry (e.g., VehicleSystem, ServiceCategory, PartsCategory, TripCategory). This determines where it appears in the UI.\n  • Name: The display name shown in pickers, filters, and reports.\n  • Description/notes: Optional guidance on when to use the term.\n  • Icon and color (optional): Visual hints used in lists and reports to improve scanning.\n  • Sort order: An integer index that controls picker order.\n  • Active flag: Marks whether the term should be offered for new entries. Inactive terms remain available for existing records and reporting.\n  • Scope (optional): A vehicle or group scope when a term is intended for a specific vehicle or context.\n• Metadata: Created/updated timestamps and a unique ID for reliable references."
-		static let header4 = "How it’s used throughout the application"
+		static var message3: String {
+			"• Type (\(Vertical.current.assetSingular.lowercased()) system, service category, parts category, etc.) and name.\n• Optional description, icon/color, and sort order.\n• Active flag — inactive terms stay available on existing records."
+		}
+		static let header4 = "How it's used throughout the application"
 		static let message4 =
-		"  • Service Items: Choose a Vehicle System for each maintenance template so items are grouped and filtered logically (e.g., Engine, Brakes, Tires). This system label carries through to Service Records created from the item.\n  • Service Records: Tag completed work with a system/category to organize histories and power system-based reporting and filters, including the Dashboard’s System Hotlist chart.\n  • Parts: Assign parts to a category so you can analyze spend by category and quickly find compatible items while building Service Items.\n  • Travel and Fuel filters: If you define trip or purpose categories, they appear in Travel Log pickers and report groupings.\n  • Reporting and dashboards: Systems and categories are used as grouping keys in PDF exports and summary views (e.g., costs by system, parts spend by category).\n  • Pickers and validation: The Systems table drives the options shown in dropdowns throughout the app, ensuring consistent naming and preventing free‑form duplicates.\n  • Inactivation behavior: Inactivating a term removes it from new-entry pickers while preserving historical records and their reports. Renaming a term updates future pickers and report labels without altering stored historical context.\n  • Sync and backup: System definitions live in your local database and sync via iCloud so the same controlled lists are available across devices and included in backups."
+		"• Drives the picker options in Service Items, Service Records, Parts, and Travel Log.\n• Powers grouping in reports and the Dashboard's System Hotlist chart.\n• Inactivating a term hides it from new entries without touching history; renaming updates future labels only."
 	}
 
 	enum Setup_Vendors {
@@ -233,16 +304,16 @@ enum OnboardingCopy {
 		static let systemImage = "person.2.badge.gearshape"
 		static let header1 = "Overview"
 		static let message1 =
-		"The Vendors/Shops table is your directory of businesses and individuals who sell parts, provide services, or perform repairs on your vehicles. Centralizing vendors enables consistent selection during data entry, accurate spend analysis by vendor, streamlined reordering of parts, and better documentation for warranties and audits. Defining vendors once and referencing them across Parts, Service Items, and Service Records keeps your data clean, searchable, and report‑ready."
+		"Vendors/Shops is your directory of businesses and people who sell parts or perform service. Centralizing them keeps entry consistent and enables spend analysis by vendor."
 		static let header2 = "Best practices"
 		static let message2 =
-		"  • Capture complete contact info: Include the vendor’s name, phone, website, email, and physical address to simplify scheduling, ordering, and navigation.\n  • Use categories and tags: Distinguish vendors by specialty (e.g., “Tires,” “Brakes,” “Body,” “Dealer,” “Online”) for faster filtering and reporting.\n  • Track account identifiers: Store your customer/account number, preferred salesperson/tech, and tax IDs for invoicing and warranty claims.\n  • Keep pricing context: Note labor rates, typical fees, and preferred payment methods to speed up Service Record entry and cost comparisons.\n  • Attach documents: Save PDFs or photos of quotes, warranties, and past invoices for quick reference.\n  • Prefer inactivation over deletion: Mark vendors inactive if you no longer use them; this preserves historical references in records and reports.\n• Standardize names: Avoid duplicates by using a consistent naming convention (e.g., “ACME Tire & Auto – Downtown”)."
+		"• Capture full contact info — phone, website, address.\n• Use categories/tags by specialty (Tires, Brakes, Dealer).\n• Track your account number and preferred technician.\n• Inactivate rather than delete vendors you no longer use."
 		static let header3 = "What the Vendors/Shops table stores"
 		static let message3 =
-		"  • Identity: Vendor/shop name, display alias (optional), and unique ID.\n  • Contact details: Phone, email, website, physical address, and hours/notes.\n  • Classification: Category/specialty (tires, brakes, general repair, dealer, online retailer) and tags for custom grouping.\n  • Accounts and terms: Your account number, tax ID, labor rate, typical fees, and payment terms or preferences.\n  • People: Primary contact, technician, or salesperson names with optional notes.\n  • Integrations and identifiers: Vendor SKUs or prefixes used on Parts, and internal reference codes for exports.\n  • Media and documents: Photos or PDFs (warranty cards, quotes, invoices) and free‑form notes.\n  • Status and ordering: Active/inactive flag and sort order to surface preferred vendors first.\n• Metadata: Created/updated timestamps for auditing."
-		static let header4 = "How it’s used throughout the application"
+		"• Name, contact details, and category/specialty.\n• Account number, labor rate, and payment terms.\n• Documents, notes, active status, and sort order."
+		static let header4 = "How it's used throughout the application"
 		static let message4 =
-		"  • Parts catalog: Link parts to a preferred vendor and store their SKU. This speeds reordering and lets you analyze spend by vendor and category.\n  • Service Items (templates): Set a default vendor on maintenance templates to standardize where you typically purchase parts or have work performed; this pre‑fills new Service Records.\n  • Service Records (work performed): Select the vendor/shop that completed the job. Vendor information appears on reports/exports and supports warranty and cost analysis.\n  • Reporting and dashboards: Group service and parts spend by vendor to identify top suppliers, compare labor rates, and track warranty claims.\n  • Quick actions: Tap a vendor to call, email, open their website, or view directions using the stored contact details.\n  • Filters and pickers: Vendor lists populate dropdowns across Parts, Service Items, and Service Records, with inactive vendors hidden from new selections by default.\n  • Consistency and cleanup: Centralizing vendors prevents free‑form duplicates and ensures historical records remain linked even if a vendor is renamed or inactivated.\n  • Sync and backup: Vendor records are stored locally and synced via iCloud so your directory and references are available across devices and preserved in backups."
+		"• Parts, Service Items, and Service Records all reference vendors for consistent selection and spend reporting.\n• Tap a vendor to call, email, or get directions.\n• Inactive vendors are hidden from new entries but existing records stay linked."
 	}
 
 	enum Setup_Settings {
@@ -250,51 +321,57 @@ enum OnboardingCopy {
 		static let systemImage = "gearshape"
 		static let header1 = "Overview"
 		static var message1: String {
-			"The Settings screen (Setup → Settings) defines the shared preferences that control how \(AppInfo.displayName) behaves and how information is displayed. It covers units of measure, which screen the app opens to, which fluid checks appear when logging fuel and travel entries, and onboarding. Most of these preferences sync via iCloud as part of your shared settings record, so you configure them once and they apply on iOS, iPadOS, and macOS; a few purely device‑local preferences—like showing inactive vehicles in lists—do not sync and are set independently on each device."
+			"The Settings screen (Setup → Settings) defines the shared preferences that control how \(AppInfo.displayName) behaves and how information is displayed — units of measure, Launch Screen, which fluid checks appear, and full‑version status. Most preferences sync via iCloud; a few purely device‑local ones (like showing inactive \(Vertical.current.assetPlural.lowercased())) don't."
 		}
 		static let header2 = "Best practices"
-		static let message2 =
-		"  • Set units first: Choose your preferred units for fuel/water, oil, DEF, temperature, speed, pressure, mass, distance, area, and vehicle dimensions (length, width, height, wheelbase) before entering data. Vehicle‑specific units are always respected for calculations; Settings controls how values are displayed.\n • Choose a Launch Screen: If you don’t want to start on the Dashboard, pick another table (or “Last Section Open”) so the app opens where you work most.\n  • Tailor Fluid Checks: Under Fuel Log → Fluid Checks, turn off checks you never perform so the Fluid Checks popup only shows what’s relevant to your vehicles.\n  • Keep it simple: Start with a minimal set of customizations and revisit Settings as your workflow matures.\n  • Review periodically: As your fleet or goals change, revisit units, Launch Screen, and Fluid Checks to ensure they still fit your workflow.\n  • Prefer in‑app conversions: Enter data in real‑world units from receipts or odometers; let the app convert for display based on Settings."
+		static var message2: String {
+			"• Set your preferred units before entering data — \(Vertical.current.assetSingular.lowercased())‑specific units always drive calculations; this controls display.\n• Choose a Launch Screen if you don't want to start on the Dashboard.\n• Tailor Fluid Checks to only what you actually check.\n• Enter data in real‑world units from receipts/\(Vertical.current.primaryMeterLabel.lowercased())s; let the app convert for display."
+		}
 		static let header3 = "What Settings stores"
-		static let message3 =
-		"  • Vehicles: A “Show Inactive in Lists” toggle (device‑local) that controls whether inactive vehicles appear in vehicle pickers and lists.\n  • Units of Measure: Display units for Fuel/Water, Oil, and DEF volume; Temperature; Speed; Pressure; Mass; Distance; Area; and vehicle dimensions—Length, Width, Height, and Wheelbase (13 pickers in all).\n  • App Behaviour: A Launch Screen picker—Dashboard, Vehicles, Fuel Log, Travel Log, Service Records, Improvements, Expenditures, Projects, Checklists, or “Last Section Open”—that determines which screen the app opens to.\n  • Fuel Log — Fluid Checks: Ten toggles (Engine Oil, Engine Coolant, Secondary Coolant, Power Steering, Brake, Transmission, Rear Axle, Front Axle, Fuel/Water Separator, Air System Water Bleed) that control which checks appear in the Fluid Checks popup shown when editing a Fuel Log entry or a Travel Log en‑route stop.\n  • Onboarding: A “Reset Startup Screens…” action that brings back the initial onboarding walkthrough on next launch.\n  • Metadata: Created/updated timestamps and a unique ID so your shared settings sync reliably across devices."
-		static let header4 = "How it’s used throughout the application"
+		static var message3: String {
+			"• Full Version: Shows whether you're on the free trial or have unlocked the full version, with buttons to unlock or Restore Purchases.\n• \(Vertical.current.assetPlural): A “Show Inactive in Lists” toggle (device‑local).\n• Units of Measure: 13 pickers covering fuel/oil/DEF, temperature, speed, pressure, mass, distance, area, and \(Vertical.current.assetSingular.lowercased()) dimensions.\n• App Behaviour: A Launch Screen picker that determines which screen the app opens to.\n• Automatic Backups: Frequency and retention count, plus a link to manage them. Requires the full version.\n• Fuel Log — Fluid Checks: Which checks appear in the Fluid Checks popup.\n• Onboarding: A “Reset Startup Screens…” action that brings back this walkthrough on next launch."
+		}
+		static let header4 = "How it's used throughout the application"
 		static let message4 =
-		"  • Editors and pickers: New entries in Fuel, Travel, Parts, Vehicles, and Service screens use your configured units for display and entry.\n  • Calculations and display: Vehicle‑specific units drive calculations; Settings’ units determine how values are formatted for display and in reports.\n  • Launch behavior: The Launch Screen setting determines which sidebar item is selected automatically when the app starts.\n  • Fluid Checks popup: The Fuel Log and Travel Log fluid‑check popups only show the checks you’ve left enabled here.\n  • Multi‑device consistency: Units, Launch Screen, and Fluid Check preferences sync via iCloud so your preferences apply on iOS, iPadOS, and macOS without reconfiguration.\n  • Onboarding: Resetting startup screens is useful if you want to re‑walk through the initial setup flow, or show it to someone new using the app on your device."
+		"• Editors and pickers throughout the app use your configured units for display and entry.\n• The Launch Screen setting picks the sidebar item selected automatically at startup.\n• Fluid Checks popups only show what you've left enabled here.\n• Units, Launch Screen, and Fluid Check preferences sync via iCloud across your devices.\n• Restore Purchases here re‑unlocks the full version on a new device — no repurchase needed."
 	}
 
 	enum Additions {
 		static let title = "Improvements & Add-Ins"
 		static let systemImage = "square.grid.3x1.folder.badge.plus"
 		static let header1 = "Overview"
-		static let message1 =
-		"The Improvements & Add-Ins module (shown in the sidebar under Vehicle Financials as “Improvements”) lets you document every upgrade, modification, and accessory added to your vehicles. From lift kits and floor mats to custom lighting and performance upgrades, each addition is tracked with full details including cost, vendor, category, photos, and the mileage or engine hours at the time of installation. Build a complete modification history that supports warranty claims, resale documentation, and insurance purposes."
+		static var message1: String {
+			"Improvements (\(Vertical.current.assetSingular) Financials → Improvements) tracks upgrades, modifications, and accessories — cost, vendor, category, photos, and \(Vertical.current.primaryMeterLabel.lowercased()) at install. Useful for warranty, resale, and insurance documentation."
+		}
 		static let header2 = "Best practices"
 		static let message2 =
-		"  • Use categories and sub-categories: Organize additions by type (Interior, Exterior, Performance, Protection) with sub-categories for detailed breakdowns and accurate cost reporting.\n  • Capture costs accurately: Enter the full installed cost including labor. The built-in totaling shows category subtotals and a grand total so you know exactly what you've invested.\n  • Link to a vendor: Select the shop or supplier from your Vendors list to maintain consistent records and enable vendor spend analysis.\n  • Add photos: Attach up to five images per record—before/after shots, receipts, and installation photos provide lasting documentation.\n  • Record mileage or hours: Logging the odometer reading or engine hours at installation creates a timeline of your vehicle's evolution.\n  • Prefer inactivation over deletion: Mark records inactive rather than deleting them to preserve complete history.\n  • Bring work over from Service Records: If a repair also amounts to an upgrade, use “Transfer to Additions” on the Service Record or Project punch‑list item instead of re‑entering it here from scratch."
+		"• Use categories/sub‑categories for organized cost rollups.\n• Enter the full installed cost, including labor.\n• Link a vendor and attach before/after photos.\n• Transfer upgrade work from a Service Record or Project item instead of re‑entering it."
 		static let header3 = "What the Add-Ins table stores"
-		static let message3 =
-		"  • Item name and description\n  • Category and sub-category for organized grouping and cost rollup\n  • Vehicle association and mileage/hours at time of installation\n  • Vendor/supplier reference and cost\n  • Up to five photos with captions\n  • Notes field for additional detail\n  • Active/inactive status and timestamps"
+		static var message3: String {
+			"• Name, category/sub‑category, and description.\n• \(Vertical.current.assetSingular), \(Vertical.current.primaryMeterLabel.lowercased())/hours at install, vendor, and cost.\n• Up to five photos and notes."
+		}
 		static let header4 = "How it's used throughout the application"
 		static let message4 =
-		"  • Dashboard: Modification and upgrade spend contributes to the fleet-wide cost picture shown on the Dashboard.\n  • List view: Records are grouped by category and sub-category with live subtotals and a grand total always visible at the bottom.\n  • Reporting: Generate a PDF report filtered by vehicle or across all vehicles, showing items grouped by category with cost totals.\n  • Filters: Filter by vehicle to focus on a specific vehicle's modification history.\n  • Transfer in from Service Records/Projects: Parts or labor lines transferred from a Service Record or a completed Project punch‑list item appear here with their assigned category/sub‑category, and stay in sync if their cost or vendor is later edited.\n  • Sync and backup: Add-In records sync via iCloud and are included in backups, ensuring your modification history is always available across devices."
+		"• Contributes to fleet‑wide cost totals on the Dashboard.\n• Grouped by category with running subtotals and a grand total.\n• PDF reports by vehicle or fleet‑wide.\n• Items transferred from Service Records or Projects stay in sync if cost or vendor is later edited."
 	}
 
 	enum Subscriptions {
 		static let title = "Expenses & Subscriptions"
 		static let systemImage = "calendar.badge.clock"
 		static let header1 = "Overview"
-		static let message1 =
-		"The Expenses & Subscriptions module (shown in the sidebar under Vehicle Financials as “Expenditures”) tracks recurring charges, subscriptions, and one-time expenses associated with your vehicles. Insurance premiums, roadside assistance memberships, registration fees, satellite radio, GPS tracking services, and lease payments all belong here. By centralizing vehicle-related expenses you gain a complete picture of total ownership cost beyond just fuel and service."
+		static var message1: String {
+			"Expenditures (\(Vertical.current.assetSingular) Financials → Expenditures) tracks recurring and one‑time costs — insurance, registration, memberships, subscriptions, lease payments — for a complete picture of ownership cost beyond fuel and service."
+		}
 		static let header2 = "Best practices"
 		static let message2 =
-		"  • Distinguish recurring from one-time: Use the recurring flag to identify charges that repeat on a schedule. This helps you anticipate annual or monthly costs, and lets the Dashboard total your recurring costs correctly.\n  • Use categories and sub-categories: Group by type (Insurance, Registration, Subscriptions, Services) with sub-categories for finer detail. Category totals make budgeting simple.\n  • Track renewal dates in notes: Use the notes or description field to record renewal and expiration dates so nothing lapses unexpectedly.\n  • Link vendors: Connect expenses to entries in your Vendors directory for consistent tracking and spend analysis.\n  • Attach documents: Store policy documents, confirmation emails, or receipts as photos for quick reference.\n  • Prefer inactivation over deletion: Mark expired items inactive to preserve historical cost records."
+		"• Flag recurring charges so the Dashboard totals them correctly.\n• Use categories/sub‑categories for budgeting.\n• Note renewal dates so nothing lapses unexpectedly.\n• Link a vendor and attach policy documents or receipts."
 		static let header3 = "What the Expenses & Subscriptions table stores"
-		static let message3 =
-		"  • Item name and description\n  • Category and sub-category for organized grouping and cost rollup\n  • Vehicle association and mileage/hours at time of entry\n  • Vendor/supplier reference, cost, and recurring charge flag\n  • Up to five photos with captions\n  • Notes for renewal dates, policy numbers, and other details\n  • Active/inactive status and timestamps"
+		static var message3: String {
+			"• Name, category/sub‑category, and description.\n• \(Vertical.current.assetSingular), vendor, cost, and a recurring flag.\n• Up to five photos and notes."
+		}
 		static let header4 = "How it's used throughout the application"
 		static let message4 =
-		"  • Cost totals: Category subtotals and a grand total are visible at the bottom of the list, giving a clear view of ongoing vehicle expenses.\n  • Dashboard: Recurring charges normalize into a monthly/annual total on the Dashboard’s Recurring Costs card, alongside upcoming insurance expirations pulled from vehicle records.\n  • Reporting: Generate a PDF report filtered by vehicle showing all expenses grouped by category with cost totals.\n  • Budgeting: By capturing all vehicle-related financial obligations in one place you can accurately assess total cost of ownership.\n  • Filters: Filter by vehicle to review expense history for a specific vehicle.\n  • Sync and backup: Expense records sync via iCloud and are included in backups so your financial history is always complete across devices."
+		"• Category subtotals and a grand total are always visible.\n• Recurring charges roll into the Dashboard's Recurring Costs card alongside insurance expirations.\n• PDF reports by vehicle for budgeting and total cost of ownership."
 	}
 
 	enum Projects {
@@ -302,16 +379,19 @@ enum OnboardingCopy {
 		static let systemImage = "list.number.badge.ellipsis"
 		static let header1 = "Overview"
 		static let message1 =
-		"The Projects module (grouped in the sidebar with Checklists) lets you plan, track, and document vehicle projects from start to finish. Whether it's a restoration, seasonal prep, a DIY upgrade, or a multi-phase build, Projects gives you a structured framework to define work, assign it to categories, and track progress item by item through the integrated Punch List view. Each project contains an ordered list of punch list items that can be checked off as work is completed."
+		"Projects lets you plan and track multi‑step work — restorations, seasonal prep, builds — through an ordered Punch List of items you check off as you go."
 		static let header2 = "Best practices"
-		static let message2 =
-		"  • Break work into discrete punch list items: Smaller, actionable tasks are easier to track and complete. Use the Punch List view to check off items as work progresses.\n  • Use categories and sub-categories: Group related projects together to keep large builds organized. Drag to reorder projects and categories to reflect priority.\n  • Add notes and descriptions: Document intent, specifications, part numbers, and instructions in each project's description and notes fields.\n  • Link to a vehicle: Associate each project with the specific vehicle it pertains to for accurate filtering and reporting.\n  • Use the Live Punch List: The Live Punch List view provides a real-time interactive checklist for in-garage use—check items off as you work.\n  • Transfer completed upgrades: When a punch list item amounts to a vehicle upgrade or modification, use “Transfer to Additions” to carry its cost, vendor, and category into the Improvements tracker.\n  • Archive completed projects: Mark finished projects inactive to keep the active list focused on current work without losing history."
+		static var message2: String {
+			"• Break work into small, actionable punch‑list items.\n• Use categories to organize larger builds; drag to reorder.\n• Link each project to a \(Vertical.current.assetSingular.lowercased()).\n• Use the Live Punch List for real‑time, in‑garage checkoff.\n• Transfer completed upgrade items to Improvements."
+		}
 		static let header3 = "What the Projects table stores"
-		static let message3 =
-		"  • Project name, category, and sub-category\n  • Description and notes for planning context\n  • Vehicle association\n  • Ordered punch list items with completion status\n  • Category and project ordering for custom arrangement\n  • Active/inactive status and timestamps"
+		static var message3: String {
+			"• Name, category/sub‑category, description, and \(Vertical.current.assetSingular.lowercased()).\n• An ordered list of punch‑list items with completion status."
+		}
 		static let header4 = "How it's used throughout the application"
-		static let message4 =
-		"  • Project list: Browse all projects for a vehicle or across the fleet, organized into user-defined categories that can be renamed and reordered.\n  • Punch List: Tap any project to open its punch list—an ordered list of tasks with completion checkboxes. Check off items as work is completed.\n  • Live Punch List: A streamlined format optimized for in-garage use on iPhone or iPad, reachable from within a project.\n  • Transfer to Additions: Any punch list item can be pushed into Vehicle Financials → Improvements with a category/sub‑category assignment, so completed project work rolls into your modification history and cost totals.\n  • Reporting: Generate two PDF reports—a Project List summary and a detailed Punch List report—filtered by vehicle or across all vehicles.\n  • Reordering: Drag-to-reorder support lets you prioritize projects and tasks within each category.\n  • Sync and backup: Project and punch list records sync via iCloud and are included in backups."
+		static var message4: String {
+			"• Browse projects by \(Vertical.current.assetSingular.lowercased()) or fleet‑wide, grouped into reorderable categories.\n• The Live Punch List gives a streamlined in‑garage checklist.\n• Transfer any item to Improvements to roll it into your modification history.\n• Two PDF reports: a Project List summary and a detailed Punch List."
+		}
 	}
 
 	enum CheckLists {
@@ -319,33 +399,34 @@ enum OnboardingCopy {
 		static let systemImage = "checklist"
 		static let header1 = "Overview"
 		static let message1 =
-		"The CheckLists module provides a flexible, reusable checklist system for routine vehicle inspections, pre-trip walkarounds, seasonal maintenance, and any process you repeat regularly. Unlike Projects (which track one-time work), CheckLists are designed to be used repeatedly. Each checklist item can contain sub-items for detailed task breakdowns, with smart completion logic that keeps parent and child items in sync automatically."
+		"CheckLists is a reusable checklist system for routine inspections and recurring processes — unlike Projects, checklists are meant to be used again and again. Items can contain sub‑items, with completion synced automatically between parent and child."
 		static let header2 = "Sub-Items and Hierarchical Tasks"
 		static let message2 =
-		"  • Create unlimited sub-items within any checklist item to break procedures into granular steps.\n  • Visual indicators show completed (green checkmark) and in-progress (orange circle) sub-item counts at a glance.\n  • Smart completion: checking a parent item automatically completes all its sub-items; completing all sub-items automatically marks the parent complete.\n  • Rename the sub-items section label per parent item (\"Steps\", \"Tasks\", or any custom label) for context-specific clarity.\n  • Expand and collapse sub-item groups to keep the view focused.\n  • Cascading deletion: removing a parent item removes all its sub-items automatically.\n  • Customize checklist header colors to visually distinguish one checklist from another at a glance."
+		"• Add unlimited sub‑items to break a task into steps.\n• Checking a parent completes all its sub‑items, and vice versa.\n• Rename the sub‑items label per item (e.g. 'Steps,' 'Tasks').\n• Deleting a parent removes its sub‑items too."
 		static let header3 = "What the CheckLists table stores"
-		static let message3 =
-		"  • Checklist name, category, description, and notes\n  • Vehicle association and ordered checklist items\n  • Checklist items with completion status, notes, and completion date\n  • Sub-items with name, description, notes, completion status, and date\n  • Custom sub-item section labels per parent item\n  • Category and checklist ordering for custom arrangement\n  • Active/inactive status and timestamps"
+		static var message3: String {
+			"• Name, category, description, \(Vertical.current.assetSingular.lowercased()), and ordered items.\n• Items and sub‑items with completion status and notes."
+		}
 		static let header4 = "How it's used throughout the application"
 		static let message4 =
-		"  • Live CheckList: The Live CheckList view presents checklist items in a streamlined interactive format optimized for in-field or in-garage use. Check items and sub-items off in real time.\n  • Sub-item management: Expand any item to reveal its sub-items, add new ones inline, or edit details in a compact expandable editor without leaving the checklist.\n  • Context menus: Long-press items for quick actions—add sub-items, rename sections, expand/collapse editors.\n  • Reporting: Generate a PDF report of checklist items and their completion status.\n  • Reuse: CheckLists persist and can be reused for each inspection cycle by clearing completion statuses.\n  • Sync and backup: CheckList records sync via iCloud and are included in backups."
+		"• The Live CheckList gives a streamlined in‑field checkoff experience.\n• Expand any item inline to manage its sub‑items.\n• Reuse a checklist by clearing completion status for the next cycle.\n• PDF report of items and completion status."
 	}
 
 	enum DataManagement_BackupRestore {
 		static let title = "Data Management: Backup / Restore"
 		static let systemImage = "square.and.arrow.up"
-		static let header1 = "Overview"
+		static var header1: String { "Overview" }
 		static var message1: String {
-			"The Backup and Restore tools, found in the sidebar’s Data Management section, protect your data and make it portable across devices. A backup exports a real folder—containing your app database, generated documents, and a browsable set of photos—that you save wherever you choose using the system file picker: on the device, in Files, or in iCloud Drive. Restore reverses the process, bringing the contents of a chosen backup folder back into the app. Because \(AppInfo.displayName) also syncs continuously via iCloud, think of Backup/Restore as a manual, point‑in‑time snapshot that complements—rather than replaces—that ongoing sync. Exactly what Restore replaces depends on whether iCloud sync is active on the device you’re restoring to; see “How it’s used” below."
+			"Backup exports a real folder — your database, documents, and browsable photos — to a location you choose (device, Files, or iCloud Drive). Restore brings a backup's contents back into the app. Since \(AppInfo.displayName) also syncs continuously via iCloud, think of Backup/Restore as a manual, point‑in‑time snapshot that complements that sync."
 		}
 		static let header2 = "Best practices"
 		static let message2 =
-		"  • Back up before major changes: Create a backup before bulk edits, restores, or app updates so you can roll back if needed.\n  • Save copies off‑device: Choose Files/iCloud Drive (or an external drive) rather than only device storage, so a lost or reset device doesn’t take your only backup with it.\n  • Let sync settle first: Give iCloud a moment to finish syncing across your devices before backing up or restoring, so you capture (or restore) a complete, consistent snapshot.\n  • Check the dates under the Backup button: The sidebar shows two separate lines—“Last Manual Backup” (only updated when you tap Backup… yourself) and “Last Auto Backup” (only updated by the automatic schedule in Settings)—so you can see either one is current without the other masking it. Both are tappable: “Last Manual Backup” opens the folder it was saved to, and “Last Auto Backup” opens the Manage Auto-Backups screen.\n  • Restart when asked: After a restore completes, the app requires a full restart to finish loading safely—on Mac it offers a Quit Now button; on iPhone/iPad it shows a screen with instructions to close the app from the App Switcher and reopen it. Continuing to use the app without restarting can lose any changes you make in the meantime.\n  • Avoid concurrent edits during restore: Pause editing on other devices until the restore finishes and sync stabilizes.\n  • Choose the right restore option when iCloud sync is on: “Resync from iCloud” (the recommended default) re‑downloads your vehicle/service data fresh from iCloud rather than reviving the backup’s exact snapshot, so anything already deleted (and synced as deleted) stays gone. “Restore Exact Snapshot” forces the backup’s data back in exactly as saved instead—reach for it when restoring onto a different iCloud account, or when iCloud’s own data didn’t come back correctly and you need the backup to win. It can conflict with your other devices on the same iCloud account until they resync, so use it deliberately, not as the default.\n  • Use the Media folder for browsing, not restoring: A backup’s Media folder is a convenience export of your photos for viewing outside the app—your photos are already safely embedded in the database and don’t need this folder to be restored.\n  • Turn on Automatic Backups so you always have a recent one: Settings → Automatic Backups lets you pick Daily/Weekly/Monthly; a fresh backup is then created for you the next time you open the app after that much time has passed, no file picker needed."
+		"• Back up before major changes, and save copies off‑device (Files/iCloud Drive), not just on‑device.\n• Let iCloud finish syncing before backing up or restoring, for a consistent snapshot.\n• Restart when asked after a restore — the app needs a full restart to finish safely.\n• If iCloud sync is on, prefer “Resync from iCloud” (the default) — it re‑downloads your data fresh rather than reviving the backup's exact snapshot. Use “Restore Exact Snapshot” only when moving to a different iCloud account or recovering from bad iCloud data.\n• Turn on Automatic Backups (Settings) so you always have a recent one — requires the full version; manual Backup…/Restore… are always free."
 		static let header3 = "What a backup contains"
 		static let message3 =
-		"  • An AppInfo.txt file: App name, version, and the date the backup was created, for quick identification and compatibility checks.\n  • Your app database: A full copy of the Application Support folder, where your SwiftData/CloudKit store lives, including hidden support files—nothing is silently skipped, so the backup is a genuinely complete copy.\n  • Your documents: A full copy of the Documents folder, including any PDF reports you’ve generated.\n  • A Media folder: Every photo stored in your records—Vehicles, Systems, Vendors, Service Records, Items, Parts, Fuel Logs, and Trip Logs—re‑exported as ordinary image files in per‑type subfolders with descriptive names, purely so you can browse or share them outside the app. This folder is not needed to restore, since the photos already live inside the database copy."
-		static let header4 = "How it’s used throughout the application"
+		"• An AppInfo.txt file identifying the app version and backup date.\n• Your full app database (Application Support folder).\n• Your Documents folder, including generated PDF reports.\n• A Media folder — every photo re‑exported as ordinary image files, for browsing outside the app (not needed to restore)."
+		static let header4 = "How it's used throughout the application"
 		static let message4 =
-		"  • Creating a backup: From the sidebar’s Data Management section, choose Backup…. The Backup button shows a brief progress indicator while your data is gathered in the background (the app stays responsive), then the system file picker lets you choose where to save the resulting folder (named with the app name and a timestamp). A scrollable summary sheet afterward lists the destination and everything that was included, no matter how many files there are—you can scroll through the full list and close it when you’re done.\n  • Restoring a backup: Choose Restore…, then pick a source—“From Manual Backup…” opens the system file picker to choose a backup folder you saved yourself; “From Automatic Backup…” opens Manage Auto-Backups so you can pick from the ones the app made for you and restore straight from there. Either way you’ll confirm a warning dialog next. If you pick a folder that isn’t actually a valid backup, you’ll get a clear error instead of a false “success.” If iCloud sync isn’t active, there’s one restore button and it restores Documents and the app database exactly as saved in the backup. If iCloud sync is active, you’re offered a choice of two buttons: “Resync from iCloud” restores Documents from the backup and lets your vehicle/service data re‑download fresh from iCloud instead of the backup’s snapshot, avoiding any risk of pushing old or deleted data back out to your other synced devices; “Restore Exact Snapshot” instead forces the backup’s database back in exactly as saved, which is what you want when restoring onto a different iCloud account or recovering from iCloud data that didn’t come back correctly, at the cost of possibly conflicting with your other synced devices until they resync. If a restore is interrupted partway (e.g. low disk space), your existing data is safely rolled back rather than left half‑overwritten. Whichever option you use, restart the app afterward as prompted for a clean, consistent state.\n  • Cross‑device portability: A backup created on iOS, iPadOS, or macOS can be restored on another device using the same Apple ID, since it captures the same underlying database and documents regardless of platform.\n  • Reporting continuity: After a restore and restart, reports, filters, and pickers reflect the restored state—vehicles, trips, fuel logs, service items/records, parts, systems, vendors, projects, checklists, and settings.\n  • Maintenance and cleanup: Keep a small set of known‑good backups (e.g., before selling a vehicle or making bulk changes) and periodically delete outdated ones to reclaim storage.\n  • Automatic backups: In Settings → Automatic Backups, choose how often you want a backup made for you—Off, Daily, Weekly, or Monthly—and how many recent ones to keep. Enabling this doesn’t open a file picker; matching backups are written quietly into the app’s own storage the next time you open the app after the interval has passed. Open “Manage Auto-Backups…” in that same section to see the ones on hand, restore from one, share a copy elsewhere (e.g. to Files or iCloud Drive, so a copy exists off‑device), or delete one you no longer need."
+		"• Backup…: Gathers your data in the background, then the system file picker lets you choose where to save it. A summary sheet lists everything included.\n• Restore…: Pick a source — a manual backup folder, or one of your automatic backups — then confirm. If iCloud sync is active, choose “Resync from iCloud” (recommended) or “Restore Exact Snapshot.” An interrupted restore rolls back safely rather than leaving things half‑done.\n• Cross‑device: A backup from any platform can be restored on another, using the same Apple ID.\n• Automatic Backups: Set a frequency and retention count in Settings (full version only); manage, restore from, or share any of them via “Manage Auto‑Backups…”."
 	}
 }
