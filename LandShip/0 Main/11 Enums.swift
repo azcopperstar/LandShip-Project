@@ -166,6 +166,96 @@ enum DashboardCard: String, CaseIterable, Identifiable, Hashable {
 	]
 }
 
+// Aviation fuel types offered by the Fuel Type picker (Edit Vehicle / Edit Fuel Log)
+// when Vertical.current.id == .aviation. rawValue is both the persisted Vehicle8/FuelLog1
+// fuelType string and the value stored in Settings1.enabledFuelTypesRaw — never rename
+// or remove a case without a migration for both.
+enum AviationFuelType: String, CaseIterable, Identifiable, Hashable {
+	case avgas100LL = "100LL"
+	case ul94 = "UL94"
+	case ul9196 = "91/96 UL"
+	case ul91 = "UL91"
+	case mogas = "Mogas"
+
+	case g100UL = "G100UL"
+	case swift100R = "100R"
+	case ul100E = "UL100E"
+
+	case jetA = "Jet A"
+	case jetA1 = "Jet A-1"
+	case jetB = "Jet B"
+	case ts1 = "TS-1"
+	case no3JetFuel = "No. 3 Jet Fuel"
+
+	case jp4 = "JP-4"
+	case jp5 = "JP-5"
+	case jp8 = "JP-8"
+	case f24 = "F-24"
+	case f35 = "F-35"
+	case jp7 = "JP-7"
+	case jpts = "JPTS"
+	case jp10 = "JP-10"
+
+	case saf = "SAF"
+	case hydrogen = "Hydrogen"
+	case lngMethane = "LNG/Methane"
+	case batteryElectric = "Battery-Electric"
+
+	var id: String { rawValue }
+
+	enum Category: String, CaseIterable, Hashable {
+		case pistonCurrent = "In Current Use"
+		case pistonTransition = "Unleaded 100-Octane Transition"
+		case turbineCivil = "Turbine — Civil"
+		case turbineMilitary = "Turbine — Military"
+		case sustainable = "Sustainable / Alternative"
+	}
+
+	var category: Category {
+		switch self {
+			case .avgas100LL, .ul94, .ul9196, .ul91, .mogas: return .pistonCurrent
+			case .g100UL, .swift100R, .ul100E: return .pistonTransition
+			case .jetA, .jetA1, .jetB, .ts1, .no3JetFuel: return .turbineCivil
+			case .jp4, .jp5, .jp8, .f24, .f35, .jp7, .jpts, .jp10: return .turbineMilitary
+			case .saf, .hydrogen, .lngMethane, .batteryElectric: return .sustainable
+		}
+	}
+
+	var summary: String {
+		switch self {
+			case .avgas100LL: return "Low-lead, dyed blue — the global default for spark-ignition GA."
+			case .ul94: return "Swift Fuels unleaded 94 octane, ASTM D7547."
+			case .ul9196: return "Unleaded, ASTM D7547 — mostly Europe."
+			case .ul91: return "Hjelmco/TotalEnergies unleaded — Scandinavia/Europe."
+			case .mogas: return "Ethanol-free automotive gasoline burned under EAA/Petersen STCs."
+			case .g100UL: return "GAMI unleaded 100-octane replacement, STC'd for essentially all spark-ignition piston aircraft."
+			case .swift100R: return "Swift Fuels unleaded 100-octane replacement; ASTM production spec Sept 2025."
+			case .ul100E: return "LyondellBasell/VP Racing unleaded 100-octane replacement; in PAFI testing."
+			case .jetA: return "US domestic turbine standard, freeze point −40°C."
+			case .jetA1: return "International turbine standard, freeze point −47°C."
+			case .jetB: return "Wide-cut naphtha/kerosene blend for extreme cold (Canada, Alaska)."
+			case .ts1: return "Russia/CIS primary jet fuel."
+			case .no3JetFuel: return "China, GB 6537 — roughly equivalent to Jet A-1."
+			case .jp4: return "NATO F-40 — wide-cut, largely retired."
+			case .jp5: return "NATO F-44 — high flash point, carrier/naval use."
+			case .jp8: return "NATO F-34 — land-based standard."
+			case .f24: return "Jet A with military additive package (US domestic)."
+			case .f35: return "Jet A-1 without static dissipator."
+			case .jp7: return "SR-71 — high thermal stability."
+			case .jpts: return "U-2 / high-altitude — very low freeze point."
+			case .jp10: return "Synthetic single-component fuel for missiles and ramjets."
+			case .saf: return "Sustainable Aviation Fuel — ASTM D7566 blending components, re-certified as D1655 once blended."
+			case .hydrogen: return "Liquid (LH2) or gaseous — experimental/demonstrator aircraft only."
+			case .lngMethane: return "Experimental."
+			case .batteryElectric: return "Not a fuel, but shown in the same field on most logging systems."
+		}
+	}
+
+	/// Enabled by default for a fresh install / not-yet-configured Settings — the handful
+	/// of fuels that cover the vast majority of GA piston and turbine aircraft.
+	static let defaultEnabled: [AviationFuelType] = [.avgas100LL, .mogas, .jetA, .jetA1]
+}
+
 // Centralize storage keys to avoid typos across the app
 enum StorageKey {
 	static let trackVehicleSelected = "trackVehicleSelected"

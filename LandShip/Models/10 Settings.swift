@@ -53,6 +53,22 @@ class Settings1 {
 		}
 	}
 
+	// Fuel Type picker configuration (aviation vertical) — which AviationFuelType
+	// entries appear in the Fuel Type picker on Edit Vehicle / Edit Fuel Log.
+	var enabledFuelTypesRaw: [String] = []
+	var fuelTypesConfigured: Bool = false    // distinguishes "not yet set up" from "all fuels hidden"
+
+	var enabledFuelTypes: [AviationFuelType] {
+		get {
+			guard fuelTypesConfigured else { return AviationFuelType.defaultEnabled }
+			return enabledFuelTypesRaw.compactMap(AviationFuelType.init(rawValue:))
+		}
+		set {
+			enabledFuelTypesRaw = newValue.map(\.rawValue)
+			fuelTypesConfigured = true
+		}
+	}
+
 	@Attribute(.externalStorage)
 	var image1: Data?
 	var image1Description: String = ""

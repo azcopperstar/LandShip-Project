@@ -34,6 +34,46 @@ struct Picker_PartsUnit: View {
 	}
 }
 
+// MARK: Fuel Type picker content — land/marine keep a small fixed list; aviation offers
+// the grouped catalog the user has enabled in Settings > Fuel Types (Settings1.enabledFuelTypes).
+// Shared between EditVehicle and EditFuelLog so both stay in sync with the same settings.
+struct FuelTypePickerOptions: View {
+	/// The field's current value, so an existing entry that's no longer in the enabled
+	/// list (e.g. after the user unchecks it in Settings) still shows up as a selectable
+	/// tag instead of silently going blank.
+	let currentValue: String
+
+	@Query(filter: #Predicate<Settings1> { $0.userName == "primary1" }) private var settingsFetched: [Settings1]
+
+	private var enabledAviationFuels: [AviationFuelType] {
+		settingsFetched.first?.enabledFuelTypes ?? AviationFuelType.defaultEnabled
+	}
+
+	var body: some View {
+		if Vertical.current.id == .aviation {
+			let enabled = enabledAviationFuels
+			ForEach(AviationFuelType.Category.allCases, id: \.self) { category in
+				let fuelsInCategory = enabled.filter { $0.category == category }
+				if !fuelsInCategory.isEmpty {
+					Section(category.rawValue) {
+						ForEach(fuelsInCategory) { fuel in
+							Text(fuel.rawValue).tag(fuel.rawValue)
+						}
+					}
+				}
+			}
+			if !currentValue.isEmpty && !enabled.contains(where: { $0.rawValue == currentValue }) {
+				Text(currentValue).tag(currentValue)
+			}
+		} else {
+			Text("Gasoline").tag("Gasoline")
+			Text("Diesel").tag("Diesel")
+			Text("EV").tag("EV")
+			Text("Hybrid").tag("Hybrid")
+		}
+	}
+}
+
 // MARK: label + editable dropdown for vehicle systems (pick existing or type a new one)
 struct Picker_VehicleSystem: View {
 	let label: String

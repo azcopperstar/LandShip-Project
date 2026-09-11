@@ -1,0 +1,11 @@
+// Shared version/build number for VehicleTrax, AeroTrax, and NauticalTrax.
+// Bump these two values here so all three targets stay in sync automatically.
+//
+// To wire a target to this file: select the target's project in the
+// navigator -> Info tab -> Configurations -> set "Based on Configuration File"
+// to Version.xcconfig for both Debug and Release, for each of the three targets.
+// Any per-target override of CURRENT_PROJECT_VERSION / MARKETING_VERSION in
+// Build Settings must be removed first, or it will take precedence over this file.
+
+MARKETING_VERSION = 2026.09.02
+CURRENT_PROJECT_VERSION = 100
