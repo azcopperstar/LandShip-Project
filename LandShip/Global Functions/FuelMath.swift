@@ -53,6 +53,7 @@ struct FuelLogPoint: Equatable {
 	let odometer: Int
 	let fuelAdded: Float
 	let fuelCost: Float
+	let fuelPrice: Float
 	let fillType: FuelFillType?
 
 	init(model: FuelLog1) {
@@ -60,14 +61,16 @@ struct FuelLogPoint: Equatable {
 		odometer = model.odometer
 		fuelAdded = model.fuelAdded
 		fuelCost = model.fuelCost
+		fuelPrice = model.fuelPrice
 		fillType = FuelFillType(rawValue: model.fillTypeRaw)
 	}
 
-	init(date: Date, odometer: Int, fuelAdded: Float, fuelCost: Float, fillType: FuelFillType?) {
+	init(date: Date, odometer: Int, fuelAdded: Float, fuelCost: Float, fuelPrice: Float, fillType: FuelFillType?) {
 		self.date = date
 		self.odometer = odometer
 		self.fuelAdded = fuelAdded
 		self.fuelCost = fuelCost
+		self.fuelPrice = fuelPrice
 		self.fillType = fillType
 	}
 }
@@ -87,6 +90,9 @@ struct FuelIntervalStats: Equatable {
 	let daysSinceLast: Int
 	let previousOdometer: Int
 	let previousDate: Date?
+	/// The immediately-prior fill's price, regardless of the full-point anchor used for
+	/// distance/economy — price change is a per-transaction metric, not an interval one.
+	let previousFuelPrice: Float
 	let hasPreviousFill: Bool
 	let flags: Set<FuelDataFlag>
 }
@@ -207,7 +213,8 @@ enum FuelMath {
 	static func interval(current: FuelLogPoint, priorAscending: [FuelLogPoint]) -> FuelIntervalStats {
 		guard let nearest = priorAscending.last else {
 			return FuelIntervalStats(distance: 0, fuelUsed: 0, economy: 0, costPerDistance: 0,
-				daysSinceLast: 0, previousOdometer: 0, previousDate: nil, hasPreviousFill: false, flags: [])
+				daysSinceLast: 0, previousOdometer: 0, previousDate: nil, previousFuelPrice: 0,
+				hasPreviousFill: false, flags: [])
 		}
 
 		var flags: Set<FuelDataFlag> = []
@@ -216,7 +223,12 @@ enum FuelMath {
 		var foundFullPoint = false
 
 		for point in priorAscending.reversed() {
-			if point.fillType?.establishesKnownFullPoint == true {
+			// Unset fillType (every record predating this feature, and any record the
+			// operator hasn't touched) defaults to treating the fill as full — this is
+			// exactly today's existing behavior (anchor on the immediately-prior fill,
+			// no accumulation, no flags) and must not change for historical data. The
+			// gating only engages once a fill is explicitly marked `.partial`/`.defuel`.
+			if point.fillType?.establishesKnownFullPoint ?? true {
 				anchor = point
 				foundFullPoint = true
 				break
@@ -236,7 +248,7 @@ enum FuelMath {
 		return FuelIntervalStats(
 			distance: distance, fuelUsed: fuelUsed, economy: economy, costPerDistance: costPerDistance,
 			daysSinceLast: days, previousOdometer: anchor.odometer, previousDate: anchor.date,
-			hasPreviousFill: true, flags: flags
+			previousFuelPrice: nearest.fuelPrice, hasPreviousFill: true, flags: flags
 		)
 	}
 

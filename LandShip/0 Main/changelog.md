@@ -3,7 +3,8 @@ VEHICLETRAX CHANGE LOG
 Send suggestions for features & improvements to: [info@aeronauticaltrax.com](mailto:info@aeronauticaltrax.com)
 
 ----------------------------------
-Version: 2026.09.02 Build: 96
+----------------------------------
+Version: 2026.09.02 Build: 114
 NOTES
 - This is a major revision with many fixes and new features.  
 - Email us (using the above link or the link on the Resouces tab) with suggestions for improvements, application features or issues with the application.
@@ -14,6 +15,12 @@ ADDED
 - New customization sheet: (slider icon in the toolbar) lets you choose which cards are shown and drag to reorder them. The scheme is saved to your account and applies on every device.
 - New vehicle checklist: in the customization sheet lets you exclude specific vehicles from "All Vehicles" totals across every card.
 - New "Inventory Status" card: lists inventory-tracked parts that are low or out of stock, with a detail view grouping parts into Out of Stock, Low Stock, and Well Stocked.
+## Location
+- Business name lookup improved: the Location field's location button now finds the actual nearby business name (e.g. a gas station or shop) instead of just a street address.
+- Nearest businesses shown: Location fields on Fuel Log and Travel Log list the 2 closest businesses by name and distance, each with a "Use" button, instead of auto-filling.
+- Road name fallback: if no nearby business is found, the road name is shown for reference (not fillable).
+- Current location shown: a caption below the field displays your current latitude/longitude.
+- Home Location: set a Home location in Settings from your current position — it becomes the top "Use" choice whenever it's closer than the nearest business.
 
 ## Vehicles
 - Added Wheel Stud Size, Wheel Nut Socket, and Wheel Nut Torque: text fields to the Tire Information section.
@@ -28,6 +35,8 @@ ADDED
 - Remaining inventory is now shown next to the part: on the Parts list, on Service Items, and on the service record that consumed it, with a low-stock warning once quantity on hand falls to or below the reorder point.
 
 ## Fuel Log
+- Fuel Type picker overhauled: replaces the old fixed Gasoline/Diesel/EV/Hybrid list with a worldwide catalog of gasoline grades, ethanol blends, diesel grades, biodiesel/renewable diesel, gaseous fuels, EV charging types, and specialty/historic fuels, grouped by category.
+- DEF fields now key off fuel family, not an exact match: DEF/AdBlue tracking appears for any diesel-family fuel type, not just the literal "Diesel" tag, so it keeps working now that diesel is split into several grades.
 - Field to track DEF price per gallon: DEF remaining in 1/8 increments
 - Exit Time field added below Date/Time: so a fuel log records both arrival and departure the same way a travel log's enroute stop does.
 - Edit form is reordered to match a travel log's enroute fuel stop:
@@ -98,6 +107,7 @@ ADDED
 
 ## Settings
 - New "Fuel Log — Fluid Checks": section in Settings.
+- New "Configure Fuel Types…" screen: choose which fuel types appear in the Fuel Type picker; the selection syncs across your devices.
 
 ## Help & Feedback
 - New "Send Feedback" form: under Resources on iPhone/iPad, and in the Support section of Help on Mac. 

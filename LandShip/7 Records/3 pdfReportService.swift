@@ -148,7 +148,7 @@ struct pdfReportService: View {
 		let partCount = 5
 		var headers = [
 			"Inactive", "Created At", "Updated At", "Service Date", Vertical.current.assetSingular, "\(Vertical.current.assetSingular) Display Name",
-			Vertical.current.primaryMeterLabel, "Engine Hours", "Service Item", "Service Item ID", "Description", "Notes",
+			Vertical.current.distanceMeterLabel, Vertical.current.hoursMeterLabel, "Service Item", "Service Item ID", "Description", "Notes",
 			"Vendor", "Labor Cost",
 			"Custom Measure Label", "Custom Measure Unit", "Custom Measure Value",
 			"Image 1 Description", "Image 2 Description", "Image 3 Description", "Image 4 Description", "Image 5 Description",
@@ -312,8 +312,8 @@ struct pdfReportService: View {
 		var groups: [PDFFieldGroup] = []
 		if let details = fieldGroup(nil, [
 			("Description", text(record.mxDescription)),
-			(Vertical.current.primaryMeterLabel, record.Miles != 0 ? NumberFormatter.localizedString(from: NSNumber(value: record.Miles), number: .decimal) : nil),
-			("Engine Hours", record.engHours != 0 ? String(format: "%.1f hrs", record.engHours) : nil),
+			(Vertical.current.distanceMeterLabel, record.Miles != 0 ? NumberFormatter.localizedString(from: NSNumber(value: record.Miles), number: .decimal) : nil),
+			(Vertical.current.hoursMeterLabel, record.engHours != 0 ? String(format: "%.1f hrs", record.engHours) : nil),
 			(record.customMeasureLabel.isEmpty ? "Custom" : record.customMeasureLabel,
 			 record.customMeasureValue != 0 ? "\(String(format: "%.1f", record.customMeasureValue)) \(record.customMeasureUnit)" : nil)
 		]) {

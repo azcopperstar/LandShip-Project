@@ -149,7 +149,7 @@ struct pdfReportTrip: View {
 		var headers = [
 			"Inactive", Vertical.current.assetSingular, "\(Vertical.current.assetSingular) Display Name", "Log Name", "Notes",
 			"Created At", "Updated At", "Trip Start", "Trip End",
-			"\(Vertical.current.primaryMeterLabel) Start", "\(Vertical.current.primaryMeterLabel) End",
+			"\(Vertical.current.distanceMeterLabel) Start", "\(Vertical.current.distanceMeterLabel) End",
 			"Engine Hours Start", "Engine Hours End",
 			"Fuel Qty Start", "Fuel Qty End", "Fuel Consumed",
 			"Fuel Level Start", "Fuel Level End", "Fuel Level Start Fraction", "Fuel Level End Fraction",
@@ -341,8 +341,8 @@ struct pdfReportTrip: View {
 
 		if let start = fieldGroup("Start", [
 			("Date/Time", functions.formatDate_DDMMMyy_HHmm(date: trip.tripDateTimeStart)),
-			(Vertical.current.primaryMeterLabel, trip.odometerStart != 0 ? NumberFormatter.localizedString(from: NSNumber(value: trip.odometerStart), number: .decimal) : nil),
-			("Engine Hours", trip.engHoursStart != 0 ? String(format: "%.1f hrs", trip.engHoursStart) : nil),
+			(Vertical.current.distanceMeterLabel, trip.odometerStart != 0 ? NumberFormatter.localizedString(from: NSNumber(value: trip.odometerStart), number: .decimal) : nil),
+			(Vertical.current.hoursMeterLabel, trip.engHoursStart != 0 ? String(format: "%.1f hrs", trip.engHoursStart) : nil),
 			("Location", text(trip.locationStart)),
 			("Fuel Level", text(trip.fuelLevelStart)),
 			("DEF Level", text(trip.defLevelFraction))
@@ -352,8 +352,8 @@ struct pdfReportTrip: View {
 
 		if let end = fieldGroup("End", [
 			("Date/Time", trip.tripDateTimeEnd > trip.tripDateTimeStart ? functions.formatDate_DDMMMyy_HHmm(date: trip.tripDateTimeEnd) : nil),
-			(Vertical.current.primaryMeterLabel, trip.odometerEnd != 0 ? NumberFormatter.localizedString(from: NSNumber(value: trip.odometerEnd), number: .decimal) : nil),
-			("Engine Hours", trip.engHoursEnd != 0 ? String(format: "%.1f hrs", trip.engHoursEnd) : nil),
+			(Vertical.current.distanceMeterLabel, trip.odometerEnd != 0 ? NumberFormatter.localizedString(from: NSNumber(value: trip.odometerEnd), number: .decimal) : nil),
+			(Vertical.current.hoursMeterLabel, trip.engHoursEnd != 0 ? String(format: "%.1f hrs", trip.engHoursEnd) : nil),
 			("Location", text(trip.locationEnd)),
 			("Fuel Level", text(trip.fuelLevelEnd)),
 			("DEF Level", text(trip.defLevelEndFraction))

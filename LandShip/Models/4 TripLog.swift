@@ -23,6 +23,10 @@ class TripLog2	{
 	var odometerEnd: Int = 0
 	var engHoursStart: Float = 0.0
 	var engHoursEnd: Float = 0.0
+	// Landings this trip (AeroTrax). Aircraft cycles are derived by summing this field
+	// across TripLog2 rather than a high-water mark — a landing count is an increment,
+	// not a meter reading. See Vehicle8.cyclesAtEntry and PartTimeMath.swift.
+	var landings: Int = 0
 	var fuelQuantityStart: Float = 0.0
 	var fuelQuantityEnd: Float = 0.0
 	var fuelConsumed: Float = 0.0
@@ -30,6 +34,42 @@ class TripLog2	{
 	var fuelLevelEnd1: Float = 1.0
 	var fuelLevelStart: String = "Full"
 	var fuelLevelEnd: String = "Full"
+	// Per-tank trip-level fuel state for multi-tank aircraft (AeroTrax), mirroring
+	// FuelLog1's fuelTankNLevelStart1/QuantityStart/LevelEnd1/QuantityEnd naming — see
+	// Vehicle8.numberOfFuelTanks. fuelQuantityStart/End above stay the aggregate (sum
+	// across tanks), matching the same aggregate/per-tank split FuelLog1 already uses.
+	// Not threaded through init, matching the fuelLevelStart1/etc. precedent above —
+	// always default-constructed then set via the edit form's @State.
+	var fuelTank1LevelStart1: Float = 0
+	var fuelTank2LevelStart1: Float = 0
+	var fuelTank3LevelStart1: Float = 0
+	var fuelTank4LevelStart1: Float = 0
+	var fuelTank5LevelStart1: Float = 0
+	var fuelTank6LevelStart1: Float = 0
+	var fuelTank1QuantityStart: Float = 0
+	var fuelTank2QuantityStart: Float = 0
+	var fuelTank3QuantityStart: Float = 0
+	var fuelTank4QuantityStart: Float = 0
+	var fuelTank5QuantityStart: Float = 0
+	var fuelTank6QuantityStart: Float = 0
+	var fuelTank1LevelEnd1: Float = 0
+	var fuelTank2LevelEnd1: Float = 0
+	var fuelTank3LevelEnd1: Float = 0
+	var fuelTank4LevelEnd1: Float = 0
+	var fuelTank5LevelEnd1: Float = 0
+	var fuelTank6LevelEnd1: Float = 0
+	var fuelTank1QuantityEnd: Float = 0
+	var fuelTank2QuantityEnd: Float = 0
+	var fuelTank3QuantityEnd: Float = 0
+	var fuelTank4QuantityEnd: Float = 0
+	var fuelTank5QuantityEnd: Float = 0
+	var fuelTank6QuantityEnd: Float = 0
+	// Per-engine tach time at departure/arrival (AeroTrax), one entry per engine listed in
+	// the aircraft's ComponentTimes rows — mirrors the fuel-tank fields above structurally,
+	// but as a single Codable array rather than 6 discrete properties (same array-on-@Model
+	// pattern already proven by startCheckedFluidItemsRaw below). Index 0 = engine slot 1.
+	var engineTachStart: [Float] = []
+	var engineTachEnd: [Float] = []
 	var defLevel1: Float = 0.0
 	var defLevelFraction: String = ""
 	var defLevelEnd1: Float = 0.0
@@ -84,6 +124,26 @@ class TripLog2	{
 	var fuelLocation6: String = ""
 	var locationStart: String = ""
 	var locationEnd: String = ""
+	// Coordinate captured alongside the location text when a "Use" choice is tapped in
+	// LabelLocationTextview. Independent of the text field — the text can still be typed
+	// freely — so these stay nil until a manual choice (airport/marina/business/Home)
+	// supplies its own known coordinate.
+	var locationStartLat: Double?
+	var locationStartLon: Double?
+	var locationEndLat: Double?
+	var locationEndLon: Double?
+	var fuelLocationLat1: Double?
+	var fuelLocationLon1: Double?
+	var fuelLocationLat2: Double?
+	var fuelLocationLon2: Double?
+	var fuelLocationLat3: Double?
+	var fuelLocationLon3: Double?
+	var fuelLocationLat4: Double?
+	var fuelLocationLon4: Double?
+	var fuelLocationLat5: Double?
+	var fuelLocationLon5: Double?
+	var fuelLocationLat6: Double?
+	var fuelLocationLon6: Double?
 	// Fluid checks performed at travel start
 	var startOilChecked: Bool = false
 	var startEngineCoolantChecked: Bool = false
@@ -95,6 +155,14 @@ class TripLog2	{
 	var startFrontAxleChecked: Bool = false
 	var startFuelWaterSeparatorChecked: Bool = false
 	var startAirSystemWaterBleedChecked: Bool = false
+	// Aviation/marine fluid checks at travel start — see FluidCheckList in 11 Enums.swift.
+	// Land keeps using the 10 Bool fields above and never populates this array.
+	// Orphaned: a `[String]` attribute crashes on decode if CloudKit ever delivers it with
+	// empty/corrupt bytes (confirmed in the field, 2026-09-08) — no longer read or written
+	// anywhere; kept declared only so existing stored data isn't dropped by a lightweight
+	// migration. `startCheckedFluidItemsPacked` below is the live replacement.
+	var startCheckedFluidItemsRaw: [String] = []
+	var startCheckedFluidItemsPacked: String = ""
 	// Fluid checks performed at travel end
 	var endOilChecked: Bool = false
 	var endEngineCoolantChecked: Bool = false
@@ -106,6 +174,9 @@ class TripLog2	{
 	var endFrontAxleChecked: Bool = false
 	var endFuelWaterSeparatorChecked: Bool = false
 	var endAirSystemWaterBleedChecked: Bool = false
+	// Orphaned — see startCheckedFluidItemsRaw's comment above.
+	var endCheckedFluidItemsRaw: [String] = []
+	var endCheckedFluidItemsPacked: String = ""
 	var vehicleTowed: Bool = false
 	var vehicleIdTowed: String = ""
 	var tripGroup: String = ""
@@ -168,6 +239,7 @@ class TripLog2	{
 		odometerEnd: Int = 0,
 		engHoursStart: Float = 0.0,
 		engHoursEnd: Float = 0.0,
+		landings: Int = 0,
 		fuelQuantityStart: Float = 0.0,
 		fuelQuantityEnd: Float = 0.0,
 		fuelConsumed: Float = 0.0,
@@ -199,6 +271,10 @@ class TripLog2	{
 		fuelDateTime6: Date? = nil,
 		locationStart: String = "",
 		locationEnd: String = "",
+		locationStartLat: Double? = nil,
+		locationStartLon: Double? = nil,
+		locationEndLat: Double? = nil,
+		locationEndLon: Double? = nil,
 		vehicleTowed: Bool = false,
 		vehicleIdTowed: String = "",
 		tripGroup: String = "",
@@ -222,6 +298,7 @@ class TripLog2	{
 		self.odometerEnd = odometerEnd
 		self.engHoursStart = engHoursStart
 		self.engHoursEnd = engHoursEnd
+		self.landings = landings
 		self.fuelQuantityStart = fuelQuantityStart
 		self.fuelQuantityEnd = fuelQuantityEnd
 		self.fuelConsumed = fuelConsumed
@@ -253,6 +330,10 @@ class TripLog2	{
 		self.fuelDateTime6 = fuelDateTime6
 		self.locationStart = locationStart
 		self.locationEnd = locationEnd
+		self.locationStartLat = locationStartLat
+		self.locationStartLon = locationStartLon
+		self.locationEndLat = locationEndLat
+		self.locationEndLon = locationEndLon
 		self.vehicleTowed = vehicleTowed
 		self.vehicleIdTowed = vehicleIdTowed
 		self.tripGroup = tripGroup

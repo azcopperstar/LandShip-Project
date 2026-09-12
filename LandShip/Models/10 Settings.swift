@@ -37,6 +37,38 @@ class Settings1 {
 	var fluidChk_fuelWaterSep: Bool = true
 	var fluidChk_airWaterBleed: Bool = true
 
+	// Fluid Checks sheet configuration (aviation vertical) — which AviationFluidCheckItem
+	// entries appear in the Fluid Checks popup. Land uses the fluidChk_* Bools above instead.
+	var enabledAviationFluidCheckItemsRaw: [String] = []
+	var aviationFluidCheckItemsConfigured: Bool = false    // distinguishes "not yet set up" from "all items hidden"
+
+	var enabledAviationFluidCheckItems: [AviationFluidCheckItem] {
+		get {
+			guard aviationFluidCheckItemsConfigured else { return AviationFluidCheckItem.allCases }
+			return enabledAviationFluidCheckItemsRaw.compactMap(AviationFluidCheckItem.init(rawValue:))
+		}
+		set {
+			enabledAviationFluidCheckItemsRaw = newValue.map(\.rawValue)
+			aviationFluidCheckItemsConfigured = true
+		}
+	}
+
+	// Fluid Checks sheet configuration (marine vertical) — which MarineFluidCheckItem
+	// entries appear in the Fluid Checks popup. Land uses the fluidChk_* Bools above instead.
+	var enabledMarineFluidCheckItemsRaw: [String] = []
+	var marineFluidCheckItemsConfigured: Bool = false    // distinguishes "not yet set up" from "all items hidden"
+
+	var enabledMarineFluidCheckItems: [MarineFluidCheckItem] {
+		get {
+			guard marineFluidCheckItemsConfigured else { return MarineFluidCheckItem.allCases }
+			return enabledMarineFluidCheckItemsRaw.compactMap(MarineFluidCheckItem.init(rawValue:))
+		}
+		set {
+			enabledMarineFluidCheckItemsRaw = newValue.map(\.rawValue)
+			marineFluidCheckItemsConfigured = true
+		}
+	}
+
 	// Dashboard configuration scheme
 	var dashCardOrderRaw: [String] = []      // enabled DashboardCard rawValues, in display order
 	var dashCardsConfigured: Bool = false    // distinguishes "not yet set up" from "all cards hidden"
@@ -68,6 +100,89 @@ class Settings1 {
 			fuelTypesConfigured = true
 		}
 	}
+
+	// Fuel Type picker configuration (marine vertical) — which MarineFuelType
+	// entries appear in the Fuel Type picker on Edit Vehicle / Edit Fuel Log.
+	var enabledMarineFuelTypesRaw: [String] = []
+	var marineFuelTypesConfigured: Bool = false    // distinguishes "not yet set up" from "all fuels hidden"
+
+	var enabledMarineFuelTypes: [MarineFuelType] {
+		get {
+			guard marineFuelTypesConfigured else { return MarineFuelType.defaultEnabled }
+			return enabledMarineFuelTypesRaw.compactMap(MarineFuelType.init(rawValue:))
+		}
+		set {
+			enabledMarineFuelTypesRaw = newValue.map(\.rawValue)
+			marineFuelTypesConfigured = true
+		}
+	}
+
+	// Fuel Type picker configuration (land vertical) — which LandFuelType
+	// entries appear in the Fuel Type picker on Edit Vehicle / Edit Fuel Log.
+	var enabledLandFuelTypesRaw: [String] = []
+	var landFuelTypesConfigured: Bool = false    // distinguishes "not yet set up" from "all fuels hidden"
+
+	var enabledLandFuelTypes: [LandFuelType] {
+		get {
+			guard landFuelTypesConfigured else { return LandFuelType.defaultEnabled }
+			return enabledLandFuelTypesRaw.compactMap(LandFuelType.init(rawValue:))
+		}
+		set {
+			enabledLandFuelTypesRaw = newValue.map(\.rawValue)
+			landFuelTypesConfigured = true
+		}
+	}
+
+	var enabledHydraulicFluidTypesRaw: [String] = []
+	var hydraulicFluidTypesConfigured: Bool = false
+
+	var enabledHydraulicFluidTypes: [AviationHydraulicFluidType] {
+		get {
+			guard hydraulicFluidTypesConfigured else { return AviationHydraulicFluidType.defaultEnabled }
+			return enabledHydraulicFluidTypesRaw.compactMap(AviationHydraulicFluidType.init(rawValue:))
+		}
+		set {
+			enabledHydraulicFluidTypesRaw = newValue.map(\.rawValue)
+			hydraulicFluidTypesConfigured = true
+		}
+	}
+
+	var enabledMarineHydraulicFluidTypesRaw: [String] = []
+	var marineHydraulicFluidTypesConfigured: Bool = false
+
+	var enabledMarineHydraulicFluidTypes: [MarineHydraulicFluidType] {
+		get {
+			guard marineHydraulicFluidTypesConfigured else { return MarineHydraulicFluidType.defaultEnabled }
+			return enabledMarineHydraulicFluidTypesRaw.compactMap(MarineHydraulicFluidType.init(rawValue:))
+		}
+		set {
+			enabledMarineHydraulicFluidTypesRaw = newValue.map(\.rawValue)
+			marineHydraulicFluidTypesConfigured = true
+		}
+	}
+
+	var enabledLandHydraulicFluidTypesRaw: [String] = []
+	var landHydraulicFluidTypesConfigured: Bool = false
+
+	var enabledLandHydraulicFluidTypes: [LandHydraulicFluidType] {
+		get {
+			guard landHydraulicFluidTypesConfigured else { return LandHydraulicFluidType.defaultEnabled }
+			return enabledLandHydraulicFluidTypesRaw.compactMap(LandHydraulicFluidType.init(rawValue:))
+		}
+		set {
+			enabledLandHydraulicFluidTypesRaw = newValue.map(\.rawValue)
+			landHydraulicFluidTypesConfigured = true
+		}
+	}
+
+	// Home location — captured via Settings' "Use Current Location" button. Optional: nil
+	// until the user sets it. Consulted by LabelLocationTextview (Fuel Log/Travel Log
+	// location fields) to offer "Home" as the top "Use" choice when it's closer than any
+	// live-searched airport/marina/business result.
+	var homeLatitude: Double?
+	var homeLongitude: Double?
+
+	var hasHomeLocation: Bool { homeLatitude != nil && homeLongitude != nil }
 
 	@Attribute(.externalStorage)
 	var image1: Data?

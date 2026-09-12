@@ -40,6 +40,9 @@ struct LandShipApp: App {
 	private let modelContainer: ModelContainer?
 	private let startupError: Error?
 	private let isLocalOnly: Bool
+
+	@AppStorage(StorageKey.appearanceMode) private var appearanceModeRaw: String = AppearanceMode.system.rawValue
+	private var appearanceMode: AppearanceMode { AppearanceMode(rawValue: appearanceModeRaw) ?? .system }
 	
 	// Sync monitoring (static to persist for app lifetime)
 	private static var syncMonitor: CloudKitSyncMonitor?
@@ -198,13 +201,18 @@ struct LandShipApp: App {
 		WindowGroup {
 			RootStartupView(modelContainer: modelContainer, isLocalOnly: isLocalOnly, startupError: startupError)
 				.environment(\.entitlements, EntitlementStore.shared)
+				.preferredColorScheme(appearanceMode.colorScheme)
 		}
+#if os(macOS)
+		.windowToolbarStyle(.unifiedCompact(showsTitle: false))
+#endif
 #if os(macOS)
 		Window("\(AppInfo.displayName) Help", id: "help") {
 			HelpView()
 				.frame(minWidth: 600, minHeight: 500)
 				.windowFrameAutosave("HelpWindow")
 				.environment(\.entitlements, EntitlementStore.shared)
+				.preferredColorScheme(appearanceMode.colorScheme)
 		}
 		.commands {
 			HelpCommands()
@@ -250,11 +258,15 @@ private struct StoreCommands: Commands {
 }
 
 private struct DebugCommands: Commands {
+	// Mirrors the AppTitleView badge so the menu also signals an unread
+	// CloudKit failure — the sidebar title isn't always visible on macOS.
+	@AppStorage(StorageKey.hasUnreadCloudKitFailure) private var hasUnreadCloudKitFailure = false
+
 	var body: some Commands {
 		// The .principal toolbar long-press that opens Debug Tools on iOS doesn't
 		// reliably register on macOS, so this menu item is the macOS entry point.
 		CommandGroup(after: .appInfo) {
-			Button("Debug Tools…") {
+			Button(hasUnreadCloudKitFailure ? "Debug Tools… ⚠️ Sync Failure" : "Debug Tools…") {
 				NotificationCenter.default.post(name: .openDebugToolsRequested, object: nil)
 			}
 			.keyboardShortcut("d", modifiers: [.command, .shift, .option])
@@ -660,10 +672,71 @@ final class CloudKitSyncMonitor: @unchecked Sendable {
 			return
 		}
 
+		// CloudKit's own internal Protected Cloud Storage key rotation surfaces as a
+		// BAD_REQUEST on record type "_pcs_data" in the Dashboard's telemetry. It is not
+		// one of our CD_* record types, NSPersistentCloudKitContainer retries it internally,
+		// and Apple DTS's guidance is that it's only a concern paired with QUOTA_EXCEEDED.
+		// Logging it as a failure buries real signal, so it gets a quieter log line instead.
+		if Self.isBenignPCSNoise(error) {
+			logger.info("ℹ️ CloudKit \(kind, privacy: .public) reported benign PCS key-rotation noise (_pcs_data BAD_REQUEST) — no action needed")
+			return
+		}
+
 		let message = "❌ CloudKit \(kind) FAILED at \(formatTime(Date())): \(error.localizedDescription)"
 		print("[LandShip] \(message)")
 		logger.error("\(message, privacy: .public)")
 		Self.logDetail(for: error)
+		Self.persistFailure(phase: kind, error: error)
+	}
+
+	/// True only if every leaf of this error's tree is CloudKit's own internal
+	/// PCS key-rotation record ("_pcs_data") failing with badRequest — never true
+	/// if the tree contains any real record type, even mixed with PCS noise.
+	private static func isBenignPCSNoise(_ error: Error) -> Bool {
+		guard let ckError = error as? CKError,
+			  ckError.code == .partialFailure,
+			  let byItemID = ckError.partialErrorsByItemID,
+			  !byItemID.isEmpty else { return false }
+
+		return byItemID.allSatisfy { itemID, subError in
+			(itemID as? CKRecord.ID)?.recordName.hasPrefix("_pcs_data") == true
+				&& (subError as? CKError)?.code == .invalidArguments
+		}
+	}
+
+	/// Appends real (non-PCS-noise) sync failures to a plain-text log in Application
+	/// Support, so a TestFlight tester who reports "it's not syncing" can locate and
+	/// share the file — Console.app isn't reachable on their device. Also mirrored into
+	/// InAppLogger so the same failure shows up in the long-press Debug Tools sheet.
+	private static func persistFailure(phase: String, error: Error) {
+		let nsError = error as NSError
+		var line = "\(Date()) [\(phase)] \(nsError.domain) code=\(nsError.code): \(nsError.localizedDescription)"
+		if let ckError = error as? CKError, let partial = ckError.partialErrorsByItemID, !partial.isEmpty {
+			let recordNames = partial.keys.compactMap { ($0 as? CKRecord.ID)?.recordName }.joined(separator: ", ")
+			line += " partialFailures=[\(recordNames)]"
+		}
+
+		// Safe: this is only ever reached from the eventObserver closure, which
+		// NotificationCenter delivers on queue: .main.
+		MainActor.assumeIsolated {
+			InAppLogger.shared.log("❌ CloudKit \(phase) FAILED: \(nsError.domain) code=\(nsError.code): \(nsError.localizedDescription)")
+		}
+		UserDefaults.standard.set(true, forKey: StorageKey.hasUnreadCloudKitFailure)
+
+		line += "\n"
+
+		guard let dir = try? FileManager.default.url(
+			for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+		), let data = line.data(using: .utf8) else { return }
+
+		let fileURL = dir.appendingPathComponent("cloudkit-failures.log")
+		if let handle = try? FileHandle(forWritingTo: fileURL) {
+			handle.seekToEndOfFile()
+			handle.write(data)
+			try? handle.close()
+		} else {
+			try? data.write(to: fileURL)
+		}
 	}
 
 	/// Unpacks a CloudKit error far enough to name the failing record type and

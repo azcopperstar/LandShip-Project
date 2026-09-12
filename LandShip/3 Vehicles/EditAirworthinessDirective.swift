@@ -2,8 +2,10 @@
 //  EditAirworthinessDirective.swift
 //  LandShip
 //
-//  Sheet-based form for adding or editing a single AirworthinessDirective.
-//  Presented from EditVehicle whenever the user taps an AD row or the Add button.
+//  Sheet-based form for adding or editing a single AirworthinessDirective — also covers
+//  Service Bulletins/Letters via directiveType (see the model's header comment). Presented
+//  from EditVehicle whenever the user taps a row or the Add button, or from EditParts's
+//  "DIRECTIVES & BULLETINS" card (fixedPartNumber set, defaulting the scope to Part Number).
 //  AeroTrax only — see Vertical.enabledFeatures.
 //
 
@@ -31,11 +33,18 @@ struct EditAirworthinessDirective: View {
 	@State private var nextDueHours: Float = 0
 	@State private var notes: String = ""
 
+	@State private var directiveType: String
+	@State private var isMandatory: Bool
+	@State private var appliesToScope: String
+	@State private var appliesToPartNumber: String
+	@State private var appliesToManufacturer: String
+	@State private var appliesToSerialNumbers: String
+
 	@State private var isPresentingDeleteConfirm: Bool = false
 	@State private var showSaveError: Bool = false
 	@State private var saveErrorMessage: String?
 
-	init(vehicleId: String, directive: AirworthinessDirective? = nil) {
+	init(vehicleId: String, directive: AirworthinessDirective? = nil, fixedPartNumber: String? = nil) {
 		self.vehicleId = vehicleId
 		self.directive = directive
 		self._adNumber = State(initialValue: directive?.adNumber ?? "")
@@ -51,6 +60,12 @@ struct EditAirworthinessDirective: View {
 		self._nextDueDate = State(initialValue: directive?.nextDueDate ?? Date())
 		self._nextDueHours = State(initialValue: directive?.nextDueHours ?? 0)
 		self._notes = State(initialValue: directive?.notes ?? "")
+		self._directiveType = State(initialValue: directive?.directiveType.isEmpty == false ? directive!.directiveType : "Airworthiness Directive")
+		self._isMandatory = State(initialValue: directive?.isMandatory ?? true)
+		self._appliesToScope = State(initialValue: directive?.appliesToScope ?? (fixedPartNumber != nil ? "Part Number" : "Aircraft"))
+		self._appliesToPartNumber = State(initialValue: directive?.appliesToPartNumber ?? fixedPartNumber ?? "")
+		self._appliesToManufacturer = State(initialValue: directive?.appliesToManufacturer ?? "")
+		self._appliesToSerialNumbers = State(initialValue: directive?.appliesToSerialNumbers ?? "")
 	}
 
 	var body: some View {
@@ -58,10 +73,52 @@ struct EditAirworthinessDirective: View {
 			ScrollView {
 				CardView {
 					VStack {
-						SectionText(label: "AD DETAILS")
-						HStack { LabelDataTextview(label: "AD Number", data: $adNumber) }
+						SectionText(label: "DIRECTIVE / BULLETIN DETAILS")
+						HStack {
+							Text("Type").textLabelModified()
+							Picker("", selection: $directiveType) {
+								Text("Airworthiness Directive").tag("Airworthiness Directive")
+								Text("Service Bulletin").tag("Service Bulletin")
+								Text("Mandatory Service Bulletin").tag("Mandatory Service Bulletin")
+								Text("Service Letter").tag("Service Letter")
+								Text("Service Instruction").tag("Service Instruction")
+							}
+							.pickerStyle(.automatic)
+							.frame(maxWidth: .infinity, alignment: .trailing)
+						}
+						HStack { LabelDataToggle(label: "Mandatory", data: $isMandatory) }
+						HStack { LabelDataTextview(label: "Number", data: $adNumber) }
 						HStack { LabelDataTextview(label: "Title", data: $title) }
 						HStack { LabelDataTextview(label: "Applicability", data: $applicability) }
+					}
+				}
+
+				CardView {
+					VStack {
+						SectionText(label: "APPLICABILITY SCOPE")
+						HStack {
+							Text("Applies To").textLabelModified()
+							Picker("", selection: $appliesToScope) {
+								Text("Aircraft").tag("Aircraft")
+								Text("Part Number").tag("Part Number")
+								Text("Both").tag("Both")
+							}
+							.pickerStyle(.automatic)
+							.frame(maxWidth: .infinity, alignment: .trailing)
+						}
+						Text("Many directives are issued against a part number, not an aircraft model — that entry follows the part to whichever aircraft it's installed on.")
+							.font(.caption)
+							.foregroundStyle(.secondary)
+							.frame(maxWidth: .infinity, alignment: .leading)
+						if appliesToScope != "Aircraft" {
+							HStack { LabelDataTextview(label: "Part Number", data: $appliesToPartNumber) }
+							HStack { LabelDataTextview(label: "Manufacturer", data: $appliesToManufacturer) }
+							HStack { LabelDataTextview(label: "Serial Numbers", data: $appliesToSerialNumbers) }
+							Text("Serial number ranges are recorded for reference only — not checked automatically.")
+								.font(.caption)
+								.foregroundStyle(.secondary)
+								.frame(maxWidth: .infinity, alignment: .leading)
+						}
 					}
 				}
 
@@ -161,6 +218,12 @@ struct EditAirworthinessDirective: View {
 			existing.nextDueDate = nextDueDate
 			existing.nextDueHours = nextDueHours
 			existing.notes = notes
+			existing.directiveType = directiveType
+			existing.isMandatory = isMandatory
+			existing.appliesToScope = appliesToScope
+			existing.appliesToPartNumber = appliesToScope == "Aircraft" ? "" : appliesToPartNumber
+			existing.appliesToManufacturer = appliesToScope == "Aircraft" ? "" : appliesToManufacturer
+			existing.appliesToSerialNumbers = appliesToScope == "Aircraft" ? "" : appliesToSerialNumbers
 			existing.updatedAt = Date()
 		} else {
 			let newDirective = AirworthinessDirective(
@@ -177,7 +240,13 @@ struct EditAirworthinessDirective: View {
 				signedOffBy: signedOffBy,
 				nextDueDate: nextDueDate,
 				nextDueHours: nextDueHours,
-				notes: notes
+				notes: notes,
+				directiveType: directiveType,
+				isMandatory: isMandatory,
+				appliesToScope: appliesToScope,
+				appliesToPartNumber: appliesToScope == "Aircraft" ? "" : appliesToPartNumber,
+				appliesToManufacturer: appliesToScope == "Aircraft" ? "" : appliesToManufacturer,
+				appliesToSerialNumbers: appliesToScope == "Aircraft" ? "" : appliesToSerialNumbers
 			)
 			modelContext.insert(newDirective)
 		}

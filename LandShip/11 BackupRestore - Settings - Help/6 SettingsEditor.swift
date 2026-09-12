@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import CoreLocation
 
 struct SettingsEditorView: View {
 	// Called when the user picks "Restore" on an entry in Manage Auto-Backups.
@@ -29,6 +30,11 @@ struct SettingsEditorView: View {
 	// Hold a reference to the editable model (created if missing)
 	@State private var settings: Settings1?
 
+	// Home location capture — a throwaway LocationProvider just for this one button, mirroring
+	// LabelLocationTextview's usage elsewhere.
+	@StateObject private var homeLocationProvider = LocationProvider()
+	@State private var isCapturingHomeLocation = false
+
 	// App-wide onboarding completion flag (shared with ContentView)
 	@AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
 	@State private var showResetOnboardingConfirm: Bool = false
@@ -36,6 +42,7 @@ struct SettingsEditorView: View {
 	// App-wide vehicle list preference moved here from ChooseVehicle
 	@AppStorage("showInactiveVehicles") private var showInactiveVehicles: Bool = false
 	@AppStorage(StorageKey.launchScreen) private var launchScreen: String = "dashboard"
+	@AppStorage(StorageKey.appearanceMode) private var appearanceModeRaw: String = AppearanceMode.system.rawValue
 
 	// Automatic backup preferences
 	@AppStorage(StorageKey.autoBackupInterval) private var autoBackupIntervalRaw: String = AutoBackupInterval.off.rawValue
@@ -91,12 +98,67 @@ struct SettingsEditorView: View {
 		)
 	}
 	
+	/// Signed decimal degrees with N/S, E/W suffixes, e.g. "39.8600°N, 75.2010°W" — same
+	/// format as LabelLocationTextview's lat/lon caption, kept as a separate copy since that
+	/// one is private to its own struct.
+	private static func homeCoordinateString(latitude: Double, longitude: Double) -> String {
+		let latDirection = latitude >= 0 ? "N" : "S"
+		let lonDirection = longitude >= 0 ? "E" : "W"
+		return String(format: "%.4f°%@, %.4f°%@", abs(latitude), latDirection, abs(longitude), lonDirection)
+	}
+
 	private func bindBool(_ keyPath: ReferenceWritableKeyPath<Settings1, Bool>) -> Binding<Bool> {
 		Binding(
 			get: { settings?[keyPath: keyPath] ?? true },
 			set: { newValue in
 				if settings == nil { ensureSettings() }
 				settings?[keyPath: keyPath] = newValue
+			}
+		)
+	}
+
+	/// The vertical's full fluid-check item list, in catalog declaration order — land isn't
+	/// represented here since it uses the fixed fluidChk_* Bools via bindBool instead.
+	private var currentVerticalFluidCheckLabels: [String] {
+		switch Vertical.current.id {
+			case .land: return []
+			case .aviation: return AviationFluidCheckItem.allCases.map(\.rawValue)
+			case .marine: return MarineFluidCheckItem.allCases.map(\.rawValue)
+		}
+	}
+
+	/// Binds one aviation/marine fluid-check item's enabled state, re-sorting the backing
+	/// array into catalog order on every write so Set iteration order never leaks into
+	/// storage — mirrors FuelTypesConfigView.save().
+	private func bindFluidCheckItem(_ label: String) -> Binding<Bool> {
+		Binding(
+			get: {
+				switch Vertical.current.id {
+					case .land: return true
+					case .aviation:
+						guard let item = AviationFluidCheckItem(rawValue: label) else { return true }
+						return settings?.enabledAviationFluidCheckItems.contains(item) ?? true
+					case .marine:
+						guard let item = MarineFluidCheckItem(rawValue: label) else { return true }
+						return settings?.enabledMarineFluidCheckItems.contains(item) ?? true
+				}
+			},
+			set: { newValue in
+				if settings == nil { ensureSettings() }
+				guard let s = settings else { return }
+				switch Vertical.current.id {
+					case .land: break
+					case .aviation:
+						guard let item = AviationFluidCheckItem(rawValue: label) else { return }
+						var current = Set(s.enabledAviationFluidCheckItems)
+						if newValue { current.insert(item) } else { current.remove(item) }
+						s.enabledAviationFluidCheckItems = AviationFluidCheckItem.allCases.filter { current.contains($0) }
+					case .marine:
+						guard let item = MarineFluidCheckItem(rawValue: label) else { return }
+						var current = Set(s.enabledMarineFluidCheckItems)
+						if newValue { current.insert(item) } else { current.remove(item) }
+						s.enabledMarineFluidCheckItems = MarineFluidCheckItem.allCases.filter { current.contains($0) }
+				}
 			}
 		)
 	}
@@ -128,6 +190,15 @@ struct SettingsEditorView: View {
 			Picker_LWH(label: "Wheelbase", data: bind(\.unitWheelBase))
 		}
 		
+		Section("Appearance") {
+			Picker("Appearance", selection: $appearanceModeRaw) {
+				ForEach(AppearanceMode.allCases) { mode in
+					Text(mode.label).tag(mode.rawValue)
+				}
+			}
+			.pickerStyle(.segmented)
+		}
+
 		Section("App Behaviour") {
 			Picker("Launch Screen", selection: $launchScreen) {
 				Text("Dashboard").tag("dashboard")
@@ -198,19 +269,145 @@ struct SettingsEditorView: View {
 			Text("When enabled, \(AppInfo.displayName) creates a backup automatically the next time you open the app after the chosen interval has passed — no file picker needed. Automatic backups are stored in the app's own Documents folder and pruned to the number kept above; use \u{201C}Manage Auto-Backups…\u{201D} to restore, share a copy elsewhere, or delete one.")
 		}
 
-		Section("Fuel Log — Fluid Checks") {
-			Text("Choose which fluid checks appear in the Fluid Checks popup when editing a fuel log or enroute stop.")
-				.font(.caption).foregroundStyle(.secondary)
-			Toggle("Engine Oil", isOn: bindBool(\.fluidChk_engineOil))
-			Toggle("Engine Coolant", isOn: bindBool(\.fluidChk_engineCoolant))
-			Toggle("Secondary Coolant", isOn: bindBool(\.fluidChk_secondaryCoolant))
-			Toggle("Power Steering", isOn: bindBool(\.fluidChk_powerSteering))
-			Toggle("Brake", isOn: bindBool(\.fluidChk_brake))
-			Toggle("Transmission", isOn: bindBool(\.fluidChk_transmission))
-			Toggle("Rear Axle", isOn: bindBool(\.fluidChk_rearAxle))
-			Toggle("Front Axle", isOn: bindBool(\.fluidChk_frontAxle))
-			Toggle("Fuel/Water Separator", isOn: bindBool(\.fluidChk_fuelWaterSep))
-			Toggle("Air System Water Bleed", isOn: bindBool(\.fluidChk_airWaterBleed))
+		if Vertical.current.id == .aviation {
+			Section {
+				NavigationLink("Configure Fuel Types…") {
+					FuelTypesConfigView()
+				}
+			} header: {
+				Text("Fuel Types")
+			} footer: {
+				Text("Choose which fuel types (100LL, Jet A, JP-8, SAF, etc.) appear in the Fuel Type picker when editing an aircraft or fuel log entry.")
+			}
+		}
+
+		if Vertical.current.id == .marine {
+			Section {
+				NavigationLink("Configure Fuel Types…") {
+					MarineFuelTypesConfigView()
+				}
+			} header: {
+				Text("Fuel Types")
+			} footer: {
+				Text("Choose which fuel types (marine gasoline, LSMGO, VLSFO, LNG, etc.) appear in the Fuel Type picker when editing a vessel or fuel log entry.")
+			}
+		}
+
+		if Vertical.current.id == .land {
+			Section {
+				NavigationLink("Configure Fuel Types…") {
+					LandFuelTypesConfigView()
+				}
+			} header: {
+				Text("Fuel Types")
+			} footer: {
+				Text("Choose which fuel types (gasoline grades, ethanol blends, diesel, EV charging, etc.) appear in the Fuel Type picker when editing a vehicle or fuel log entry.")
+			}
+		}
+
+		if Vertical.current.id == .aviation {
+			Section {
+				NavigationLink("Configure Hydraulic Fluid Types…") {
+					HydraulicFluidTypesConfigView()
+				}
+			} header: {
+				Text("Hydraulic Fluid Types")
+			} footer: {
+				Text("Choose which hydraulic fluid types (MIL-PRF-5606, Skydrol, HyJet, etc.) appear in the Hydraulic Fluid Type picker when editing an aircraft.")
+			}
+		}
+
+		if Vertical.current.id == .marine {
+			Section {
+				NavigationLink("Configure Hydraulic Fluid Types…") {
+					MarineHydraulicFluidTypesConfigView()
+				}
+			} header: {
+				Text("Hydraulic Fluid Types")
+			} footer: {
+				Text("Choose which hydraulic fluid types (tilt/trim fluid, AW hydraulic oil, Dexron III, etc.) appear in the Hydraulic Fluid Type picker when editing a vessel.")
+			}
+		}
+
+		if Vertical.current.id == .land {
+			Section {
+				NavigationLink("Configure Hydraulic Fluid Types…") {
+					LandHydraulicFluidTypesConfigView()
+				}
+			} header: {
+				Text("Hydraulic Fluid Types")
+			} footer: {
+				Text("Choose which hydraulic fluid types (AW hydraulic oil, automatic transmission fluid, tractor/equipment brand fluids, etc.) appear in the Hydraulic Fluid Type picker when editing a vehicle.")
+			}
+		}
+
+		if Vertical.current.id == .land {
+			Section("Fuel Log — Fluid Checks") {
+				Text("Choose which fluid checks appear in the Fluid Checks popup when editing a fuel log or enroute stop.")
+					.font(.caption).foregroundStyle(.secondary)
+				Toggle("Engine Oil", isOn: bindBool(\.fluidChk_engineOil))
+				Toggle("Engine Coolant", isOn: bindBool(\.fluidChk_engineCoolant))
+				Toggle("Secondary Coolant", isOn: bindBool(\.fluidChk_secondaryCoolant))
+				Toggle("Power Steering", isOn: bindBool(\.fluidChk_powerSteering))
+				Toggle("Brake", isOn: bindBool(\.fluidChk_brake))
+				Toggle("Transmission", isOn: bindBool(\.fluidChk_transmission))
+				Toggle("Rear Axle", isOn: bindBool(\.fluidChk_rearAxle))
+				Toggle("Front Axle", isOn: bindBool(\.fluidChk_frontAxle))
+				Toggle("Fuel/Water Separator", isOn: bindBool(\.fluidChk_fuelWaterSep))
+				Toggle("Air System Water Bleed", isOn: bindBool(\.fluidChk_airWaterBleed))
+			}
+		} else {
+			Section("Fuel Log — Fluid Checks") {
+				Text("Choose which fluid checks appear in the Fluid Checks popup when editing a fuel log or enroute stop.")
+					.font(.caption).foregroundStyle(.secondary)
+				ForEach(currentVerticalFluidCheckLabels, id: \.self) { label in
+					Toggle(label, isOn: bindFluidCheckItem(label))
+				}
+			}
+		}
+
+		Section {
+			if let settings, let lat = settings.homeLatitude, let lon = settings.homeLongitude {
+				Text(Self.homeCoordinateString(latitude: lat, longitude: lon))
+					.font(.callout)
+					.foregroundStyle(.secondary)
+				Button(role: .destructive) {
+					settings.homeLatitude = nil
+					settings.homeLongitude = nil
+				} label: {
+					Label("Clear Home Location", systemImage: "trash")
+				}
+			} else {
+				Text("Not set.")
+					.font(.callout)
+					.foregroundStyle(.secondary)
+			}
+			Button {
+				Task {
+					if settings == nil { ensureSettings() }
+					isCapturingHomeLocation = true
+					await homeLocationProvider.refreshLocationContext()
+					if let location = homeLocationProvider.lastLocation {
+						settings?.homeLatitude = location.coordinate.latitude
+						settings?.homeLongitude = location.coordinate.longitude
+					}
+					isCapturingHomeLocation = false
+				}
+			} label: {
+				if isCapturingHomeLocation {
+					HStack {
+						ProgressView()
+						Text("Locating…")
+					}
+				} else {
+					Label("Use Current Location", systemImage: "location.fill")
+				}
+			}
+			.disabled(isCapturingHomeLocation)
+		} header: {
+			Text("Home Location")
+		} footer: {
+			Text("Sets \u{201C}Home\u{201D} as a quick \u{201C}Use\u{201D} choice on Fuel Log/Travel Log location fields when it\u{2019}s the closest match to your current position.")
 		}
 
 		Section {

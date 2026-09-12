@@ -145,14 +145,17 @@ struct pdfReportFuel: View {
 		let logs = fetchFuelLogs()
 		let headers = [
 			"Inactive", "Log ID", Vertical.current.assetSingular, "\(Vertical.current.assetSingular) Display Name", "Log Name", "Notes",
-			"Created At", "Updated At", "Date/Time", "Exit Time", Vertical.current.primaryMeterLabel, "Location", "Engine Hours",
+			"Created At", "Updated At", "Date/Time", "Exit Time", Vertical.current.distanceMeterLabel, "Location", Vertical.current.hoursMeterLabel,
 			"Fuel Qty Start", "Fuel Qty End", "Fuel Added", "DEF Added", "DEF Price",
 			"DEF Level Start", "DEF Level Start Fraction", "DEF Qty Start", "DEF Level End", "DEF Level End Fraction", "DEF Qty End",
 			"Oil Added", "Oil Checked", "Engine Coolant Checked", "Secondary Coolant Checked", "Power Steering Checked",
 			"Brake Fluid Checked", "Transmission Fluid Checked", "Rear Axle Checked", "Front Axle Checked",
-			"Fuel Water Separator Checked", "Air System Water Bleed Checked",
+			"Fuel Water Separator Checked", "Air System Water Bleed Checked", "Checked Fluid Items",
 			"Fuel Level Start", "Fuel Level End", "Fuel Level Start Fraction", "Fuel Level End Fraction",
 			"Fuel Price", "Fuel Cost", "Fuel Type",
+			"Uplift Quantity", "Uplift Unit", "Density", "Density Unit", "Fill Type",
+			"Ticket Number", "Supplier / Brand", "Contract Price", "Contract Savings", "All-In Cost",
+			"Trip / Mission Number", "Cost Center",
 			"Image 1 Description", "Image 2 Description", "Image 3 Description"
 		]
 		let rows: [[String]] = logs.map { log in
@@ -165,8 +168,13 @@ struct pdfReportFuel: View {
 				CSVField.float(log.oilAdded), CSVField.bool(log.oilChecked), CSVField.bool(log.engineCoolantChecked), CSVField.bool(log.secondaryCoolantChecked), CSVField.bool(log.powerSteeringChecked),
 				CSVField.bool(log.brakeFluidChecked), CSVField.bool(log.transmissionFluidChecked), CSVField.bool(log.rearAxleChecked), CSVField.bool(log.frontAxleChecked),
 				CSVField.bool(log.fuelWaterSeparatorChecked), CSVField.bool(log.airSystemWaterBleedChecked),
+				FluidCheckList.currentLabels.filter { FluidCheckList.unpack(log.checkedFluidItemsPacked).contains($0) }.joined(separator: "; "),
 				CSVField.float(log.fuelLevelStart1), CSVField.float(log.fuelLevelEnd1), log.fuelLevelStartFraction, log.fuelLevelEndFraction,
 				CSVField.float(log.fuelPrice), CSVField.float(log.fuelCost), log.fuelType,
+				CSVField.float(log.upliftQuantity), log.upliftUnitRaw, CSVField.float(log.density), log.densityUnitRaw, log.fillTypeRaw,
+				log.ticketNumber, log.supplierBrand, CSVField.float(log.contractPricePerUnit),
+				CSVField.float(FuelMath.costBreakdown(log).contractSavings), CSVField.float(FuelMath.costBreakdown(log).allInCost),
+				log.tripNumber, log.costCenter,
 				log.image1Description, log.image2Description, log.image3Description
 			]
 		}
@@ -205,6 +213,7 @@ struct pdfReportFuel: View {
 	func generatePDFWithTable() -> Data? {
 		let logs = fetchFuelLogs()
 		let units = prefsFunctions.loadSettingsArray(context: modelContext, userName: "primary1") ?? Array(repeating: "", count: 13)
+		let intervalStats = functions.loadFuelIntervalStatsBatch(context: modelContext, logs: logs)
 
 		let columns: [PDFTableColumn] = [
 			PDFTableColumn("\(Vertical.current.assetSingular.uppercased()) &\nLOCATION", weight: 0.28),
@@ -216,7 +225,7 @@ struct pdfReportFuel: View {
 			[
 				vehicleLocationCell(log, units: units),
 				fuelingCell(log, units: units),
-				checksAndNotesCell(log)
+				checksAndNotesCell(log, flags: intervalStats[log.persistentModelID]?.flags ?? [])
 			]
 		}
 
@@ -242,13 +251,13 @@ struct pdfReportFuel: View {
 
 			// DEF only applies to diesel engines — non-diesel entries are excluded entirely
 			// rather than relying on their DEF values already being zero.
-			let dieselEntries = subset.filter { $0.fuelType.caseInsensitiveCompare("Diesel") == .orderedSame }
+			let dieselEntries = subset.filter { isDieselFamilyFuelType($0.fuelType) }
 			let totalDefAdded = dieselEntries.reduce(Float(0)) { $0 + $1.defAdded }
 			let totalDefCost = dieselEntries.reduce(Float(0)) { $0 + $1.defAdded * $1.defPrice }
 			let defEntries = dieselEntries.filter { $0.defAdded != 0 }
 			let averageDefCost = defEntries.isEmpty ? 0 : totalDefCost / Float(defEntries.count)
 
-			return [
+			var fields: [(String, String?)] = [
 				("Total Fuel Added", totalFuelAdded != 0 ? "\(String(format: "%.1f", totalFuelAdded)) \(fuelUnit)" : nil),
 				("Total Fuel Cost", totalFuelCost != 0 ? pdfCurrencyString(totalFuelCost) : nil),
 				("Average Fuel Cost", averageFuelCost != 0 ? pdfCurrencyString(averageFuelCost) : nil),
@@ -258,6 +267,17 @@ struct pdfReportFuel: View {
 				("Total DEF Cost", totalDefCost != 0 ? pdfCurrencyString(totalDefCost) : nil),
 				("Average DEF Cost", averageDefCost != 0 ? pdfCurrencyString(averageDefCost) : nil)
 			]
+
+			// Contract fuel savings and all-in cost — AeroTrax only for now.
+			if Vertical.current.enabledFeatures.contains(.fuelOperations) {
+				let breakdowns = subset.map(FuelMath.costBreakdown)
+				let totalSavings = breakdowns.reduce(Float(0)) { $0 + $1.contractSavings }
+				let totalAllIn = breakdowns.reduce(Float(0)) { $0 + $1.allInCost }
+				fields.append(("Contract Savings", totalSavings != 0 ? pdfCurrencyString(totalSavings) : nil))
+				fields.append(("All-In Cost", totalAllIn != 0 ? pdfCurrencyString(totalAllIn) : nil))
+			}
+
+			return fields
 		}
 		return PDFReportSummary(title: "FUEL LOG SUMMARY", groups: groups)
 	}
@@ -300,8 +320,8 @@ struct pdfReportFuel: View {
 			("Date/Time", functions.formatDate_DDMMMyy_HHmm(date: log.fuelDateTime)),
 			("Exit Time", exitTime),
 			("Location", text(log.location)),
-			(Vertical.current.primaryMeterLabel, log.odometer != 0 ? "\(NumberFormatter.localizedString(from: NSNumber(value: log.odometer), number: .decimal)) \(distanceUnit)" : nil),
-			("Engine Hours", log.engHours != 0 ? String(format: "%.1f hrs", log.engHours) : nil)
+			(Vertical.current.distanceMeterLabel, log.odometer != 0 ? "\(NumberFormatter.localizedString(from: NSNumber(value: log.odometer), number: .decimal)) \(distanceUnit)" : nil),
+			(Vertical.current.hoursMeterLabel, log.engHours != 0 ? String(format: "%.1f hrs", log.engHours) : nil)
 		]) {
 			groups.append(identity)
 		}
@@ -318,6 +338,7 @@ struct pdfReportFuel: View {
 
 		if let fueling = fieldGroup(nil, [
 			("Fuel Type", text(log.fuelType)),
+			("Fill Type", text(log.fillTypeRaw)),
 			("Level Start", levelText(fraction: log.fuelLevelStartFraction, level: log.fuelLevelStart1)),
 			("Level End", levelText(fraction: log.fuelLevelEndFraction, level: log.fuelLevelEnd1)),
 			("Fuel Added", log.fuelAdded != 0 ? "\(String(format: "%.1f", log.fuelAdded)) \(fuelUnit)" : nil),
@@ -328,9 +349,22 @@ struct pdfReportFuel: View {
 			groups.append(fueling)
 		}
 
+		// Cost stack — AeroTrax only for now (Vertical.enabledFeatures.fuelOperations).
+		if Vertical.current.enabledFeatures.contains(.fuelOperations) {
+			let breakdown = FuelMath.costBreakdown(log)
+			if let costStack = fieldGroup("Cost Stack", [
+				("Ticket", text(log.ticketNumber)),
+				("Supplier", text(log.supplierBrand)),
+				("All-In Cost", breakdown.allInCost != 0 ? functions.formatCurrency(dollars: breakdown.allInCost) : nil),
+				("Contract Savings", breakdown.contractSavings != 0 ? functions.formatCurrency(dollars: breakdown.contractSavings) : nil)
+			]) {
+				groups.append(costStack)
+			}
+		}
+
 		// DEF only applies to diesel engines — non-diesel entries never show the DEF group,
 		// regardless of whether any DEF values happen to be present.
-		if log.fuelType.caseInsensitiveCompare("Diesel") == .orderedSame,
+		if isDieselFamilyFuelType(log.fuelType),
 		   let def = fieldGroup("DEF", [
 			("Added", log.defAdded != 0 ? "\(String(format: "%.1f", log.defAdded)) \(defUnit)" : nil),
 			("Price", log.defPrice != 0 ? functions.formatCurrency(dollars: log.defPrice) : nil),
@@ -344,22 +378,34 @@ struct pdfReportFuel: View {
 		return .groups(groups)
 	}
 
-	private func checksAndNotesCell(_ log: FuelLog1) -> PDFCell {
+	/// Renders fuel data-quality flags as short prose — mirrors EditFuelLog's
+	/// flagsDescription idiom: a flag means the economy figure differs from what a clean
+	/// full-to-full reading would give, not that something is wrong.
+	private func flagsText(_ flags: Set<FuelDataFlag>) -> String? {
+		var parts: [String] = []
+		if flags.contains(.noPriorFullFill) { parts.append("No prior full fill found.") }
+		if flags.contains(.partialFillInInterval) { parts.append("Includes a partial fill.") }
+		if flags.contains(.densityAssumed) { parts.append("Density assumed.") }
+		return parts.isEmpty ? nil : parts.joined(separator: " ")
+	}
+
+	private func checksAndNotesCell(_ log: FuelLog1, flags: Set<FuelDataFlag>) -> PDFCell {
 		var groups: [PDFFieldGroup] = []
 
-		let checkedFluids: [(String, Bool)] = [
-			("Engine Oil", log.oilChecked),
-			("Engine Coolant", log.engineCoolantChecked),
-			("Secondary Coolant", log.secondaryCoolantChecked),
-			("Power Steering", log.powerSteeringChecked),
-			("Brake", log.brakeFluidChecked),
-			("Transmission", log.transmissionFluidChecked),
-			("Rear Axle", log.rearAxleChecked),
-			("Front Axle", log.frontAxleChecked),
-			("Fuel/Water Separator", log.fuelWaterSeparatorChecked),
-			("Air System Water Bleed", log.airSystemWaterBleedChecked)
-		]
-		let checkedNames = checkedFluids.filter(\.1).map(\.0)
+		let checkedNames: [String] = Vertical.current.id == .land
+			? [
+				("Engine Oil", log.oilChecked),
+				("Engine Coolant", log.engineCoolantChecked),
+				("Secondary Coolant", log.secondaryCoolantChecked),
+				("Power Steering", log.powerSteeringChecked),
+				("Brake", log.brakeFluidChecked),
+				("Transmission", log.transmissionFluidChecked),
+				("Rear Axle", log.rearAxleChecked),
+				("Front Axle", log.frontAxleChecked),
+				("Fuel/Water Separator", log.fuelWaterSeparatorChecked),
+				("Air System Water Bleed", log.airSystemWaterBleedChecked)
+			].filter(\.1).map(\.0)
+			: FluidCheckList.currentLabels.filter { FluidCheckList.unpack(log.checkedFluidItemsPacked).contains($0) }
 		if let checks = fieldGroup("Fluid Checks", [
 			("Checked", checkedNames.isEmpty ? nil : checkedNames.joined(separator: ", "))
 		]) {
@@ -370,6 +416,12 @@ struct pdfReportFuel: View {
 			("Notes", text(log.fuelNotes))
 		]) {
 			groups.append(notes)
+		}
+
+		if let dataQuality = fieldGroup("Data Quality", [
+			("Note", flagsText(flags))
+		]) {
+			groups.append(dataQuality)
 		}
 
 		return .groups(groups)

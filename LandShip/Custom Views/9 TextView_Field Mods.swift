@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import CoreLocation
 import Combine
 import CoreLocation
 
@@ -80,102 +81,288 @@ struct PageTitle_Col3_Photo: View {
 struct LabelLocationTextview: View {
     let label: String
     @Binding var data: String
-    /// When `false`, the field never auto-fills on appear/becoming empty — it only fills when the location button is pressed.
-    var autoFillOnAppear: Bool = true
+    /// Coordinate captured alongside `data` — never typed, only ever set by tapping a
+    /// "Use" choice below (or filled from Home). When both bindings are supplied, a
+    /// non-editable "<coordinateLabel>: 39.8600°N, 75.2010°W" caption is shown above the
+    /// text field so the coordinate a "Use" tap actually stored stays visible.
+    var latitude: Binding<Double?>? = nil
+    var longitude: Binding<Double?>? = nil
+    var coordinateLabel: String = "Coordinates"
 
     @StateObject private var locationProvider = LocationProvider()
-    @State private var userClearedField: Bool = false
-    @State private var isFetchingLocation: Bool = false
+    @Query(filter: #Predicate<Settings1> { $0.userName == "primary1" })
+    private var settingsFetch: [Settings1]
+    /// Gates the ICAO/IATA/local code lookup to focus loss rather than every keystroke —
+    /// see the `onChange(of:)` below — so a code isn't rewritten out from under the user
+    /// while they're still typing it.
+    @FocusState private var isLocationFieldFocused: Bool
+    /// The 2 closest airports to a typed city name, populated on focus loss when `data`
+    /// doesn't resolve as an airport code itself — offered as manual "Use" choices the
+    /// same way the GPS-based nearby list is, never auto-filled.
+    @State private var cityAirportChoices: [NearbyAirport] = []
+
+    private var coordinateCaption: String {
+        guard let lat = latitude?.wrappedValue, let lon = longitude?.wrappedValue else {
+            return "-------N --------W"
+        }
+        return Self.coordinateString(for: CLLocation(latitude: lat, longitude: lon))
+    }
+
+    /// True once a real coordinate is showing — from a "Use" tap (present position via a
+    /// nearby choice or Home) or a typed ICAO/IATA/local code — as opposed to the dashed
+    /// placeholder. Drives the caption's accent-color highlight.
+    private var hasCoordinateValue: Bool {
+        latitude?.wrappedValue != nil && longitude?.wrappedValue != nil
+    }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+        if latitude != nil, longitude != nil {
+            Text("\(coordinateLabel): \(coordinateCaption)")
+                .font(.caption2)
+                .foregroundStyle(hasCoordinateValue ? Color.accentColor : .secondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
         HStack(alignment: .center, spacing: 8) {
             Text(label)
                 .textLabelModified()
             TextField("", text: $data, prompt: Text(label.replacingOccurrences(of: ":", with: "")))
                 .textViewModified()
+                .focused($isLocationFieldFocused)
 #if os(iOS)
                 .selectAllTextOnBeginEditing()
 #endif
-                .onChange(of: data) { oldValue, newValue in
-                    // If the user cleared the field (transitioned from non-empty to empty), disable future auto-fill
-                    let wasNonEmpty = !oldValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    let isNowEmpty = newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    if wasNonEmpty && isNowEmpty {
-                        userClearedField = true
-                    }
-                }
-                .onChange(of: data) { _, newValue in
-                    if !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        userClearedField = false
-                    }
-                }
-#if os(iOS)
-            Button {
-                userClearedField = false
-                Task { @MainActor in
-                    if isFetchingLocation { return }
-                    isFetchingLocation = true
-                    defer { isFetchingLocation = false }
-                    do {
-                        // Prefer a business/area-of-interest name when available
-                        if let place = await locationProvider.currentPlaceString(preferBusinessName: true) {
-                            let trimmed = place.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !trimmed.isEmpty {
-                                data = trimmed
-                            }
-                        } else {
-                            // Fallback: try again without preferring business name
-                            if let place = await locationProvider.currentPlaceString(preferBusinessName: false) {
-                                let trimmed = place.trimmingCharacters(in: .whitespacesAndNewlines)
-                                if !trimmed.isEmpty {
-                                    data = trimmed
-                                }
-                            }
-                        }
-                    }
-                }
-            } label: {
-                if isFetchingLocation {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .frame(width: 20, height: 20)
-                        .accessibilityLabel("Fetching current location")
-                } else {
-                    Image(systemName: "location.fill")
-                        .imageScale(.medium)
-                        .accessibilityLabel("Use current location")
-                }
-            }
-            .buttonStyle(.borderless)
-            .disabled(!data.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .help(data.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Fill with current place" : "Clear the field to auto-fill location")
-#endif
         }
-        .task(id: data.isEmpty) {
-            guard autoFillOnAppear else { return }
-            // Only auto-fill when the field is empty and the user hasn't explicitly cleared it
-            let shouldAutofill = await MainActor.run {
-                data.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !userClearedField
+        if let location = locationProvider.lastLocation {
+            ViewThatFits(in: .horizontal) {
+                Text("Current Location: \(Self.coordinateString(for: location))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text("Location: \(Self.coordinateString(for: location))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
-            guard shouldAutofill else { return }
-
-            // Call through a MainActor-isolated closure to avoid sending the provider across actors
-            let fetchPlace: @MainActor () async -> String? = { [locationProvider] in
-                await locationProvider.currentPlaceString(preferBusinessName: true)
-            }
-            let place = await fetchPlace()
-
-            // Assign back on the main actor, but only if the user hasn't started typing meanwhile
-            if let place {
-                let allowFill = await MainActor.run {
-                    data.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !userClearedField
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        // Up to 2 manual "Use" choices — nearest airports (AeroTrax), marinas
+        // (NauticalTrax), or businesses (VehicleTrax), with "Home" substituted in as the
+        // top choice when it's closer than the nearest live result. Never auto-fills; see
+        // locationChoices below and LocationProvider.refreshLocationContext(...).
+        ForEach(locationChoices) { choice in
+            HStack(spacing: 6) {
+                Spacer(minLength: 0)
+                Text(choice.title)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Button("Use") {
+                    data = choice.value
+                    if let choiceLat = choice.latitude, let choiceLon = choice.longitude {
+                        latitude?.wrappedValue = choiceLat
+                        longitude?.wrappedValue = choiceLon
+                    }
                 }
-                if allowFill {
-                    await MainActor.run { data = place }
-                }
+                .font(.caption2)
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .disabled(!choice.isEnabled)
             }
         }
-        .accessibilityHint("Auto-fills with current place if empty")
+        // Closest airports to a typed city name (not a code) — see cityAirportChoices
+        // and resolveAirportCodeIfPossible() above. Same "Use" row shape as the GPS-based
+        // list, just keyed off what the user typed instead of the device's location.
+        ForEach(cityAirportChoices) { airport in
+            HStack(spacing: 6) {
+                Spacer(minLength: 0)
+                Text("\(airport.code) — \(airport.name) (\(Self.distanceString(meters: airport.distanceMeters, nautical: true)))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Button("Use") {
+                    data = "\(airport.code)- \(airport.name)"
+                    latitude?.wrappedValue = airport.latitude
+                    longitude?.wrappedValue = airport.longitude
+                    cityAirportChoices = []
+                }
+                .font(.caption2)
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+            }
+        }
+        }
+        .task {
+            // Populate the lat/lon caption and the nearby-airports/nearby-places list
+            // above. Display-only until the user taps "Use" — this never writes to `data`
+            // itself, on any vertical.
+            await locationProvider.refreshLocationContext(
+                includeNearbyAirports: Vertical.current.id == .aviation,
+                nearbyPlaceQuery: Vertical.current.id == .marine ? .marinas
+                    : Vertical.current.id == .land ? .businesses : .none
+            )
+        }
+        .onChange(of: isLocationFieldFocused) { wasFocused, isFocused in
+            // Only resolve the exact-code rewrite once the user is done typing (focus
+            // lost), not per keystroke — rewriting the field mid-type would fight the
+            // cursor/selection. City search (below) doesn't touch the field, so it isn't
+            // gated the same way.
+            guard wasFocused, !isFocused else { return }
+            Task { await resolveAirportCodeIfPossible() }
+        }
+        .task(id: data) {
+            // Live city-name search, as opposed to the focus-gated exact-code rewrite
+            // above — safe to run on every keystroke since it only ever populates
+            // cityAirportChoices for manual "Use" selection, never writes to `data`
+            // itself. SwiftUI cancels the in-flight geocode when `data` changes again,
+            // giving debounce-like behavior for free (same pattern as the appear-time
+            // .task{} above).
+            await searchCityAirportsLive()
+        }
+        .accessibilityHint("Shows nearby locations for manual selection")
+    }
+
+    /// Resolves the current `data` text as an ICAO/IATA/local airport code once the user
+    /// is done editing (see the focus `onChange` above). On a match, normalizes the field
+    /// to "KTUS- Tucson International Airport" and fills the coordinate caption, same as
+    /// tapping a nearby-airport "Use" row.
+    private func resolveAirportCodeIfPossible() async {
+        guard Vertical.current.id == .aviation, latitude != nil, longitude != nil else { return }
+        let trimmed = data.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 3 else { return }
+        if let match = await locationProvider.airportMatch(forCode: trimmed) {
+            latitude?.wrappedValue = match.latitude
+            longitude?.wrappedValue = match.longitude
+            let formatted = "\(match.code)- \(match.name)"
+            if data != formatted {
+                data = formatted
+            }
+        }
+    }
+
+    /// Tries the current `data` text as a city name as the user types and, if it
+    /// geocodes, populates `cityAirportChoices` with the 2 closest airports — offered via
+    /// "Use" only, since a city name is ambiguous about which airport is meant. Runs live
+    /// (not focus-gated) because, unlike `resolveAirportCodeIfPossible`, it never writes
+    /// to `data` or the coordinate itself. Skips the geocode entirely when the text is
+    /// already an exact airport code — that case is handled by the focus-gated rewrite,
+    /// and city results for it would be redundant.
+    private func searchCityAirportsLive() async {
+        guard Vertical.current.id == .aviation, latitude != nil, longitude != nil else { return }
+        let trimmed = data.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 3 else {
+            cityAirportChoices = []
+            return
+        }
+        if await locationProvider.airportMatch(forCode: trimmed) != nil {
+            cityAirportChoices = []
+            return
+        }
+        cityAirportChoices = await locationProvider.nearbyAirports(forPlaceName: trimmed) ?? []
+    }
+
+    /// The Home coordinate saved in Settings, if the user has set one. Read here rather than
+    /// in LocationProvider because it needs `Settings1`, a SwiftData model — LocationProvider
+    /// itself has no ModelContext and is plain location/MapKit plumbing only.
+    private var homeLocation: CLLocation? {
+        guard let settings = settingsFetch.first,
+              let lat = settings.homeLatitude, let lon = settings.homeLongitude else { return nil }
+        return CLLocation(latitude: lat, longitude: lon)
+    }
+
+    private var homeDistanceMeters: CLLocationDistance? {
+        guard let home = homeLocation, let current = locationProvider.lastLocation else { return nil }
+        return current.distance(from: home)
+    }
+
+    /// One row of the manual "Use" list — a uniform shape covering airports, marinas,
+    /// businesses, Home, and the disabled road-name fallback, so the view only needs one
+    /// `ForEach` instead of a near-duplicate block per vertical.
+    private struct LocationChoice: Identifiable {
+        let id: String
+        let title: String
+        let value: String
+        var latitude: Double? = nil
+        var longitude: Double? = nil
+        var isEnabled: Bool = true
+    }
+
+    /// Builds the 0-2 rows shown below the lat/lon caption. Aviation/marine use nautical
+    /// miles for distance (the universal convention for both); land uses locale-natural
+    /// units. When land's business search finds nothing nearby, falls back to a disabled,
+    /// blank-value row showing just the road name — informational only, since there's
+    /// nothing meaningful to fill into the field.
+    private var locationChoices: [LocationChoice] {
+        let nautical = Vertical.current.id != .land
+        let base: [(choice: LocationChoice, distanceMeters: CLLocationDistance)]
+        switch Vertical.current.id {
+        case .aviation:
+            base = locationProvider.nearbyAirports.map { airport in
+                (LocationChoice(
+                    id: airport.code,
+                    title: "\(airport.code) — \(airport.name) (\(Self.distanceString(meters: airport.distanceMeters, nautical: true)))",
+                    value: airport.code,
+                    latitude: airport.latitude,
+                    longitude: airport.longitude
+                ), airport.distanceMeters)
+            }
+        case .marine:
+            base = locationProvider.nearbyPlaces.map { place in
+                (LocationChoice(
+                    id: place.name,
+                    title: "\(place.name) (\(Self.distanceString(meters: place.distanceMeters, nautical: true)))",
+                    value: place.name,
+                    latitude: place.latitude,
+                    longitude: place.longitude
+                ), place.distanceMeters)
+            }
+        case .land:
+            if locationProvider.nearbyPlaces.isEmpty {
+                guard let road = locationProvider.nearestRoadName else { return [] }
+                return [LocationChoice(id: "road", title: road, value: "", isEnabled: false)]
+            }
+            base = locationProvider.nearbyPlaces.map { place in
+                (LocationChoice(
+                    id: place.name,
+                    title: "\(place.name) (\(Self.distanceString(meters: place.distanceMeters, nautical: false)))",
+                    value: place.name,
+                    latitude: place.latitude,
+                    longitude: place.longitude
+                ), place.distanceMeters)
+            }
+        }
+
+        guard let homeDistanceMeters, homeDistanceMeters < (base.first?.distanceMeters ?? .infinity) else {
+            return base.map(\.choice)
+        }
+        let homeChoice = LocationChoice(
+            id: "home",
+            title: "Home (\(Self.distanceString(meters: homeDistanceMeters, nautical: nautical)))",
+            value: "Home",
+            latitude: homeLocation?.coordinate.latitude,
+            longitude: homeLocation?.coordinate.longitude
+        )
+        return ([homeChoice] + base.map(\.choice)).prefix(2).map { $0 }
+    }
+
+    /// Signed decimal degrees with N/S, E/W suffixes, e.g. "39.8600°N, 75.2010°W".
+    private static func coordinateString(for location: CLLocation) -> String {
+        let lat = location.coordinate.latitude
+        let lon = location.coordinate.longitude
+        let latDirection = lat >= 0 ? "N" : "S"
+        let lonDirection = lon >= 0 ? "E" : "W"
+        return String(format: "%.4f°%@, %.4f°%@", abs(lat), latDirection, abs(lon), lonDirection)
+    }
+
+    /// Distance to a nearby-list entry. Aviation and marine use nautical miles (the
+    /// universal convention for both); land uses `MeasurementFormatter`'s natural-scale
+    /// output, which picks feet/miles or meters/km to match the device's locale.
+    private static func distanceString(meters: CLLocationDistance, nautical: Bool) -> String {
+        if nautical {
+            return String(format: "%.1f nm", meters / 1852.0)
+        }
+        let formatter = MeasurementFormatter()
+        formatter.unitOptions = .naturalScale
+        formatter.unitStyle = .short
+        return formatter.string(from: Measurement(value: meters, unit: UnitLength.meters))
     }
 }
 
@@ -238,16 +425,31 @@ struct LabelDataTextview_Numberpad_Int: View {
 struct LabelDataTextview_Numberpad_Float: View {
 	let label: String
 	@Binding var data: Float
+	/// When true, uses the fixed Medium-width box (matching Qty/Price/Oil/tank-added/etc.
+	/// in LabelDataTextview_Numberpad_Fuel) instead of the default full-width field — for
+	/// fields that sit alongside other fixed-width fields in the same row/section, so all
+	/// boxes read as the same size. Defaults to the original full-width behavior so every
+	/// other call site of this shared struct is unaffected.
+	var fixedWidth: Bool = false
 	let functions: Functions = Functions()
 	var body: some View {
 		Text(label)
 			.textLabelModified()
-		TextField("", value: $data, formatter: functions.DoubleFormatter, prompt: Text(label.replacingOccurrences(of: ":", with: "")))
-			.textViewModified()
+		if fixedWidth {
+			TextField("", value: $data, formatter: functions.DoubleFormatter, prompt: Text(label.replacingOccurrences(of: ":", with: "")))
+				.textViewModified_Medium()
 #if !os(macOS)
-			.selectAllTextOnBeginEditing()
-			.keyboardType(.decimalPad)
+				.selectAllTextOnBeginEditing()
+				.keyboardType(.decimalPad)
 #endif
+		} else {
+			TextField("", value: $data, formatter: functions.DoubleFormatter, prompt: Text(label.replacingOccurrences(of: ":", with: "")))
+				.textViewModified()
+#if !os(macOS)
+				.selectAllTextOnBeginEditing()
+				.keyboardType(.decimalPad)
+#endif
+		}
 	}
 }
 
@@ -269,6 +471,10 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 	@Binding var fuelOdometer: Float
 	@Binding var fuelEngHours: Float
 	@Binding var fuelLocation: String
+	/// Coordinate captured alongside `fuelLocation` when a "Use" choice is tapped. See
+	/// LabelLocationTextview.latitude/longitude — same never-typed, "Use"-only contract.
+	var fuelLocationLat: Binding<Double?>? = nil
+	var fuelLocationLon: Binding<Double?>? = nil
 	@Binding var fuelNotes: String
 	@Binding var oilAdded: Float
 	let labelOil: String
@@ -284,6 +490,9 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 	@Binding var frontAxleChecked: Bool
 	@Binding var fuelWaterSeparatorChecked: Bool
 	@Binding var airSystemWaterBleedChecked: Bool
+	/// Aviation/marine fluid checks for this stop — see FluidCheckList in 11 Enums.swift.
+	/// When supplied, the fixed bindings above are ignored inside the Fluid Checks sheet.
+	var checkedFluidItems: Binding<Set<String>>? = nil
 	@Binding var fuelDateTime: Date
 	@Binding var fuelImage1: Data?
 	@Binding var fuelImage2: Data?
@@ -308,6 +517,30 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 	var defQuantityStart: Binding<Float>? = nil
 	/// Price per unit of DEF added at this stop.
 	var defPrice: Binding<Float>? = nil
+	/// Multi-tank aircraft only (AeroTrax) — per-tank Added amount for this stop, persisted
+	/// onto the linked FuelLog1's own fuelTankNAdded fields (see add_editFuelRecord). A
+	/// fixed 6-element array (unused slots ignored) rather than 6 discrete bindings, to
+	/// avoid a 36-property explosion across the six enroute-stop editors that embed this view.
+	var tankAdded: Binding<[Float]>? = nil
+	var tankCount: Int = 1
+	var tankName: (Int) -> String = { "Tank \($0)" }
+	var tankCapacityFor: (Int) -> Float = { _ in 0 }
+	/// Multi-tank aircraft only (AeroTrax) — per-engine oil added for this stop, replacing
+	/// the single `oilAdded` field the same way it already replaced it on the standalone
+	/// Fuel Log (see FuelLog1's "FLUIDS ADDED" fields). A fixed 6-element array for the
+	/// same reason as `tankAdded` above.
+	var engineOilAdded: Binding<[Float]>? = nil
+	var engineCount: Int = 1
+	var engineNameFor: (Int) -> String = { "Engine \($0)" }
+	/// Per-engine tach time reading at this stop — mirrors `engineOilAdded` above, using
+	/// the same fixed 6-element array and `engineCount`/`engineNameFor`. Persisted onto the
+	/// linked FuelLog1's own `engineTach` field (see add_editFuelRecord).
+	var engineTach: Binding<[Float]>? = nil
+	/// Aviation-only fluids, alongside engine oil — mirrors FuelLog1's deiceFluidAdded/
+	/// hydraulicFluidAdded/brakeFluidAdded, persisted the same way.
+	var deiceFluidAdded: Binding<Float>? = nil
+	var hydraulicFluidAdded: Binding<Float>? = nil
+	var brakeFluidAdded: Binding<Float>? = nil
 	/// Tank capacities used by the level pickers to show the resulting quantity.
 	var fuelCapacity: Float = 0
 	var defCapacity: Float = 0
@@ -322,7 +555,8 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 	/// Optional callback invoked when any of the fuel fields (notably notes) change or commit
 	var onUpdate: (() -> Void)? = nil
 	@State private var showFluidChecks: Bool = false
-	
+	@State private var showFluidsAdded: Bool = false
+
 	private var isLocationValid: Bool { !fuelLocation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !dataFuelLog }
 	private var isQuantityValid: Bool { dataQuantity >= 0 }
 	private var isPriceValid: Bool { !dataFuelLog || dataPrice >= 0 }
@@ -333,16 +567,29 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 	/// Stop details stay hidden until a stop reason is chosen, so a freshly-added stop doesn't show a wall of empty fields.
 	private var fieldsVisible: Bool { stopReason.map { !$0.wrappedValue.isEmpty } ?? true }
 	/// DEF only applies to a diesel vehicle, so its fields stay hidden for anything else.
-	private var isDieselStop: Bool { fuelType?.wrappedValue == "Diesel" }
+	private var isDieselStop: Bool { fuelType.map { isDieselFamilyFuelType($0.wrappedValue) } ?? false }
 	/// Quantity only applies to fuel stops; other stop reasons (rest, food, etc.) don't add fuel.
 	private var isFuelStop: Bool { stopReason.map { $0.wrappedValue == "Fuel" } ?? true }
+
+	/// Drops a trailing " (manufacturer)" from an engine name — `engineNameFor` includes it
+	/// (useful for the Oil Added rows, which can span several engines), but the Tach row
+	/// only needs "Engine 1 Tach", not "Engine 1 (Lycoming O-360) Tach".
+	private func withoutManufacturer(_ name: String) -> String {
+		guard let idx = name.firstIndex(of: "(") else { return name }
+		return String(name[..<idx]).trimmingCharacters(in: .whitespaces)
+	}
 
 	/// "Fluid Checks" with a running count, so the button says how many were done
 	/// without having to open the sheet.
 	private var fluidChecksTitle: String {
-		let done = [oilChecked, engineCoolantChecked, secondaryCoolantChecked, powerSteeringChecked,
-			 brakeFluidChecked, transmissionFluidChecked, rearAxleChecked, frontAxleChecked,
-			 fuelWaterSeparatorChecked, airSystemWaterBleedChecked].filter { $0 }.count
+		let done: Int
+		if let items = checkedFluidItems {
+			done = items.wrappedValue.count
+		} else {
+			done = [oilChecked, engineCoolantChecked, secondaryCoolantChecked, powerSteeringChecked,
+				 brakeFluidChecked, transmissionFluidChecked, rearAxleChecked, frontAxleChecked,
+				 fuelWaterSeparatorChecked, airSystemWaterBleedChecked].filter { $0 }.count
+		}
 		return "Fluid Checks (\(done) completed)"
 	}
 
@@ -364,6 +611,20 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 		}
 		// A tank can't hold more than its capacity, however much was keyed in.
 		fuelQuantityEnd.wrappedValue = min(fuelCapacity, max(0, startQuantity + dataQuantity))
+	}
+
+	/// Binding into one slot of a `tankAdded`/`engineOilAdded` fixed 6-element array —
+	/// see those properties above for why an array instead of 6 discrete bindings.
+	private func tankAddedBinding(_ array: Binding<[Float]>, _ number: Int) -> Binding<Float> {
+		Binding(
+			get: { number - 1 < array.wrappedValue.count ? array.wrappedValue[number - 1] : 0 },
+			set: { newValue in
+				var values = array.wrappedValue
+				while values.count < number { values.append(0) }
+				values[number - 1] = newValue
+				array.wrappedValue = values
+			}
+		)
 	}
 	
 	/// Fills the end DEF quantity in from the level before adding plus the amount added,
@@ -496,15 +757,16 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 						.accessibilityHint("Choose an existing fuel log to attach to this stop, or create a new one")
 					}
 				}
-				LabelDataPicker_DateTime(label: "Start Stop                   ", data: $fuelDateTime)
+				LabelDataPicker_DateTime(label: Vertical.current.id == .aviation ? "Arrive                       " : "Start Stop                   ", data: $fuelDateTime)
 				if let fuelExitTime {
-					LabelDataPicker_DateTime(label: "End Stop                     ", data: fuelExitTime, notEarlierThan: fuelDateTime)
+					LabelDataPicker_DateTime(label: Vertical.current.id == .aviation ? "Depart                       " : "End Stop                     ", data: fuelExitTime, notEarlierThan: fuelDateTime)
 				}
-				LabelLocationTextview(label: "Location", data: $fuelLocation, autoFillOnAppear: false)
+				LabelLocationTextview(label: "Location", data: $fuelLocation, latitude: fuelLocationLat, longitude: fuelLocationLon, coordinateLabel: "Enroute Stop Coordinates")
 				// Odometer, hours and fuel type describe the stop itself, so they come before the
 				// tank readings and the amount put in.
 				if dataFuelLog {
 					HStack {
+						if Vertical.current.visibleFieldGroups.contains(.odometer) {
 						Text("Odometer")
 							.textLabelModified()
 						validatedField(isOdometerValid) {
@@ -521,7 +783,8 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 								.font(.caption2)
 								.foregroundStyle(.red)
 						}
-						Text("Eng Hours")
+						}
+						Text(Vertical.current.hoursMeterLabel)
 							.textLabelModified()
 						validatedField(isEngHoursValid) {
 							TextField("", value: $fuelEngHours, formatter: functions.FloatFormatter)
@@ -530,7 +793,7 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 								.selectAllTextOnBeginEditing()
 								.keyboardType(.numberPad)
 #endif
-								.accessibilityLabel("Fuel Engine Hours")
+								.accessibilityLabel(Vertical.current.hoursMeterLabel)
 						}
 						if !isEngHoursValid {
 							Text("Engine hours cannot be negative")
@@ -539,24 +802,38 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 						}
 					}
 				}
-				if dataFuelLog, let fuelType {
+				if let engineTach, Vertical.current.id == .aviation {
+				ForEach(1...engineCount, id: \.self) { engineNumber in
 					HStack {
+						Text("\(withoutManufacturer(engineNameFor(engineNumber))) Tach")
+							.textLabelModified()
+						TextField("", value: tankAddedBinding(engineTach, engineNumber), formatter: functions.FloatFormatter)
+							.textViewModified_Medium()
+#if !os(macOS)
+							.selectAllTextOnBeginEditing()
+							.keyboardType(.decimalPad)
+#endif
+							.accessibilityLabel("\(engineNameFor(engineNumber)) Tach Time")
+					}
+				}
+			}
+			if dataFuelLog, let fuelType {
+					HStack {
+						Spacer()
 						Text("Fuel Type")
 							.textLabelModified()
 						Picker("", selection: fuelType) {
-							Text("Gasoline").tag("Gasoline")
-							Text("Diesel").tag("Diesel")
-							Text("EV").tag("EV")
-							Text("Hybrid").tag("Hybrid")
+							FuelTypePickerOptions(currentValue: fuelType.wrappedValue)
 						}
 						.pickerStyle(.automatic)
-						.frame(maxWidth: .infinity, alignment: .trailing)
 					}
 				}
-				// Level before fuelling comes before the amount put in, so the stop reads in the
+				if dataFuelLog { FuelTypePickerNote() }
+					// Level before fuelling comes before the amount put in, so the stop reads in the
 				// order it happens: how full it was, then how much went in, then how full it ended.
 				if dataFuelLog, let fuelLevelStart {
 					HStack {
+						Spacer()
 						// Choosing an eighth fills the quantity in; a typed quantity is left alone and
 						// reconciled back to the nearest eighth when the trip is saved.
 						Picker_FuelLevel1(label: "Fuel Level Start", data: fuelLevelStart, data1: fuelCapacity, quantity: fuelQuantityStart)
@@ -566,8 +843,27 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 							}
 					}
 				}
+			if isFuelStop, let tankAdded, tankCount > 1 {
+				ForEach(1...tankCount, id: \.self) { tankNumber in
+					HStack {
+						Text("\(tankName(tankNumber)) Qty\(label)")
+							.textLabelModified()
+						TextField("", value: tankAddedBinding(tankAdded, tankNumber), formatter: functions.DoubleFormatter)
+							.textViewModified_Medium()
+#if !os(macOS)
+							.selectAllTextOnBeginEditing()
+							.keyboardType(.decimalPad)
+#endif
+							.accessibilityLabel("\(tankName(tankNumber)) Fuel Quantity \(label)")
+							.onChange(of: tankAdded.wrappedValue) { _, _ in
+								dataQuantity = tankAdded.wrappedValue.prefix(tankCount).reduce(0, +)
+								recalcEndLevelFromQuantity()
+							}
+					}
+				}
+			}
 			HStack {
-				if isFuelStop {
+				if isFuelStop, tankAdded == nil || tankCount <= 1 {
 					Text("Qty\(label)")
 						.textLabelModified()
 					validatedField(isQuantityValid) {
@@ -609,6 +905,7 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 			}
 			if dataFuelLog, let fuelLevelEnd {
 				HStack {
+					Spacer()
 					Picker_FuelLevel1(label: "Fuel Level End", data: fuelLevelEnd, data1: fuelCapacity, quantity: fuelQuantityEnd)
 						.onChange(of: fuelLevelEnd.wrappedValue) { _, newFraction in
 							fuelQuantityEnd?.wrappedValue = fuelCapacity * newFraction
@@ -617,6 +914,9 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 			}
 			if dataFuelLog {
 				VStack {
+					// Aviation moves Oil/Deice/Hydraulic/Brake into the "Fluids Added" popup
+					// below instead — land/marine keep the simple inline Oil field, unchanged.
+					if Vertical.current.id != .aviation {
 					HStack(alignment: .center) {
 						Text("--------- Fluids Added ---------")
 					}
@@ -639,6 +939,7 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 								.font(.caption2)
 								.foregroundStyle(.red)
 						}
+					}
 					}
 					if isDieselStop, let defLevelStart {
 						HStack {
@@ -695,27 +996,51 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 						}
 					}
 					HStack {
+						Spacer()
+						if Vertical.current.id == .aviation {
+							Button {
+								showFluidsAdded = true
+							} label: {
+								Label("Fluids Added", systemImage: "drop.triangle")
+							}
+							.buttonStyle(.bordered)
+						}
 						Button {
 							showFluidChecks = true
 						} label: {
 							Label(fluidChecksTitle, systemImage: "drop.circle")
 						}
 						.buttonStyle(.bordered)
-						Spacer()
 					}
 					.sheet(isPresented: $showFluidChecks) {
-						FluidCheckSheet(
-						oilChecked: $oilChecked,
-						engineCoolantChecked: $engineCoolantChecked,
-						secondaryCoolantChecked: $secondaryCoolantChecked,
-						powerSteeringChecked: $powerSteeringChecked,
-						brakeFluidChecked: $brakeFluidChecked,
-						transmissionFluidChecked: $transmissionFluidChecked,
-						rearAxleChecked: $rearAxleChecked,
-						frontAxleChecked: $frontAxleChecked,
-						fuelWaterSeparatorChecked: $fuelWaterSeparatorChecked,
-						airSystemWaterBleedChecked: $airSystemWaterBleedChecked,
-					)
+						if let items = checkedFluidItems {
+							FluidCheckSheet(checkedItems: items)
+						} else {
+							FluidCheckSheet(
+							oilChecked: $oilChecked,
+							engineCoolantChecked: $engineCoolantChecked,
+							secondaryCoolantChecked: $secondaryCoolantChecked,
+							powerSteeringChecked: $powerSteeringChecked,
+							brakeFluidChecked: $brakeFluidChecked,
+							transmissionFluidChecked: $transmissionFluidChecked,
+							rearAxleChecked: $rearAxleChecked,
+							frontAxleChecked: $frontAxleChecked,
+							fuelWaterSeparatorChecked: $fuelWaterSeparatorChecked,
+							airSystemWaterBleedChecked: $airSystemWaterBleedChecked,
+						)
+						}
+					}
+					.sheet(isPresented: $showFluidsAdded) {
+						FluidsAddedSheet(
+							engineOilAdded: engineOilAdded,
+							oilAdded: $oilAdded,
+							engineCount: engineCount,
+							engineNameFor: engineNameFor,
+							labelOil: labelOil,
+							deiceFluidAdded: deiceFluidAdded,
+							hydraulicFluidAdded: hydraulicFluidAdded,
+							brakeFluidAdded: brakeFluidAdded
+						)
 					}
 				}
 				HStack {
@@ -942,6 +1267,90 @@ extension View {
 #endif
 }
 
+// MARK: - Fluids Added Sheet
+/// Aviation-only popup for a stop's Oil (per-engine when the aircraft has more than one)
+/// plus Deice/Hydraulic/Brake fluid — pulled out of the enroute-stop form inline, mirroring
+/// how "Fluid Checks" is its own popup rather than ten inline toggles.
+struct FluidsAddedSheet: View {
+	@Environment(\.dismiss) private var dismiss
+	let functions: Functions = Functions()
+
+	var engineOilAdded: Binding<[Float]>? = nil
+	@Binding var oilAdded: Float
+	var engineCount: Int
+	var engineNameFor: (Int) -> String
+	var labelOil: String
+	var deiceFluidAdded: Binding<Float>? = nil
+	var hydraulicFluidAdded: Binding<Float>? = nil
+	var brakeFluidAdded: Binding<Float>? = nil
+
+	private func slotBinding(_ array: Binding<[Float]>, _ number: Int) -> Binding<Float> {
+		Binding(
+			get: { number - 1 < array.wrappedValue.count ? array.wrappedValue[number - 1] : 0 },
+			set: { newValue in
+				var values = array.wrappedValue
+				while values.count < number { values.append(0) }
+				values[number - 1] = newValue
+				array.wrappedValue = values
+			}
+		)
+	}
+
+	/// Drops a trailing " (manufacturer)" from an engine name — mirrors the identical helper
+	/// in `LabelDataTextview_Numberpad_Fuel`, kept local since this is a separate struct.
+	private func withoutManufacturer(_ name: String) -> String {
+		guard let idx = name.firstIndex(of: "(") else { return name }
+		return String(name[..<idx]).trimmingCharacters(in: .whitespaces)
+	}
+
+	@ViewBuilder private func row(_ label: String, _ value: Binding<Float>, accessibilityLabel: String) -> some View {
+		HStack {
+			Text(label)
+			Spacer()
+			TextField("", value: value, formatter: functions.FloatFormatter)
+				.multilineTextAlignment(.trailing)
+#if !os(macOS)
+				.selectAllTextOnBeginEditing()
+				.keyboardType(.decimalPad)
+#endif
+				.accessibilityLabel(accessibilityLabel)
+		}
+	}
+
+	var body: some View {
+		NavigationStack {
+			Form {
+				Section {
+					if let engineOilAdded, engineCount > 1 {
+						ForEach(1...engineCount, id: \.self) { engineNumber in
+							row("\(withoutManufacturer(engineNameFor(engineNumber))) Oil \(labelOil)", slotBinding(engineOilAdded, engineNumber), accessibilityLabel: "\(withoutManufacturer(engineNameFor(engineNumber))) Oil Added \(labelOil)")
+						}
+					} else {
+						row("Oil \(labelOil)", $oilAdded, accessibilityLabel: "Oil Added \(labelOil)")
+					}
+					if let deiceFluidAdded {
+						row("Deice Fluid \(labelOil)", deiceFluidAdded, accessibilityLabel: "Deice Fluid Added \(labelOil)")
+					}
+					if let hydraulicFluidAdded {
+						row("Hydraulic Fluid \(labelOil)", hydraulicFluidAdded, accessibilityLabel: "Hydraulic Fluid Added \(labelOil)")
+					}
+					if let brakeFluidAdded {
+						row("Brake Fluid \(labelOil)", brakeFluidAdded, accessibilityLabel: "Brake Fluid Added \(labelOil)")
+					}
+				} header: {
+					Text("Fluids added at this stop")
+				}
+			}
+			.navigationTitle("Fluids Added")
+			.toolbar {
+				ToolbarItem(placement: .confirmationAction) {
+					Button("Done") { dismiss() }
+				}
+			}
+		}
+	}
+}
+
 // MARK: - Fluid Check Sheet
 struct FluidCheckSheet: View {
 	@Environment(\.dismiss) private var dismiss
@@ -961,20 +1370,48 @@ struct FluidCheckSheet: View {
 	var fuelWaterSeparatorChecked: Binding<Bool>? = nil
 	var airSystemWaterBleedChecked: Binding<Bool>? = nil
 
+	/// Aviation/marine — a vertical-specific item list (FluidCheckList.currentLabels)
+	/// backed by one Set<String>, instead of the ten fixed Bool bindings above. When this
+	/// is supplied, the fixed bindings are ignored entirely.
+	var checkedItems: Binding<Set<String>>? = nil
+
+	/// The vertical's full item list, filtered by whichever items the user has enabled in
+	/// Settings — same "hide the ones I don't need" idea as the land fluidChk_* Bools just
+	/// below, but backed by a single enabled-set per vertical instead of ten fixed fields.
+	private var enabledLabels: [String] {
+		switch Vertical.current.id {
+			case .land: return []
+			case .aviation: return (s?.enabledAviationFluidCheckItems ?? AviationFluidCheckItem.allCases).map(\.rawValue)
+			case .marine: return (s?.enabledMarineFluidCheckItems ?? MarineFluidCheckItem.allCases).map(\.rawValue)
+		}
+	}
+
 	var body: some View {
 		NavigationStack {
 			Form {
 				Section {
-					if let b = oilChecked, s?.fluidChk_engineOil ?? true { Toggle("Engine Oil", isOn: b) }
-					if let b = engineCoolantChecked, s?.fluidChk_engineCoolant ?? true { Toggle("Engine Coolant", isOn: b) }
-					if let b = secondaryCoolantChecked, s?.fluidChk_secondaryCoolant ?? true { Toggle("Secondary Coolant", isOn: b) }
-					if let b = powerSteeringChecked, s?.fluidChk_powerSteering ?? true { Toggle("Power Steering", isOn: b) }
-					if let b = brakeFluidChecked, s?.fluidChk_brake ?? true { Toggle("Brake", isOn: b) }
-					if let b = transmissionFluidChecked, s?.fluidChk_transmission ?? true { Toggle("Transmission", isOn: b) }
-					if let b = rearAxleChecked, s?.fluidChk_rearAxle ?? true { Toggle("Rear Axle", isOn: b) }
-					if let b = frontAxleChecked, s?.fluidChk_frontAxle ?? true { Toggle("Front Axle", isOn: b) }
-					if let b = fuelWaterSeparatorChecked, s?.fluidChk_fuelWaterSep ?? true { Toggle("Fuel/Water Separator", isOn: b) }
-					if let b = airSystemWaterBleedChecked, s?.fluidChk_airWaterBleed ?? true { Toggle("Air System Water Bleed", isOn: b) }
+					if let items = checkedItems {
+						ForEach(enabledLabels, id: \.self) { label in
+							Toggle(label, isOn: Binding(
+								get: { items.wrappedValue.contains(label) },
+								set: { isOn in
+									if isOn { items.wrappedValue.insert(label) }
+									else { items.wrappedValue.remove(label) }
+								}
+							))
+						}
+					} else {
+						if let b = oilChecked, s?.fluidChk_engineOil ?? true { Toggle("Engine Oil", isOn: b) }
+						if let b = engineCoolantChecked, s?.fluidChk_engineCoolant ?? true { Toggle("Engine Coolant", isOn: b) }
+						if let b = secondaryCoolantChecked, s?.fluidChk_secondaryCoolant ?? true { Toggle("Secondary Coolant", isOn: b) }
+						if let b = powerSteeringChecked, s?.fluidChk_powerSteering ?? true { Toggle("Power Steering", isOn: b) }
+						if let b = brakeFluidChecked, s?.fluidChk_brake ?? true { Toggle("Brake", isOn: b) }
+						if let b = transmissionFluidChecked, s?.fluidChk_transmission ?? true { Toggle("Transmission", isOn: b) }
+						if let b = rearAxleChecked, s?.fluidChk_rearAxle ?? true { Toggle("Rear Axle", isOn: b) }
+						if let b = frontAxleChecked, s?.fluidChk_frontAxle ?? true { Toggle("Front Axle", isOn: b) }
+						if let b = fuelWaterSeparatorChecked, s?.fluidChk_fuelWaterSep ?? true { Toggle("Fuel/Water Separator", isOn: b) }
+						if let b = airSystemWaterBleedChecked, s?.fluidChk_airWaterBleed ?? true { Toggle("Air System Water Bleed", isOn: b) }
+					}
 				} header: {
 					Text("Mark fluids checked at this stop")
 				}

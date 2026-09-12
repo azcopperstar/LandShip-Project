@@ -352,16 +352,22 @@ struct pdfReportAviationLogbook: View {
 		]
 		let rows: [[PDFCell]] = components.map { comp in
 			let vehicleName = comp.vehicleId.isEmpty ? nil : functions.getVehicleDisplayName(vehicleId: comp.vehicleId, context: modelContext)
+			let isEngine = comp.componentType == "Engine"
 			var identity: [PDFFieldGroup] = []
 			if let g = fieldGroup(nil, [
 				("Component", text(comp.componentName)),
 				("Type", text(comp.componentType)),
 				(Vertical.current.assetSingular, vehicleName)
 			]) { identity.append(g) }
+			if isEngine, let g = fieldGroup(nil, [
+				("Make", text(comp.make)),
+				("Horsepower", comp.horsepower != 0 ? "\(comp.horsepower)" : nil),
+				("Serial Number", text(comp.serialNumber))
+			]) { identity.append(g) }
 
 			var times: [PDFFieldGroup] = []
 			if let g = fieldGroup(nil, [
-				("Total Time", comp.totalTime != 0 ? "\(comp.totalTime)" : nil),
+				(isEngine ? "Engine Hours" : "Total Time", comp.totalTime != 0 ? "\(comp.totalTime)" : nil),
 				("Time Since Overhaul", comp.timeSinceOverhaul != 0 ? "\(comp.timeSinceOverhaul)" : nil),
 				("Last Overhaul Date", functions.formatDate_DDMMMyy(date: comp.lastOverhaulDate))
 			]) { times.append(g) }

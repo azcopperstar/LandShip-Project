@@ -114,6 +114,36 @@ struct EditTripLog: View {
 	@State private var fuelLevelEnd1: Float = 1.0
 	@State private var fuelLevelStart: String = "Full"
 	@State private var fuelLevelEnd: String = "Full"
+	// Per-tank trip-level fuel state, multi-tank aircraft only — see TripLog2 and
+	// vehicleFuelTankCount/tank binding helpers below.
+	@State private var fuelTank1LevelStart1: Float = 0
+	@State private var fuelTank2LevelStart1: Float = 0
+	@State private var fuelTank3LevelStart1: Float = 0
+	@State private var fuelTank4LevelStart1: Float = 0
+	@State private var fuelTank5LevelStart1: Float = 0
+	@State private var fuelTank6LevelStart1: Float = 0
+	@State private var fuelTank1QuantityStart: Float = 0
+	@State private var fuelTank2QuantityStart: Float = 0
+	@State private var fuelTank3QuantityStart: Float = 0
+	@State private var fuelTank4QuantityStart: Float = 0
+	@State private var fuelTank5QuantityStart: Float = 0
+	@State private var fuelTank6QuantityStart: Float = 0
+	@State private var fuelTank1LevelEnd1: Float = 0
+	@State private var fuelTank2LevelEnd1: Float = 0
+	@State private var fuelTank3LevelEnd1: Float = 0
+	@State private var fuelTank4LevelEnd1: Float = 0
+	@State private var fuelTank5LevelEnd1: Float = 0
+	@State private var fuelTank6LevelEnd1: Float = 0
+	// Per-engine tach time at departure/arrival — see TripLog2.engineTachStart/End and
+	// tachBinding(_:_:) below.
+	@State private var engineTachStart: [Float] = Array(repeating: 0, count: 6)
+	@State private var engineTachEnd: [Float] = Array(repeating: 0, count: 6)
+	@State private var fuelTank1QuantityEnd: Float = 0
+	@State private var fuelTank2QuantityEnd: Float = 0
+	@State private var fuelTank3QuantityEnd: Float = 0
+	@State private var fuelTank4QuantityEnd: Float = 0
+	@State private var fuelTank5QuantityEnd: Float = 0
+	@State private var fuelTank6QuantityEnd: Float = 0
 	@State private var defLevel1: Float = 0.0
 	@State private var defLevelFraction: String = ""
 	@State private var defLevelEnd1: Float = 0.0
@@ -134,6 +164,10 @@ struct EditTripLog: View {
 	@State private var fuelAdded6: Float = 0.0
 	@State private var locationStart: String = ""
 	@State private var locationEnd: String = ""
+	@State private var locationStartLat: Double?
+	@State private var locationStartLon: Double?
+	@State private var locationEndLat: Double?
+	@State private var locationEndLon: Double?
 	@State private var vehicleTowed: Bool = false
 	@State private var vehicleIdTowed: String = ""
 	@State private var image1: Data?
@@ -145,6 +179,9 @@ struct EditTripLog: View {
 
 	// vehicle stats (centralized via VehicleDetails)
 	@State private var vehicleDetails: VehicleDetails? = nil
+	/// This vehicle's `ComponentTimes` engine rows — see EditFuelLog.swift's identical
+	/// property for the full explanation. Aviation only; empty on land/marine.
+	@State private var engineComponents: [ComponentTimes] = []
 	
 	// create fuel log controls for up to 6 stops
 	@State private var createFuelLog1: Bool = false
@@ -152,7 +189,17 @@ struct EditTripLog: View {
 	@State private var fuelOdometer1: Float = 0.0
 	@State private var fuelEngHours1: Float = 0.0
 	@State private var fuelLocation1: String = ""
+	@State private var fuelLocationLat1: Double?
+	@State private var fuelLocationLon1: Double?
 	@State private var oilAdded1: Float = 0.0
+	// Multi-tank/fluids-added scheme (AeroTrax), stop 1 — see LabelDataTextview_Numberpad_Fuel
+	// tankAdded/engineOilAdded and applyTankAndFluidsAdded above.
+	@State private var stopTankAdded1: [Float] = Array(repeating: 0, count: 6)
+	@State private var stopEngineOilAdded1: [Float] = Array(repeating: 0, count: 6)
+	@State private var stopDeiceFluidAdded1: Float = 0.0
+	@State private var stopHydraulicFluidAdded1: Float = 0.0
+	@State private var stopBrakeFluidAdded1: Float = 0.0
+	@State private var stopEngineTach1: [Float] = Array(repeating: 0, count: 6)
 	@State private var defAdded1: Float = 0.0
 	@State private var oilChecked1: Bool = false
 	@State private var engineCoolantChecked1: Bool = false
@@ -164,13 +211,23 @@ struct EditTripLog: View {
 	@State private var frontAxleChecked1: Bool = false
 	@State private var fuelWaterSeparatorChecked1: Bool = false
 	@State private var airSystemWaterBleedChecked1: Bool = false
+	/// Aviation/marine fluid checks for this stop — see FluidCheckList in 11 Enums.swift.
+	@State private var checkedFluidItems1: Set<String> = []
 	@State private var createFuelLog2: Bool = false
 	@State private var fuelNotes1: String = ""
 	@State private var fuelPrice2: Float = 0.0
 	@State private var fuelOdometer2: Float = 0.0
 	@State private var fuelEngHours2: Float = 0.0
 	@State private var fuelLocation2: String = ""
+	@State private var fuelLocationLat2: Double?
+	@State private var fuelLocationLon2: Double?
 	@State private var oilAdded2: Float = 0.0
+	@State private var stopTankAdded2: [Float] = Array(repeating: 0, count: 6)
+	@State private var stopEngineOilAdded2: [Float] = Array(repeating: 0, count: 6)
+	@State private var stopDeiceFluidAdded2: Float = 0.0
+	@State private var stopHydraulicFluidAdded2: Float = 0.0
+	@State private var stopBrakeFluidAdded2: Float = 0.0
+	@State private var stopEngineTach2: [Float] = Array(repeating: 0, count: 6)
 	@State private var defAdded2: Float = 0.0
 	@State private var oilChecked2: Bool = false
 	@State private var engineCoolantChecked2: Bool = false
@@ -182,13 +239,22 @@ struct EditTripLog: View {
 	@State private var frontAxleChecked2: Bool = false
 	@State private var fuelWaterSeparatorChecked2: Bool = false
 	@State private var airSystemWaterBleedChecked2: Bool = false
+	@State private var checkedFluidItems2: Set<String> = []
 	@State private var fuelNotes2: String = ""
 	@State private var createFuelLog3: Bool = false
 	@State private var fuelPrice3: Float = 0.0
 	@State private var fuelOdometer3: Float = 0.0
 	@State private var fuelEngHours3: Float = 0.0
 	@State private var fuelLocation3: String = ""
+	@State private var fuelLocationLat3: Double?
+	@State private var fuelLocationLon3: Double?
 	@State private var oilAdded3: Float = 0.0
+	@State private var stopTankAdded3: [Float] = Array(repeating: 0, count: 6)
+	@State private var stopEngineOilAdded3: [Float] = Array(repeating: 0, count: 6)
+	@State private var stopDeiceFluidAdded3: Float = 0.0
+	@State private var stopHydraulicFluidAdded3: Float = 0.0
+	@State private var stopBrakeFluidAdded3: Float = 0.0
+	@State private var stopEngineTach3: [Float] = Array(repeating: 0, count: 6)
 	@State private var defAdded3: Float = 0.0
 	@State private var oilChecked3: Bool = false
 	@State private var engineCoolantChecked3: Bool = false
@@ -200,13 +266,22 @@ struct EditTripLog: View {
 	@State private var frontAxleChecked3: Bool = false
 	@State private var fuelWaterSeparatorChecked3: Bool = false
 	@State private var airSystemWaterBleedChecked3: Bool = false
+	@State private var checkedFluidItems3: Set<String> = []
 	@State private var fuelNotes3: String = ""
 	@State private var createFuelLog4: Bool = false
 	@State private var fuelPrice4: Float = 0.0
 	@State private var fuelOdometer4: Float = 0.0
 	@State private var fuelEngHours4: Float = 0.0
 	@State private var fuelLocation4: String = ""
+	@State private var fuelLocationLat4: Double?
+	@State private var fuelLocationLon4: Double?
 	@State private var oilAdded4: Float = 0.0
+	@State private var stopTankAdded4: [Float] = Array(repeating: 0, count: 6)
+	@State private var stopEngineOilAdded4: [Float] = Array(repeating: 0, count: 6)
+	@State private var stopDeiceFluidAdded4: Float = 0.0
+	@State private var stopHydraulicFluidAdded4: Float = 0.0
+	@State private var stopBrakeFluidAdded4: Float = 0.0
+	@State private var stopEngineTach4: [Float] = Array(repeating: 0, count: 6)
 	@State private var defAdded4: Float = 0.0
 	@State private var oilChecked4: Bool = false
 	@State private var engineCoolantChecked4: Bool = false
@@ -218,13 +293,22 @@ struct EditTripLog: View {
 	@State private var frontAxleChecked4: Bool = false
 	@State private var fuelWaterSeparatorChecked4: Bool = false
 	@State private var airSystemWaterBleedChecked4: Bool = false
+	@State private var checkedFluidItems4: Set<String> = []
 	@State private var fuelNotes4: String = ""
 	@State private var createFuelLog5: Bool = false
 	@State private var fuelPrice5: Float = 0.0
 	@State private var fuelOdometer5: Float = 0.0
 	@State private var fuelEngHours5: Float = 0.0
 	@State private var fuelLocation5: String = ""
+	@State private var fuelLocationLat5: Double?
+	@State private var fuelLocationLon5: Double?
 	@State private var oilAdded5: Float = 0.0
+	@State private var stopTankAdded5: [Float] = Array(repeating: 0, count: 6)
+	@State private var stopEngineOilAdded5: [Float] = Array(repeating: 0, count: 6)
+	@State private var stopDeiceFluidAdded5: Float = 0.0
+	@State private var stopHydraulicFluidAdded5: Float = 0.0
+	@State private var stopBrakeFluidAdded5: Float = 0.0
+	@State private var stopEngineTach5: [Float] = Array(repeating: 0, count: 6)
 	@State private var defAdded5: Float = 0.0
 	@State private var oilChecked5: Bool = false
 	@State private var engineCoolantChecked5: Bool = false
@@ -236,13 +320,22 @@ struct EditTripLog: View {
 	@State private var frontAxleChecked5: Bool = false
 	@State private var fuelWaterSeparatorChecked5: Bool = false
 	@State private var airSystemWaterBleedChecked5: Bool = false
+	@State private var checkedFluidItems5: Set<String> = []
 	@State private var fuelNotes5: String = ""
 	@State private var createFuelLog6: Bool = false
 	@State private var fuelPrice6: Float = 0.0
 	@State private var fuelOdometer6: Float = 0.0
 	@State private var fuelEngHours6: Float = 0.0
 	@State private var fuelLocation6: String = ""
+	@State private var fuelLocationLat6: Double?
+	@State private var fuelLocationLon6: Double?
 	@State private var oilAdded6: Float = 0.0
+	@State private var stopTankAdded6: [Float] = Array(repeating: 0, count: 6)
+	@State private var stopEngineOilAdded6: [Float] = Array(repeating: 0, count: 6)
+	@State private var stopDeiceFluidAdded6: Float = 0.0
+	@State private var stopHydraulicFluidAdded6: Float = 0.0
+	@State private var stopBrakeFluidAdded6: Float = 0.0
+	@State private var stopEngineTach6: [Float] = Array(repeating: 0, count: 6)
 	@State private var defAdded6: Float = 0.0
 	@State private var oilChecked6: Bool = false
 	@State private var engineCoolantChecked6: Bool = false
@@ -254,6 +347,7 @@ struct EditTripLog: View {
 	@State private var frontAxleChecked6: Bool = false
 	@State private var fuelWaterSeparatorChecked6: Bool = false
 	@State private var airSystemWaterBleedChecked6: Bool = false
+	@State private var checkedFluidItems6: Set<String> = []
 	@State private var fuelNotes6: String = ""
 	@State private var fuelDateTime1: Date = Date()
 	@State private var fuelDateTime2: Date = Date()
@@ -375,6 +469,8 @@ struct EditTripLog: View {
 	@State private var startFrontAxleChecked: Bool = false
 	@State private var startFuelWaterSeparatorChecked: Bool = false
 	@State private var startAirSystemWaterBleedChecked: Bool = false
+	/// Aviation/marine fluid checks at travel start/end — see FluidCheckList in 11 Enums.swift.
+	@State private var startCheckedFluidItems: Set<String> = []
 	@State private var endOilChecked: Bool = false
 	@State private var endEngineCoolantChecked: Bool = false
 	@State private var endSecondaryCoolantChecked: Bool = false
@@ -385,11 +481,13 @@ struct EditTripLog: View {
 	@State private var endFrontAxleChecked: Bool = false
 	@State private var endFuelWaterSeparatorChecked: Bool = false
 	@State private var endAirSystemWaterBleedChecked: Bool = false
+	@State private var endCheckedFluidItems: Set<String> = []
 	@State private var showStartFluidChecks: Bool = false
 	@State private var showEndFluidChecks: Bool = false
 
 	// New: ModelPicker selections
 	@State private var selectedVehicle: Vehicle8? = nil
+	@State private var showingQuickAddVehicle: Bool = false
 	@State private var selectedTowedVehicle: Vehicle8? = nil
 	@State private var tripGroup: String = ""
 	@State private var availableGroups: [String] = []
@@ -429,6 +527,32 @@ struct EditTripLog: View {
 		self._fuelLevelEnd1 = State.init(initialValue: dataSet.fuelLevelEnd1)
 		self._fuelLevelStart = State.init(initialValue: dataSet.fuelLevelStart)
 		self._fuelLevelEnd = State.init(initialValue: dataSet.fuelLevelEnd)
+		self._fuelTank1LevelStart1 = State.init(initialValue: dataSet.fuelTank1LevelStart1)
+		self._fuelTank2LevelStart1 = State.init(initialValue: dataSet.fuelTank2LevelStart1)
+		self._fuelTank3LevelStart1 = State.init(initialValue: dataSet.fuelTank3LevelStart1)
+		self._fuelTank4LevelStart1 = State.init(initialValue: dataSet.fuelTank4LevelStart1)
+		self._fuelTank5LevelStart1 = State.init(initialValue: dataSet.fuelTank5LevelStart1)
+		self._fuelTank6LevelStart1 = State.init(initialValue: dataSet.fuelTank6LevelStart1)
+		self._fuelTank1QuantityStart = State.init(initialValue: dataSet.fuelTank1QuantityStart)
+		self._fuelTank2QuantityStart = State.init(initialValue: dataSet.fuelTank2QuantityStart)
+		self._fuelTank3QuantityStart = State.init(initialValue: dataSet.fuelTank3QuantityStart)
+		self._fuelTank4QuantityStart = State.init(initialValue: dataSet.fuelTank4QuantityStart)
+		self._fuelTank5QuantityStart = State.init(initialValue: dataSet.fuelTank5QuantityStart)
+		self._fuelTank6QuantityStart = State.init(initialValue: dataSet.fuelTank6QuantityStart)
+		self._fuelTank1LevelEnd1 = State.init(initialValue: dataSet.fuelTank1LevelEnd1)
+		self._fuelTank2LevelEnd1 = State.init(initialValue: dataSet.fuelTank2LevelEnd1)
+		self._fuelTank3LevelEnd1 = State.init(initialValue: dataSet.fuelTank3LevelEnd1)
+		self._fuelTank4LevelEnd1 = State.init(initialValue: dataSet.fuelTank4LevelEnd1)
+		self._fuelTank5LevelEnd1 = State.init(initialValue: dataSet.fuelTank5LevelEnd1)
+		self._fuelTank6LevelEnd1 = State.init(initialValue: dataSet.fuelTank6LevelEnd1)
+		self._fuelTank1QuantityEnd = State.init(initialValue: dataSet.fuelTank1QuantityEnd)
+		self._fuelTank2QuantityEnd = State.init(initialValue: dataSet.fuelTank2QuantityEnd)
+		self._fuelTank3QuantityEnd = State.init(initialValue: dataSet.fuelTank3QuantityEnd)
+		self._fuelTank4QuantityEnd = State.init(initialValue: dataSet.fuelTank4QuantityEnd)
+		self._fuelTank5QuantityEnd = State.init(initialValue: dataSet.fuelTank5QuantityEnd)
+		self._fuelTank6QuantityEnd = State.init(initialValue: dataSet.fuelTank6QuantityEnd)
+		self._engineTachStart = State.init(initialValue: dataSet.engineTachStart)
+		self._engineTachEnd = State.init(initialValue: dataSet.engineTachEnd)
 		self._defLevel1 = State.init(initialValue: dataSet.defLevel1)
 		self._defLevelFraction = State.init(initialValue: dataSet.defLevelFraction)
 		self._defLevelEnd1 = State.init(initialValue: dataSet.defLevelEnd1)
@@ -449,6 +573,10 @@ struct EditTripLog: View {
 		self._fuelAdded6 = State.init(initialValue: dataSet.fuelAdded6)
 		self._locationStart = State.init(initialValue: dataSet.locationStart)
 		self._locationEnd = State.init(initialValue: dataSet.locationEnd)
+		self._locationStartLat = State.init(initialValue: dataSet.locationStartLat)
+		self._locationStartLon = State.init(initialValue: dataSet.locationStartLon)
+		self._locationEndLat = State.init(initialValue: dataSet.locationEndLat)
+		self._locationEndLon = State.init(initialValue: dataSet.locationEndLon)
 		self._vehicleTowed = State.init(initialValue: dataSet.vehicleTowed)
 		self._vehicleIdTowed = State.init(initialValue: dataSet.vehicleIdTowed)
 		self._image1 = State.init(initialValue: dataSet.image1)
@@ -496,6 +624,18 @@ struct EditTripLog: View {
 		self._fuelLocation4 = State.init(initialValue: dataSet.fuelLocation4)
 		self._fuelLocation5 = State.init(initialValue: dataSet.fuelLocation5)
 		self._fuelLocation6 = State.init(initialValue: dataSet.fuelLocation6)
+		self._fuelLocationLat1 = State.init(initialValue: dataSet.fuelLocationLat1)
+		self._fuelLocationLon1 = State.init(initialValue: dataSet.fuelLocationLon1)
+		self._fuelLocationLat2 = State.init(initialValue: dataSet.fuelLocationLat2)
+		self._fuelLocationLon2 = State.init(initialValue: dataSet.fuelLocationLon2)
+		self._fuelLocationLat3 = State.init(initialValue: dataSet.fuelLocationLat3)
+		self._fuelLocationLon3 = State.init(initialValue: dataSet.fuelLocationLon3)
+		self._fuelLocationLat4 = State.init(initialValue: dataSet.fuelLocationLat4)
+		self._fuelLocationLon4 = State.init(initialValue: dataSet.fuelLocationLon4)
+		self._fuelLocationLat5 = State.init(initialValue: dataSet.fuelLocationLat5)
+		self._fuelLocationLon5 = State.init(initialValue: dataSet.fuelLocationLon5)
+		self._fuelLocationLat6 = State.init(initialValue: dataSet.fuelLocationLat6)
+		self._fuelLocationLon6 = State.init(initialValue: dataSet.fuelLocationLon6)
 		self._fuelStop1Image1 = State.init(initialValue: dataSet.fuelStop1Image1)
 		self._fuelStop1Image2 = State.init(initialValue: dataSet.fuelStop1Image2)
 		self._fuelStop1Image3 = State.init(initialValue: dataSet.fuelStop1Image3)
@@ -524,6 +664,7 @@ struct EditTripLog: View {
 		self._startFrontAxleChecked = State.init(initialValue: dataSet.startFrontAxleChecked)
 		self._startFuelWaterSeparatorChecked = State.init(initialValue: dataSet.startFuelWaterSeparatorChecked)
 		self._startAirSystemWaterBleedChecked = State.init(initialValue: dataSet.startAirSystemWaterBleedChecked)
+		self._startCheckedFluidItems = State.init(initialValue: FluidCheckList.unpack(dataSet.startCheckedFluidItemsPacked))
 		self._endOilChecked = State.init(initialValue: dataSet.endOilChecked)
 		self._endEngineCoolantChecked = State.init(initialValue: dataSet.endEngineCoolantChecked)
 		self._endSecondaryCoolantChecked = State.init(initialValue: dataSet.endSecondaryCoolantChecked)
@@ -534,6 +675,7 @@ struct EditTripLog: View {
 		self._endFrontAxleChecked = State.init(initialValue: dataSet.endFrontAxleChecked)
 		self._endFuelWaterSeparatorChecked = State.init(initialValue: dataSet.endFuelWaterSeparatorChecked)
 		self._endAirSystemWaterBleedChecked = State.init(initialValue: dataSet.endAirSystemWaterBleedChecked)
+		self._endCheckedFluidItems = State.init(initialValue: FluidCheckList.unpack(dataSet.endCheckedFluidItemsPacked))
 		let group = dataSet.tripGroup
 		self._tripGroup = State(initialValue: group)
 		self._tripGroupSelection = State(initialValue: group.isEmpty ? "__none__" : group)
@@ -576,6 +718,7 @@ struct EditTripLog: View {
 						SectionText(label: "GENERAL")
 						
 						LabeledContent {
+							HStack {
 							ModelPicker(
 								selection: $selectedVehicle,
 								title: Vertical.current.assetSingular,
@@ -600,9 +743,23 @@ struct EditTripLog: View {
 								loadAvailableFuelLogs()
 							}
 							.fixedSize(horizontal: true, vertical: true)
+							if Vertical.current.id == .aviation {
+								Button {
+									showingQuickAddVehicle = true
+								} label: {
+									Image(systemName: "plus.circle")
+								}
+								.buttonStyle(.borderless)
+							}
+							}
 						} label: {
 							Text(Vertical.current.assetSingular)
 								.textLabelModified()
+						}
+						.sheet(isPresented: $showingQuickAddVehicle) {
+							QuickAddVehicle(onCreate: { newVehicle in
+								selectedVehicle = newVehicle
+							})
 						}
 
 						HStack{LabelDataTextview(label: "Log Name", data: $logName)}
@@ -630,6 +787,7 @@ struct EditTripLog: View {
 						if tripGroupSelection == "__new__" {
 							HStack{LabelDataTextview(label: "Group Name", data: $tripGroup)}
 						}
+						if Vertical.current.id != .aviation {
 						HStack{LabelDataToggle(label: "Towed \(Vertical.current.assetSingular)", data: $vehicleTowed)}
 
 						if vehicleTowed {
@@ -669,15 +827,42 @@ struct EditTripLog: View {
 							.frame(maxWidth: .infinity, alignment: .trailing)
 						}
 					}
+					}
 				}
 				
 				CardView {
 					VStack {
-						SectionText(label: "TRAVEL START")
-						HStack{LabelDataPicker_DateTime(label: "Date/Time                    ", data: $tripDateTimeStart)}
-						HStack{LabelDataTextview_Numberpad_Int(label: Vertical.current.primaryMeterLabel, data: $odometerStart)}
-						HStack{LabelDataTextview_Numberpad_Float(label: "Engine Hours:", data: $engHoursStart)}
-						HStack{LabelLocationTextview(label: "Location", data: $locationStart)}
+						SectionText(label: Vertical.current.id == .aviation ? "DEPARTURE" : "TRAVEL START")
+						HStack{LabelDataPicker_DateTime(label: Vertical.current.id == .aviation ? "Depart                       " : "Date/Time                    ", data: $tripDateTimeStart)}
+						if Vertical.current.visibleFieldGroups.contains(.odometer) {
+							HStack{LabelDataTextview_Numberpad_Int(label: Vertical.current.distanceMeterLabel, data: $odometerStart)}
+						}
+						HStack{LabelLocationTextview(label: "Location", data: $locationStart, latitude: $locationStartLat, longitude: $locationStartLon, coordinateLabel: "Departure Coordinates")}
+						HStack{LabelDataTextview_Numberpad_Float(label: "\(Vertical.current.hoursMeterLabel):", data: $engHoursStart, fixedWidth: Vertical.current.id == .aviation)}
+						if Vertical.current.id == .aviation {
+							ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+								HStack{LabelDataTextview_Numberpad_Float(label: "\(stopEngineNameShort(engineNumber)) Tach", data: tachBinding($engineTachStart, engineNumber), fixedWidth: true)}
+							}
+						}
+						if vehicleFuelTankCount > 1 {
+							ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
+								VStack(alignment: .leading, spacing: 6) {
+									HStack {
+										Picker_FuelLevel1(label: "\(fuelTankName(tankNumber)) Level", data: tankLevelStartBinding(tankNumber), data1: fuelTankCapacity(tankNumber), quantity: tankQuantityStartBinding(tankNumber))
+									}
+									.onChange(of: tankLevelStartBinding(tankNumber).wrappedValue) { _, newFraction in
+										tankQuantityStartBinding(tankNumber).wrappedValue = fuelTankCapacity(tankNumber) * newFraction
+										reconcileFuelTanksBeforeSave()
+										recomputeFuelConsumed()
+									}
+									.onChange(of: tankQuantityStartBinding(tankNumber).wrappedValue) { _, _ in
+										reconcileFuelTanksBeforeSave()
+										recomputeFuelConsumed()
+									}
+								}
+								.padding(.vertical, 4)
+							}
+						} else {
 						HStack{
 							Picker_FuelLevel1(label: "Fuel Level", data: $fuelLevelStart1, data1: Float(vehicleDetails?.fuelCapacity ?? 0), quantity: $fuelQuantityStart)
 								// Choosing an eighth fills in the quantity. Typing a quantity is left alone — it is
@@ -691,6 +876,8 @@ struct EditTripLog: View {
 									recomputeFuelConsumed()
 								}
 						}
+						}
+						if Vertical.current.id != .aviation {
 						HStack{
 							Picker_FuelLevel1(label: "DEF Level", data: $defLevel1, data1: Float(vehicleDetails?.defCapacity ?? 0), quantity: $defQuantityStart)
 								.onChange(of: defLevel1) { _, newFraction in
@@ -698,29 +885,33 @@ struct EditTripLog: View {
 									defLevelFraction = functions.getFuelLevel(unit: newFraction)
 								}
 						}
+						}
 						HStack {
 							Spacer()
 							Button {
 								showStartFluidChecks = true
 							} label: {
-								Label(fluidChecksTitle(startFluidChecks), systemImage: "drop.circle")
+								Label(Vertical.current.id == .land ? fluidChecksTitle(startFluidChecks) : "Fluid Checks (\(startCheckedFluidItems.count) completed)", systemImage: "drop.circle")
 							}
 							.buttonStyle(.bordered)
-							Spacer()
 						}
 						.sheet(isPresented: $showStartFluidChecks) {
-							FluidCheckSheet(
-								oilChecked: $startOilChecked,
-								engineCoolantChecked: $startEngineCoolantChecked,
-								secondaryCoolantChecked: $startSecondaryCoolantChecked,
-								powerSteeringChecked: $startPowerSteeringChecked,
-								brakeFluidChecked: $startBrakeFluidChecked,
-								transmissionFluidChecked: $startTransmissionFluidChecked,
-								rearAxleChecked: $startRearAxleChecked,
-								frontAxleChecked: $startFrontAxleChecked,
-								fuelWaterSeparatorChecked: $startFuelWaterSeparatorChecked,
-								airSystemWaterBleedChecked: $startAirSystemWaterBleedChecked
-							)
+							if Vertical.current.id == .land {
+								FluidCheckSheet(
+									oilChecked: $startOilChecked,
+									engineCoolantChecked: $startEngineCoolantChecked,
+									secondaryCoolantChecked: $startSecondaryCoolantChecked,
+									powerSteeringChecked: $startPowerSteeringChecked,
+									brakeFluidChecked: $startBrakeFluidChecked,
+									transmissionFluidChecked: $startTransmissionFluidChecked,
+									rearAxleChecked: $startRearAxleChecked,
+									frontAxleChecked: $startFrontAxleChecked,
+									fuelWaterSeparatorChecked: $startFuelWaterSeparatorChecked,
+									airSystemWaterBleedChecked: $startAirSystemWaterBleedChecked
+								)
+							} else {
+								FluidCheckSheet(checkedItems: $startCheckedFluidItems)
+							}
 						}
 					}
 				}
@@ -739,6 +930,8 @@ struct EditTripLog: View {
 								fuelOdometer: $fuelOdometer1,
 								fuelEngHours: $fuelEngHours1,
 								fuelLocation: $fuelLocation1,
+									fuelLocationLat: $fuelLocationLat1,
+									fuelLocationLon: $fuelLocationLon1,
 								fuelNotes: $fuelNotes1,
 								oilAdded: $oilAdded1,
 								labelOil: "(\(unit(UnitIndex.oil)))",
@@ -754,6 +947,7 @@ struct EditTripLog: View {
 								frontAxleChecked: $frontAxleChecked1,
 								fuelWaterSeparatorChecked: $fuelWaterSeparatorChecked1,
 								airSystemWaterBleedChecked: $airSystemWaterBleedChecked1,
+								checkedFluidItems: $checkedFluidItems1,
 							fuelDateTime: $fuelDateTime1,
 							fuelImage1: $fuelStop1Image1,
 							fuelImage2: $fuelStop1Image2,
@@ -771,6 +965,17 @@ struct EditTripLog: View {
 							defLevelStart: $stopDefLevelStart1,
 							defQuantityStart: $stopDefQtyStart1,
 							defPrice: $stopDefPrice1,
+							tankAdded: $stopTankAdded1,
+							tankCount: vehicleFuelTankCount,
+							tankName: fuelTankName,
+							tankCapacityFor: fuelTankCapacity,
+							engineOilAdded: $stopEngineOilAdded1,
+							engineCount: stopEngineCount,
+							engineNameFor: stopEngineName,
+							engineTach: $stopEngineTach1,
+							deiceFluidAdded: $stopDeiceFluidAdded1,
+							hydraulicFluidAdded: $stopHydraulicFluidAdded1,
+							brakeFluidAdded: $stopBrakeFluidAdded1,
 							fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
 							defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
 							linkedLogId: $fuelAdded1Log,
@@ -791,6 +996,8 @@ struct EditTripLog: View {
 									fuelOdometer: $fuelOdometer2,
 									fuelEngHours: $fuelEngHours2,
 									fuelLocation: $fuelLocation2,
+										fuelLocationLat: $fuelLocationLat2,
+										fuelLocationLon: $fuelLocationLon2,
 									fuelNotes: $fuelNotes2,
 									oilAdded: $oilAdded2,
 									labelOil: "(\(unit(UnitIndex.oil)))",
@@ -806,6 +1013,7 @@ struct EditTripLog: View {
 									frontAxleChecked: $frontAxleChecked2,
 									fuelWaterSeparatorChecked: $fuelWaterSeparatorChecked2,
 									airSystemWaterBleedChecked: $airSystemWaterBleedChecked2,
+								checkedFluidItems: $checkedFluidItems2,
 								fuelDateTime: $fuelDateTime2,
 								fuelImage1: $fuelStop2Image1,
 								fuelImage2: $fuelStop2Image2,
@@ -823,6 +1031,17 @@ struct EditTripLog: View {
 								defLevelStart: $stopDefLevelStart2,
 								defQuantityStart: $stopDefQtyStart2,
 								defPrice: $stopDefPrice2,
+								tankAdded: $stopTankAdded2,
+								tankCount: vehicleFuelTankCount,
+								tankName: fuelTankName,
+								tankCapacityFor: fuelTankCapacity,
+								engineOilAdded: $stopEngineOilAdded2,
+								engineCount: stopEngineCount,
+								engineNameFor: stopEngineName,
+								engineTach: $stopEngineTach2,
+								deiceFluidAdded: $stopDeiceFluidAdded2,
+								hydraulicFluidAdded: $stopHydraulicFluidAdded2,
+								brakeFluidAdded: $stopBrakeFluidAdded2,
 								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
 								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
 								linkedLogId: $fuelAdded2Log,
@@ -844,6 +1063,8 @@ struct EditTripLog: View {
 									fuelOdometer: $fuelOdometer3,
 									fuelEngHours: $fuelEngHours3,
 									fuelLocation: $fuelLocation3,
+										fuelLocationLat: $fuelLocationLat3,
+										fuelLocationLon: $fuelLocationLon3,
 									fuelNotes: $fuelNotes3,
 									oilAdded: $oilAdded3,
 									labelOil: "(\(unit(UnitIndex.oil)))",
@@ -859,6 +1080,7 @@ struct EditTripLog: View {
 									frontAxleChecked: $frontAxleChecked3,
 									fuelWaterSeparatorChecked: $fuelWaterSeparatorChecked3,
 									airSystemWaterBleedChecked: $airSystemWaterBleedChecked3,
+								checkedFluidItems: $checkedFluidItems3,
 								fuelDateTime: $fuelDateTime3,
 								fuelImage1: $fuelStop3Image1,
 								fuelImage2: $fuelStop3Image2,
@@ -876,6 +1098,17 @@ struct EditTripLog: View {
 								defLevelStart: $stopDefLevelStart3,
 								defQuantityStart: $stopDefQtyStart3,
 								defPrice: $stopDefPrice3,
+								tankAdded: $stopTankAdded3,
+								tankCount: vehicleFuelTankCount,
+								tankName: fuelTankName,
+								tankCapacityFor: fuelTankCapacity,
+								engineOilAdded: $stopEngineOilAdded3,
+								engineCount: stopEngineCount,
+								engineNameFor: stopEngineName,
+								engineTach: $stopEngineTach3,
+								deiceFluidAdded: $stopDeiceFluidAdded3,
+								hydraulicFluidAdded: $stopHydraulicFluidAdded3,
+								brakeFluidAdded: $stopBrakeFluidAdded3,
 								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
 								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
 								linkedLogId: $fuelAdded3Log,
@@ -897,6 +1130,8 @@ struct EditTripLog: View {
 									fuelOdometer: $fuelOdometer4,
 									fuelEngHours: $fuelEngHours4,
 									fuelLocation: $fuelLocation4,
+										fuelLocationLat: $fuelLocationLat4,
+										fuelLocationLon: $fuelLocationLon4,
 									fuelNotes: $fuelNotes4,
 									oilAdded: $oilAdded4,
 									labelOil: "(\(unit(UnitIndex.oil)))",
@@ -912,6 +1147,7 @@ struct EditTripLog: View {
 									frontAxleChecked: $frontAxleChecked4,
 									fuelWaterSeparatorChecked: $fuelWaterSeparatorChecked4,
 									airSystemWaterBleedChecked: $airSystemWaterBleedChecked4,
+								checkedFluidItems: $checkedFluidItems4,
 								fuelDateTime: $fuelDateTime4,
 								fuelImage1: $fuelStop4Image1,
 								fuelImage2: $fuelStop4Image2,
@@ -929,6 +1165,17 @@ struct EditTripLog: View {
 								defLevelStart: $stopDefLevelStart4,
 								defQuantityStart: $stopDefQtyStart4,
 								defPrice: $stopDefPrice4,
+								tankAdded: $stopTankAdded4,
+								tankCount: vehicleFuelTankCount,
+								tankName: fuelTankName,
+								tankCapacityFor: fuelTankCapacity,
+								engineOilAdded: $stopEngineOilAdded4,
+								engineCount: stopEngineCount,
+								engineNameFor: stopEngineName,
+								engineTach: $stopEngineTach4,
+								deiceFluidAdded: $stopDeiceFluidAdded4,
+								hydraulicFluidAdded: $stopHydraulicFluidAdded4,
+								brakeFluidAdded: $stopBrakeFluidAdded4,
 								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
 								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
 								linkedLogId: $fuelAdded4Log,
@@ -950,6 +1197,8 @@ struct EditTripLog: View {
 									fuelOdometer: $fuelOdometer5,
 									fuelEngHours: $fuelEngHours5,
 									fuelLocation: $fuelLocation5,
+										fuelLocationLat: $fuelLocationLat5,
+										fuelLocationLon: $fuelLocationLon5,
 									fuelNotes: $fuelNotes5,
 									oilAdded: $oilAdded5,
 									labelOil: "(\(unit(UnitIndex.oil)))",
@@ -965,6 +1214,7 @@ struct EditTripLog: View {
 									frontAxleChecked: $frontAxleChecked5,
 									fuelWaterSeparatorChecked: $fuelWaterSeparatorChecked5,
 									airSystemWaterBleedChecked: $airSystemWaterBleedChecked5,
+								checkedFluidItems: $checkedFluidItems5,
 								fuelDateTime: $fuelDateTime5,
 								fuelImage1: $fuelStop5Image1,
 								fuelImage2: $fuelStop5Image2,
@@ -982,6 +1232,17 @@ struct EditTripLog: View {
 								defLevelStart: $stopDefLevelStart5,
 								defQuantityStart: $stopDefQtyStart5,
 								defPrice: $stopDefPrice5,
+								tankAdded: $stopTankAdded5,
+								tankCount: vehicleFuelTankCount,
+								tankName: fuelTankName,
+								tankCapacityFor: fuelTankCapacity,
+								engineOilAdded: $stopEngineOilAdded5,
+								engineCount: stopEngineCount,
+								engineNameFor: stopEngineName,
+								engineTach: $stopEngineTach5,
+								deiceFluidAdded: $stopDeiceFluidAdded5,
+								hydraulicFluidAdded: $stopHydraulicFluidAdded5,
+								brakeFluidAdded: $stopBrakeFluidAdded5,
 								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
 								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
 								linkedLogId: $fuelAdded5Log,
@@ -1003,6 +1264,8 @@ struct EditTripLog: View {
 									fuelOdometer: $fuelOdometer6,
 									fuelEngHours: $fuelEngHours6,
 									fuelLocation: $fuelLocation6,
+										fuelLocationLat: $fuelLocationLat6,
+										fuelLocationLon: $fuelLocationLon6,
 									fuelNotes: $fuelNotes6,
 									oilAdded: $oilAdded6,
 									labelOil: "(\(unit(UnitIndex.oil)))",
@@ -1018,6 +1281,7 @@ struct EditTripLog: View {
 									frontAxleChecked: $frontAxleChecked6,
 									fuelWaterSeparatorChecked: $fuelWaterSeparatorChecked6,
 									airSystemWaterBleedChecked: $airSystemWaterBleedChecked6,
+								checkedFluidItems: $checkedFluidItems6,
 								fuelDateTime: $fuelDateTime6,
 								fuelImage1: $fuelStop6Image1,
 								fuelImage2: $fuelStop6Image2,
@@ -1035,6 +1299,17 @@ struct EditTripLog: View {
 								defLevelStart: $stopDefLevelStart6,
 								defQuantityStart: $stopDefQtyStart6,
 								defPrice: $stopDefPrice6,
+								tankAdded: $stopTankAdded6,
+								tankCount: vehicleFuelTankCount,
+								tankName: fuelTankName,
+								tankCapacityFor: fuelTankCapacity,
+								engineOilAdded: $stopEngineOilAdded6,
+								engineCount: stopEngineCount,
+								engineNameFor: stopEngineName,
+								engineTach: $stopEngineTach6,
+								deiceFluidAdded: $stopDeiceFluidAdded6,
+								hydraulicFluidAdded: $stopHydraulicFluidAdded6,
+								brakeFluidAdded: $stopBrakeFluidAdded6,
 								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
 								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
 								linkedLogId: $fuelAdded6Log,
@@ -1048,11 +1323,49 @@ struct EditTripLog: View {
 				
 				CardView {
 					VStack {
-						SectionText(label: "TRAVEL END")
-						HStack{LabelDataPicker_DateTime(label: "Date/Time                    ", data: $tripDateTimeEnd)}
-						HStack{LabelDataTextview_Numberpad_Int(label: Vertical.current.primaryMeterLabel, data: $odometerEnd)}
-						HStack{LabelDataTextview_Numberpad_Float(label: "Engine Hours:", data: $engHoursEnd)}
-						HStack{LabelLocationTextview(label: "Location", data: $locationEnd)}
+						SectionText(label: Vertical.current.id == .aviation ? "ARRIVAL" : "TRAVEL END")
+						HStack{LabelDataPicker_DateTime(label: Vertical.current.id == .aviation ? "Arrive                       " : "Date/Time                    ", data: $tripDateTimeEnd)}
+						if Vertical.current.visibleFieldGroups.contains(.odometer) {
+							HStack{LabelDataTextview_Numberpad_Int(label: Vertical.current.distanceMeterLabel, data: $odometerEnd)}
+						}
+						HStack{LabelLocationTextview(label: "Location", data: $locationEnd, latitude: $locationEndLat, longitude: $locationEndLon, coordinateLabel: "Arrival Coordinates")}
+						if let distanceNM = departureArrivalDistanceNM {
+							Text("Direct Distance: \(String(format: "%.1f nm", distanceNM))")
+								.font(.caption2)
+								.foregroundStyle(.secondary)
+								.frame(maxWidth: .infinity, alignment: .trailing)
+							if let avgSpeedKts = departureArrivalAvgSpeedKts {
+								Text("Avg Speed: \(String(format: "%.1f kts", avgSpeedKts))")
+									.font(.caption2)
+									.foregroundStyle(.secondary)
+									.frame(maxWidth: .infinity, alignment: .trailing)
+							}
+						}
+						HStack{LabelDataTextview_Numberpad_Float(label: "\(Vertical.current.hoursMeterLabel):", data: $engHoursEnd, fixedWidth: Vertical.current.id == .aviation)}
+						if Vertical.current.id == .aviation {
+							ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+								HStack{LabelDataTextview_Numberpad_Float(label: "\(stopEngineNameShort(engineNumber)) Tach", data: tachBinding($engineTachEnd, engineNumber), fixedWidth: true)}
+							}
+						}
+						if vehicleFuelTankCount > 1 {
+							ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
+								VStack(alignment: .leading, spacing: 6) {
+									HStack {
+										Picker_FuelLevel1(label: "\(fuelTankName(tankNumber)) Level", data: tankLevelEndBinding(tankNumber), data1: fuelTankCapacity(tankNumber), quantity: tankQuantityEndBinding(tankNumber))
+									}
+									.onChange(of: tankLevelEndBinding(tankNumber).wrappedValue) { _, newFraction in
+										tankQuantityEndBinding(tankNumber).wrappedValue = fuelTankCapacity(tankNumber) * newFraction
+										reconcileFuelTanksBeforeSave()
+										recomputeFuelConsumed()
+									}
+									.onChange(of: tankQuantityEndBinding(tankNumber).wrappedValue) { _, _ in
+										reconcileFuelTanksBeforeSave()
+										recomputeFuelConsumed()
+									}
+								}
+								.padding(.vertical, 4)
+							}
+						} else {
 						HStack{
 							Picker_FuelLevel1(label: "Fuel Level", data: $fuelLevelEnd1, data1: Float(vehicleDetails?.fuelCapacity ?? 0), quantity: $fuelQuantityEnd)
 								.onChange(of: fuelLevelEnd1) { _, newFraction in
@@ -1064,6 +1377,8 @@ struct EditTripLog: View {
 									recomputeFuelConsumed()
 								}
 						}
+						}
+						if Vertical.current.id != .aviation {
 						HStack{
 							Picker_FuelLevel1(label: "DEF Level", data: $defLevelEnd1, data1: Float(vehicleDetails?.defCapacity ?? 0), quantity: $defQuantityEnd)
 								.onChange(of: defLevelEnd1) { _, newFraction in
@@ -1071,29 +1386,33 @@ struct EditTripLog: View {
 									defLevelEndFraction = functions.getFuelLevel(unit: newFraction)
 								}
 						}
+						}
 						HStack {
 							Spacer()
 							Button {
 								showEndFluidChecks = true
 							} label: {
-								Label(fluidChecksTitle(endFluidChecks), systemImage: "drop.circle")
+								Label(Vertical.current.id == .land ? fluidChecksTitle(endFluidChecks) : "Fluid Checks (\(endCheckedFluidItems.count) completed)", systemImage: "drop.circle")
 							}
 							.buttonStyle(.bordered)
-							Spacer()
 						}
 						.sheet(isPresented: $showEndFluidChecks) {
-							FluidCheckSheet(
-								oilChecked: $endOilChecked,
-								engineCoolantChecked: $endEngineCoolantChecked,
-								secondaryCoolantChecked: $endSecondaryCoolantChecked,
-								powerSteeringChecked: $endPowerSteeringChecked,
-								brakeFluidChecked: $endBrakeFluidChecked,
-								transmissionFluidChecked: $endTransmissionFluidChecked,
-								rearAxleChecked: $endRearAxleChecked,
-								frontAxleChecked: $endFrontAxleChecked,
-								fuelWaterSeparatorChecked: $endFuelWaterSeparatorChecked,
-								airSystemWaterBleedChecked: $endAirSystemWaterBleedChecked
-							)
+							if Vertical.current.id == .land {
+								FluidCheckSheet(
+									oilChecked: $endOilChecked,
+									engineCoolantChecked: $endEngineCoolantChecked,
+									secondaryCoolantChecked: $endSecondaryCoolantChecked,
+									powerSteeringChecked: $endPowerSteeringChecked,
+									brakeFluidChecked: $endBrakeFluidChecked,
+									transmissionFluidChecked: $endTransmissionFluidChecked,
+									rearAxleChecked: $endRearAxleChecked,
+									frontAxleChecked: $endFrontAxleChecked,
+									fuelWaterSeparatorChecked: $endFuelWaterSeparatorChecked,
+									airSystemWaterBleedChecked: $endAirSystemWaterBleedChecked
+								)
+							} else {
+								FluidCheckSheet(checkedItems: $endCheckedFluidItems)
+							}
 						}
 					}
 				}
@@ -1168,7 +1487,8 @@ struct EditTripLog: View {
 					let d = getFuelLogData(saveLogId: fuelAdded1Log)
 					fuelPrice1 = d.fuelPrice; fuelOdometer1 = d.fuelOdometer; fuelEngHours1 = d.fuelEngHours
 					fuelLocation1 = d.fuelLocation; oilAdded1 = d.oilAdded; defAdded1 = d.defAdded
-					fuelNotes1 = d.fuelNotes; oilChecked1 = d.oilChecked; engineCoolantChecked1 = d.engineCoolantChecked; secondaryCoolantChecked1 = d.secondaryCoolantChecked; powerSteeringChecked1 = d.powerSteeringChecked; brakeFluidChecked1 = d.brakeFluidChecked; transmissionFluidChecked1 = d.transmissionFluidChecked; rearAxleChecked1 = d.rearAxleChecked; frontAxleChecked1 = d.frontAxleChecked; fuelWaterSeparatorChecked1 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked1 = d.airSystemWaterBleedChecked; fuelDateTime1 = d.fuelDateTime
+					stopTankAdded1 = d.tankAdded; stopEngineOilAdded1 = d.engineOilAdded; stopDeiceFluidAdded1 = d.deiceFluidAdded; stopHydraulicFluidAdded1 = d.hydraulicFluidAdded; stopBrakeFluidAdded1 = d.brakeFluidAdded; stopEngineTach1 = d.engineTach
+					fuelNotes1 = d.fuelNotes; oilChecked1 = d.oilChecked; engineCoolantChecked1 = d.engineCoolantChecked; secondaryCoolantChecked1 = d.secondaryCoolantChecked; powerSteeringChecked1 = d.powerSteeringChecked; brakeFluidChecked1 = d.brakeFluidChecked; transmissionFluidChecked1 = d.transmissionFluidChecked; rearAxleChecked1 = d.rearAxleChecked; frontAxleChecked1 = d.frontAxleChecked; fuelWaterSeparatorChecked1 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked1 = d.airSystemWaterBleedChecked; checkedFluidItems1 = Set(d.checkedFluidItems); fuelDateTime1 = d.fuelDateTime
 					fuelStop1Image1 = d.image1; fuelStop1Image2 = d.image2; fuelStop1Image3 = d.image3
 					stopFuelLevelStart1 = d.fuelLevelStart; stopFuelLevelEnd1 = d.fuelLevelEnd; stopDefLevel1 = d.defLevel; stopFuelType1 = d.fuelType
 					stopFuelQtyStart1 = d.fuelQuantityStart; stopFuelQtyEnd1 = d.fuelQuantityEnd; stopDefQty1 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
@@ -1181,7 +1501,8 @@ struct EditTripLog: View {
 					let d = getFuelLogData(saveLogId: fuelAdded2Log)
 					fuelPrice2 = d.fuelPrice; fuelOdometer2 = d.fuelOdometer; fuelEngHours2 = d.fuelEngHours
 					fuelLocation2 = d.fuelLocation; oilAdded2 = d.oilAdded; defAdded2 = d.defAdded
-					fuelNotes2 = d.fuelNotes; oilChecked2 = d.oilChecked; engineCoolantChecked2 = d.engineCoolantChecked; secondaryCoolantChecked2 = d.secondaryCoolantChecked; powerSteeringChecked2 = d.powerSteeringChecked; brakeFluidChecked2 = d.brakeFluidChecked; transmissionFluidChecked2 = d.transmissionFluidChecked; rearAxleChecked2 = d.rearAxleChecked; frontAxleChecked2 = d.frontAxleChecked; fuelWaterSeparatorChecked2 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked2 = d.airSystemWaterBleedChecked; fuelDateTime2 = d.fuelDateTime
+					stopTankAdded2 = d.tankAdded; stopEngineOilAdded2 = d.engineOilAdded; stopDeiceFluidAdded2 = d.deiceFluidAdded; stopHydraulicFluidAdded2 = d.hydraulicFluidAdded; stopBrakeFluidAdded2 = d.brakeFluidAdded; stopEngineTach2 = d.engineTach
+					fuelNotes2 = d.fuelNotes; oilChecked2 = d.oilChecked; engineCoolantChecked2 = d.engineCoolantChecked; secondaryCoolantChecked2 = d.secondaryCoolantChecked; powerSteeringChecked2 = d.powerSteeringChecked; brakeFluidChecked2 = d.brakeFluidChecked; transmissionFluidChecked2 = d.transmissionFluidChecked; rearAxleChecked2 = d.rearAxleChecked; frontAxleChecked2 = d.frontAxleChecked; fuelWaterSeparatorChecked2 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked2 = d.airSystemWaterBleedChecked; checkedFluidItems2 = Set(d.checkedFluidItems); fuelDateTime2 = d.fuelDateTime
 					fuelStop2Image1 = d.image1; fuelStop2Image2 = d.image2; fuelStop2Image3 = d.image3
 					stopFuelLevelStart2 = d.fuelLevelStart; stopFuelLevelEnd2 = d.fuelLevelEnd; stopDefLevel2 = d.defLevel; stopFuelType2 = d.fuelType
 					stopFuelQtyStart2 = d.fuelQuantityStart; stopFuelQtyEnd2 = d.fuelQuantityEnd; stopDefQty2 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
@@ -1194,7 +1515,8 @@ struct EditTripLog: View {
 					let d = getFuelLogData(saveLogId: fuelAdded3Log)
 					fuelPrice3 = d.fuelPrice; fuelOdometer3 = d.fuelOdometer; fuelEngHours3 = d.fuelEngHours
 					fuelLocation3 = d.fuelLocation; oilAdded3 = d.oilAdded; defAdded3 = d.defAdded
-					fuelNotes3 = d.fuelNotes; oilChecked3 = d.oilChecked; engineCoolantChecked3 = d.engineCoolantChecked; secondaryCoolantChecked3 = d.secondaryCoolantChecked; powerSteeringChecked3 = d.powerSteeringChecked; brakeFluidChecked3 = d.brakeFluidChecked; transmissionFluidChecked3 = d.transmissionFluidChecked; rearAxleChecked3 = d.rearAxleChecked; frontAxleChecked3 = d.frontAxleChecked; fuelWaterSeparatorChecked3 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked3 = d.airSystemWaterBleedChecked; fuelDateTime3 = d.fuelDateTime
+					stopTankAdded3 = d.tankAdded; stopEngineOilAdded3 = d.engineOilAdded; stopDeiceFluidAdded3 = d.deiceFluidAdded; stopHydraulicFluidAdded3 = d.hydraulicFluidAdded; stopBrakeFluidAdded3 = d.brakeFluidAdded; stopEngineTach3 = d.engineTach
+					fuelNotes3 = d.fuelNotes; oilChecked3 = d.oilChecked; engineCoolantChecked3 = d.engineCoolantChecked; secondaryCoolantChecked3 = d.secondaryCoolantChecked; powerSteeringChecked3 = d.powerSteeringChecked; brakeFluidChecked3 = d.brakeFluidChecked; transmissionFluidChecked3 = d.transmissionFluidChecked; rearAxleChecked3 = d.rearAxleChecked; frontAxleChecked3 = d.frontAxleChecked; fuelWaterSeparatorChecked3 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked3 = d.airSystemWaterBleedChecked; checkedFluidItems3 = Set(d.checkedFluidItems); fuelDateTime3 = d.fuelDateTime
 					fuelStop3Image1 = d.image1; fuelStop3Image2 = d.image2; fuelStop3Image3 = d.image3
 					stopFuelLevelStart3 = d.fuelLevelStart; stopFuelLevelEnd3 = d.fuelLevelEnd; stopDefLevel3 = d.defLevel; stopFuelType3 = d.fuelType
 					stopFuelQtyStart3 = d.fuelQuantityStart; stopFuelQtyEnd3 = d.fuelQuantityEnd; stopDefQty3 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
@@ -1207,7 +1529,8 @@ struct EditTripLog: View {
 					let d = getFuelLogData(saveLogId: fuelAdded4Log)
 					fuelPrice4 = d.fuelPrice; fuelOdometer4 = d.fuelOdometer; fuelEngHours4 = d.fuelEngHours
 					fuelLocation4 = d.fuelLocation; oilAdded4 = d.oilAdded; defAdded4 = d.defAdded
-					fuelNotes4 = d.fuelNotes; oilChecked4 = d.oilChecked; engineCoolantChecked4 = d.engineCoolantChecked; secondaryCoolantChecked4 = d.secondaryCoolantChecked; powerSteeringChecked4 = d.powerSteeringChecked; brakeFluidChecked4 = d.brakeFluidChecked; transmissionFluidChecked4 = d.transmissionFluidChecked; rearAxleChecked4 = d.rearAxleChecked; frontAxleChecked4 = d.frontAxleChecked; fuelWaterSeparatorChecked4 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked4 = d.airSystemWaterBleedChecked; fuelDateTime4 = d.fuelDateTime
+					stopTankAdded4 = d.tankAdded; stopEngineOilAdded4 = d.engineOilAdded; stopDeiceFluidAdded4 = d.deiceFluidAdded; stopHydraulicFluidAdded4 = d.hydraulicFluidAdded; stopBrakeFluidAdded4 = d.brakeFluidAdded; stopEngineTach4 = d.engineTach
+					fuelNotes4 = d.fuelNotes; oilChecked4 = d.oilChecked; engineCoolantChecked4 = d.engineCoolantChecked; secondaryCoolantChecked4 = d.secondaryCoolantChecked; powerSteeringChecked4 = d.powerSteeringChecked; brakeFluidChecked4 = d.brakeFluidChecked; transmissionFluidChecked4 = d.transmissionFluidChecked; rearAxleChecked4 = d.rearAxleChecked; frontAxleChecked4 = d.frontAxleChecked; fuelWaterSeparatorChecked4 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked4 = d.airSystemWaterBleedChecked; checkedFluidItems4 = Set(d.checkedFluidItems); fuelDateTime4 = d.fuelDateTime
 					fuelStop4Image1 = d.image1; fuelStop4Image2 = d.image2; fuelStop4Image3 = d.image3
 					stopFuelLevelStart4 = d.fuelLevelStart; stopFuelLevelEnd4 = d.fuelLevelEnd; stopDefLevel4 = d.defLevel; stopFuelType4 = d.fuelType
 					stopFuelQtyStart4 = d.fuelQuantityStart; stopFuelQtyEnd4 = d.fuelQuantityEnd; stopDefQty4 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
@@ -1220,7 +1543,8 @@ struct EditTripLog: View {
 					let d = getFuelLogData(saveLogId: fuelAdded5Log)
 					fuelPrice5 = d.fuelPrice; fuelOdometer5 = d.fuelOdometer; fuelEngHours5 = d.fuelEngHours
 					fuelLocation5 = d.fuelLocation; oilAdded5 = d.oilAdded; defAdded5 = d.defAdded
-					fuelNotes5 = d.fuelNotes; oilChecked5 = d.oilChecked; engineCoolantChecked5 = d.engineCoolantChecked; secondaryCoolantChecked5 = d.secondaryCoolantChecked; powerSteeringChecked5 = d.powerSteeringChecked; brakeFluidChecked5 = d.brakeFluidChecked; transmissionFluidChecked5 = d.transmissionFluidChecked; rearAxleChecked5 = d.rearAxleChecked; frontAxleChecked5 = d.frontAxleChecked; fuelWaterSeparatorChecked5 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked5 = d.airSystemWaterBleedChecked; fuelDateTime5 = d.fuelDateTime
+					stopTankAdded5 = d.tankAdded; stopEngineOilAdded5 = d.engineOilAdded; stopDeiceFluidAdded5 = d.deiceFluidAdded; stopHydraulicFluidAdded5 = d.hydraulicFluidAdded; stopBrakeFluidAdded5 = d.brakeFluidAdded; stopEngineTach5 = d.engineTach
+					fuelNotes5 = d.fuelNotes; oilChecked5 = d.oilChecked; engineCoolantChecked5 = d.engineCoolantChecked; secondaryCoolantChecked5 = d.secondaryCoolantChecked; powerSteeringChecked5 = d.powerSteeringChecked; brakeFluidChecked5 = d.brakeFluidChecked; transmissionFluidChecked5 = d.transmissionFluidChecked; rearAxleChecked5 = d.rearAxleChecked; frontAxleChecked5 = d.frontAxleChecked; fuelWaterSeparatorChecked5 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked5 = d.airSystemWaterBleedChecked; checkedFluidItems5 = Set(d.checkedFluidItems); fuelDateTime5 = d.fuelDateTime
 					fuelStop5Image1 = d.image1; fuelStop5Image2 = d.image2; fuelStop5Image3 = d.image3
 					stopFuelLevelStart5 = d.fuelLevelStart; stopFuelLevelEnd5 = d.fuelLevelEnd; stopDefLevel5 = d.defLevel; stopFuelType5 = d.fuelType
 					stopFuelQtyStart5 = d.fuelQuantityStart; stopFuelQtyEnd5 = d.fuelQuantityEnd; stopDefQty5 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
@@ -1233,7 +1557,8 @@ struct EditTripLog: View {
 					let d = getFuelLogData(saveLogId: fuelAdded6Log)
 					fuelPrice6 = d.fuelPrice; fuelOdometer6 = d.fuelOdometer; fuelEngHours6 = d.fuelEngHours
 					fuelLocation6 = d.fuelLocation; oilAdded6 = d.oilAdded; defAdded6 = d.defAdded
-					fuelNotes6 = d.fuelNotes; oilChecked6 = d.oilChecked; engineCoolantChecked6 = d.engineCoolantChecked; secondaryCoolantChecked6 = d.secondaryCoolantChecked; powerSteeringChecked6 = d.powerSteeringChecked; brakeFluidChecked6 = d.brakeFluidChecked; transmissionFluidChecked6 = d.transmissionFluidChecked; rearAxleChecked6 = d.rearAxleChecked; frontAxleChecked6 = d.frontAxleChecked; fuelWaterSeparatorChecked6 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked6 = d.airSystemWaterBleedChecked; fuelDateTime6 = d.fuelDateTime
+					stopTankAdded6 = d.tankAdded; stopEngineOilAdded6 = d.engineOilAdded; stopDeiceFluidAdded6 = d.deiceFluidAdded; stopHydraulicFluidAdded6 = d.hydraulicFluidAdded; stopBrakeFluidAdded6 = d.brakeFluidAdded; stopEngineTach6 = d.engineTach
+					fuelNotes6 = d.fuelNotes; oilChecked6 = d.oilChecked; engineCoolantChecked6 = d.engineCoolantChecked; secondaryCoolantChecked6 = d.secondaryCoolantChecked; powerSteeringChecked6 = d.powerSteeringChecked; brakeFluidChecked6 = d.brakeFluidChecked; transmissionFluidChecked6 = d.transmissionFluidChecked; rearAxleChecked6 = d.rearAxleChecked; frontAxleChecked6 = d.frontAxleChecked; fuelWaterSeparatorChecked6 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked6 = d.airSystemWaterBleedChecked; checkedFluidItems6 = Set(d.checkedFluidItems); fuelDateTime6 = d.fuelDateTime
 					fuelStop6Image1 = d.image1; fuelStop6Image2 = d.image2; fuelStop6Image3 = d.image3
 					stopFuelLevelStart6 = d.fuelLevelStart; stopFuelLevelEnd6 = d.fuelLevelEnd; stopDefLevel6 = d.defLevel; stopFuelType6 = d.fuelType
 					stopFuelQtyStart6 = d.fuelQuantityStart; stopFuelQtyEnd6 = d.fuelQuantityEnd; stopDefQty6 = defQuantityOrDerived(d, capacity: Float(vehicleDetails?.defCapacity ?? 0))
@@ -1243,6 +1568,36 @@ struct EditTripLog: View {
 					createFuelLog6 = true
 				}
 			}
+			// Transfer Hobbs/Tach/fuel level in as each stop's starting point, the moment the
+			// pilot actually creates it — `createFuelLogN` turns out to only ever get set to
+			// true when *reading back* an already-linked fuel log (or via the Stop Reason
+			// picker's own "Fuel" case, in `Custom Views/9 TextView_Field Mods.swift`), never
+			// as a direct reaction to typing a quantity for a brand-new non-fuel stop, so it
+			// can't be relied on alone. The real "stop now exists" signal (matching
+			// `stopIsActive`) is `fuelAddedN` going positive or `stopReasonN` going non-empty.
+			// The stop's own Arrival Time is seeded from Departure's time too, but only on the
+			// true 0->positive/empty->non-empty transition (using the onChange closure's old
+			// value) — unlike the numeric chains, a timestamp has no "still unset" sentinel to
+			// test on every call, so re-running it on every later edit would keep stomping a
+			// time the pilot had already corrected.
+			//
+			// IMPORTANT: this must live on the EDIT-mode branch's view (the one above, closed
+			// by the `.onAppear` right before this) — `EditTripLog`'s body is `if isEditing {
+			// ...edit form... } else { ...read-only details... }`, and a first attempt at this
+			// wired these same handlers onto the details-mode container below by mistake, where
+			// they can never fire while the pilot is actually editing a stop.
+			.onChange(of: fuelAdded1) { old, new in if old == 0, new > 0 { seedStopDateTime(1) }; if new > 0 { syncSequentialTripValues() } }
+			.onChange(of: stopReason1) { old, new in if old.isEmpty, !new.isEmpty { seedStopDateTime(1) }; if !new.isEmpty { syncSequentialTripValues() } }
+			.onChange(of: fuelAdded2) { old, new in if old == 0, new > 0 { seedStopDateTime(2) }; if new > 0 { syncSequentialTripValues() } }
+			.onChange(of: stopReason2) { old, new in if old.isEmpty, !new.isEmpty { seedStopDateTime(2) }; if !new.isEmpty { syncSequentialTripValues() } }
+			.onChange(of: fuelAdded3) { old, new in if old == 0, new > 0 { seedStopDateTime(3) }; if new > 0 { syncSequentialTripValues() } }
+			.onChange(of: stopReason3) { old, new in if old.isEmpty, !new.isEmpty { seedStopDateTime(3) }; if !new.isEmpty { syncSequentialTripValues() } }
+			.onChange(of: fuelAdded4) { old, new in if old == 0, new > 0 { seedStopDateTime(4) }; if new > 0 { syncSequentialTripValues() } }
+			.onChange(of: stopReason4) { old, new in if old.isEmpty, !new.isEmpty { seedStopDateTime(4) }; if !new.isEmpty { syncSequentialTripValues() } }
+			.onChange(of: fuelAdded5) { old, new in if old == 0, new > 0 { seedStopDateTime(5) }; if new > 0 { syncSequentialTripValues() } }
+			.onChange(of: stopReason5) { old, new in if old.isEmpty, !new.isEmpty { seedStopDateTime(5) }; if !new.isEmpty { syncSequentialTripValues() } }
+			.onChange(of: fuelAdded6) { old, new in if old == 0, new > 0 { seedStopDateTime(6) }; if new > 0 { syncSequentialTripValues() } }
+			.onChange(of: stopReason6) { old, new in if old.isEmpty, !new.isEmpty { seedStopDateTime(6) }; if !new.isEmpty { syncSequentialTripValues() } }
 			.toolbar {
 				ToolbarItem(placement: .automatic) {
 					Button(isEditing ? "Cancel" : "Edit") {isEditing.toggle()}
@@ -1283,6 +1638,7 @@ struct EditTripLog: View {
 									fuelEngHours1 = fuelLogData.fuelEngHours
 									fuelLocation1 = fuelLogData.fuelLocation
 									oilAdded1 = fuelLogData.oilAdded
+									stopTankAdded1 = fuelLogData.tankAdded; stopEngineOilAdded1 = fuelLogData.engineOilAdded; stopDeiceFluidAdded1 = fuelLogData.deiceFluidAdded; stopHydraulicFluidAdded1 = fuelLogData.hydraulicFluidAdded; stopBrakeFluidAdded1 = fuelLogData.brakeFluidAdded; stopEngineTach1 = fuelLogData.engineTach
 									defAdded1 = fuelLogData.defAdded
 									fuelNotes1 = fuelLogData.fuelNotes
 									oilChecked1 = fuelLogData.oilChecked
@@ -1310,6 +1666,7 @@ struct EditTripLog: View {
 									fuelEngHours2 = fuelLogData.fuelEngHours
 									fuelLocation2 = fuelLogData.fuelLocation
 									oilAdded2 = fuelLogData.oilAdded
+									stopTankAdded2 = fuelLogData.tankAdded; stopEngineOilAdded2 = fuelLogData.engineOilAdded; stopDeiceFluidAdded2 = fuelLogData.deiceFluidAdded; stopHydraulicFluidAdded2 = fuelLogData.hydraulicFluidAdded; stopBrakeFluidAdded2 = fuelLogData.brakeFluidAdded; stopEngineTach2 = fuelLogData.engineTach
 									defAdded2 = fuelLogData.defAdded
 									fuelNotes2 = fuelLogData.fuelNotes
 									oilChecked2 = fuelLogData.oilChecked
@@ -1337,6 +1694,7 @@ struct EditTripLog: View {
 									fuelEngHours3 = fuelLogData.fuelEngHours
 									fuelLocation3 = fuelLogData.fuelLocation
 									oilAdded3 = fuelLogData.oilAdded
+									stopTankAdded3 = fuelLogData.tankAdded; stopEngineOilAdded3 = fuelLogData.engineOilAdded; stopDeiceFluidAdded3 = fuelLogData.deiceFluidAdded; stopHydraulicFluidAdded3 = fuelLogData.hydraulicFluidAdded; stopBrakeFluidAdded3 = fuelLogData.brakeFluidAdded; stopEngineTach3 = fuelLogData.engineTach
 									defAdded3 = fuelLogData.defAdded
 									fuelNotes3 = fuelLogData.fuelNotes
 									oilChecked3 = fuelLogData.oilChecked
@@ -1364,6 +1722,7 @@ struct EditTripLog: View {
 									fuelEngHours4 = fuelLogData.fuelEngHours
 									fuelLocation4 = fuelLogData.fuelLocation
 									oilAdded4 = fuelLogData.oilAdded
+									stopTankAdded4 = fuelLogData.tankAdded; stopEngineOilAdded4 = fuelLogData.engineOilAdded; stopDeiceFluidAdded4 = fuelLogData.deiceFluidAdded; stopHydraulicFluidAdded4 = fuelLogData.hydraulicFluidAdded; stopBrakeFluidAdded4 = fuelLogData.brakeFluidAdded; stopEngineTach4 = fuelLogData.engineTach
 									defAdded4 = fuelLogData.defAdded
 									fuelNotes4 = fuelLogData.fuelNotes
 									oilChecked4 = fuelLogData.oilChecked
@@ -1391,6 +1750,7 @@ struct EditTripLog: View {
 									fuelEngHours5 = fuelLogData.fuelEngHours
 									fuelLocation5 = fuelLogData.fuelLocation
 									oilAdded5 = fuelLogData.oilAdded
+									stopTankAdded5 = fuelLogData.tankAdded; stopEngineOilAdded5 = fuelLogData.engineOilAdded; stopDeiceFluidAdded5 = fuelLogData.deiceFluidAdded; stopHydraulicFluidAdded5 = fuelLogData.hydraulicFluidAdded; stopBrakeFluidAdded5 = fuelLogData.brakeFluidAdded; stopEngineTach5 = fuelLogData.engineTach
 									defAdded5 = fuelLogData.defAdded
 									fuelNotes5 = fuelLogData.fuelNotes
 									oilChecked5 = fuelLogData.oilChecked
@@ -1418,6 +1778,7 @@ struct EditTripLog: View {
 									fuelEngHours6 = fuelLogData.fuelEngHours
 									fuelLocation6 = fuelLogData.fuelLocation
 									oilAdded6 = fuelLogData.oilAdded
+									stopTankAdded6 = fuelLogData.tankAdded; stopEngineOilAdded6 = fuelLogData.engineOilAdded; stopDeiceFluidAdded6 = fuelLogData.deiceFluidAdded; stopHydraulicFluidAdded6 = fuelLogData.hydraulicFluidAdded; stopBrakeFluidAdded6 = fuelLogData.brakeFluidAdded; stopEngineTach6 = fuelLogData.engineTach
 									defAdded6 = fuelLogData.defAdded
 									fuelNotes6 = fuelLogData.fuelNotes
 									oilChecked6 = fuelLogData.oilChecked
@@ -1444,7 +1805,7 @@ struct EditTripLog: View {
 							HStack{LabelDataText(label: "Trip Group", data: tripGroup)}
 						}
 						HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
-						if dataSet.vehicleTowed {
+						if dataSet.vehicleTowed && Vertical.current.id != .aviation {
 							HStack{LabelDataText(label: "Towed \(Vertical.current.assetSingular)", data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleIdTowed, context: modelContext))}
 						}
 							HStack{ LabelDataText(label: "Status", data: dataSet.inactive ? "Inactive" : "Active") }
@@ -1453,16 +1814,19 @@ struct EditTripLog: View {
 				
 				CardView {
 					VStack {
-						SectionText(label: "TRAVEL START")
-						HStack{LabelDataText(label: "Departure", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.tripDateTimeStart))")}
-						HStack{LabelDataText(label: Vertical.current.primaryMeterLabel, data: "\(dataSet.odometerStart) \(unit(UnitIndex.distance))")}
-						if dataSet.engHoursStart > 0 {
-							HStack{LabelDataNumber(label: "Engine Hours:", data: dataSet.engHoursStart, fractionalLength: 1)}
+						SectionText(label: Vertical.current.id == .aviation ? "DEPARTURE" : "TRAVEL START")
+						HStack{LabelDataText(label: Vertical.current.id == .aviation ? "Depart" : "Departure", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.tripDateTimeStart))")}
+						if Vertical.current.visibleFieldGroups.contains(.odometer) {
+							HStack{LabelDataText(label: Vertical.current.distanceMeterLabel, data: "\(dataSet.odometerStart) \(unit(UnitIndex.distance))")}
 						}
-						if dataSet.fuelLevelStart != "" {
+						if vehicleFuelTankCount > 1 {
+							ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
+								HStack{LabelDataText(label: fuelTankName(tankNumber), data: tankReading(fraction: tankLevelStartBinding(tankNumber).wrappedValue, quantity: tankQuantityStartBinding(tankNumber).wrappedValue, unitLabel: unit(UnitIndex.fuel)))}
+							}
+						} else if dataSet.fuelLevelStart != "" {
 							HStack{LabelDataText(label: "Fuel Level", data: "\(dataSet.fuelLevelStart) \(dataSet.fuelQuantityStart)\(unit(UnitIndex.fuel))")}
 						}
-						if dataSet.defLevelFraction != "" {
+						if dataSet.defLevelFraction != "" && Vertical.current.id != .aviation {
 							let defQtyStart = dataSet.defQuantityStart > 0
 							? dataSet.defQuantityStart
 							: dataSet.defLevel1 * Float(vehicleDetails?.defCapacity ?? 0)
@@ -1472,18 +1836,31 @@ struct EditTripLog: View {
 						if dataSet.locationStart != "" {
 							HStack{LabelDataText(label: "Location", data: "\(dataSet.locationStart)")}
 						}
-						let startChecks = checkedFluidList([
-							("Engine Oil", dataSet.startOilChecked),
-							("Engine Coolant", dataSet.startEngineCoolantChecked),
-							("Secondary Coolant", dataSet.startSecondaryCoolantChecked),
-							("Power Steering", dataSet.startPowerSteeringChecked),
-							("Brake", dataSet.startBrakeFluidChecked),
-							("Transmission", dataSet.startTransmissionFluidChecked),
-							("Rear Axle", dataSet.startRearAxleChecked),
-							("Front Axle", dataSet.startFrontAxleChecked),
-							("Fuel/Water Separator", dataSet.startFuelWaterSeparatorChecked),
-							("Air System Water Bleed", dataSet.startAirSystemWaterBleedChecked)
-						])
+						if dataSet.engHoursStart > 0 {
+							HStack{LabelDataNumber(label: "\(Vertical.current.hoursMeterLabel):", data: dataSet.engHoursStart, fractionalLength: 1)}
+						}
+						if Vertical.current.id == .aviation {
+							ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+								let tach = engineNumber <= dataSet.engineTachStart.count ? dataSet.engineTachStart[engineNumber - 1] : 0
+								if tach > 0 {
+									HStack{LabelDataNumber(label: "\(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
+								}
+							}
+						}
+						let startChecks = Vertical.current.id == .land
+							? checkedFluidList([
+								("Engine Oil", dataSet.startOilChecked),
+								("Engine Coolant", dataSet.startEngineCoolantChecked),
+								("Secondary Coolant", dataSet.startSecondaryCoolantChecked),
+								("Power Steering", dataSet.startPowerSteeringChecked),
+								("Brake", dataSet.startBrakeFluidChecked),
+								("Transmission", dataSet.startTransmissionFluidChecked),
+								("Rear Axle", dataSet.startRearAxleChecked),
+								("Front Axle", dataSet.startFrontAxleChecked),
+								("Fuel/Water Separator", dataSet.startFuelWaterSeparatorChecked),
+								("Air System Water Bleed", dataSet.startAirSystemWaterBleedChecked)
+							])
+							: FluidCheckList.currentLabels.filter { FluidCheckList.unpack(dataSet.startCheckedFluidItemsPacked).contains($0) }.joined(separator: ", ")
 						if !startChecks.isEmpty {
 							HStack{LabelDataText(label: "Fluids Checked", data: startChecks)}
 						}
@@ -1506,6 +1883,35 @@ struct EditTripLog: View {
 								let fuelStartText1 = tankReading(fraction: stopFuelLevelStart1, quantity: stopFuelQtyStart1, unitLabel: unit(UnitIndex.fuel))
 								let fuelEndText1 = tankReading(fraction: stopFuelLevelEnd1, quantity: stopFuelQtyEnd1, unitLabel: unit(UnitIndex.fuel))
 								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText1) to \(fuelEndText1)")}
+								if vehicleFuelTankCount > 1 {
+									ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
+										let added = tankNumber <= stopTankAdded1.count ? stopTankAdded1[tankNumber - 1] : 0
+										if added > 0 {
+											HStack{LabelDataNumber(label: "  \(fuelTankName(tankNumber)) Added", data: added, fractionalLength: 1)}
+										}
+									}
+								}
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+									let amount = engineNumber <= stopEngineOilAdded1.count ? stopEngineOilAdded1[engineNumber - 1] : 0
+									if amount > 0 {
+										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Oil Added", data: amount, fractionalLength: 1)}
+									}
+								}
+								if stopDeiceFluidAdded1 > 0 {
+									HStack{LabelDataNumber(label: "  Deice Fluid Added", data: stopDeiceFluidAdded1, fractionalLength: 1)}
+								}
+								if stopHydraulicFluidAdded1 > 0 {
+									HStack{LabelDataNumber(label: "  Hydraulic Fluid Added", data: stopHydraulicFluidAdded1, fractionalLength: 1)}
+								}
+								if stopBrakeFluidAdded1 > 0 {
+									HStack{LabelDataNumber(label: "  Brake Fluid Added", data: stopBrakeFluidAdded1, fractionalLength: 1)}
+								}
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+									let tach = engineNumber <= stopEngineTach1.count ? stopEngineTach1[engineNumber - 1] : 0
+									if tach > 0 {
+										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
+									}
+								}
 								if stopDefLevelStart1 > 0 || stopDefQtyStart1 > 0 {
 									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart1, quantity: stopDefQtyStart1, unitLabel: unit(UnitIndex.def)))}
 								}
@@ -1530,13 +1936,13 @@ struct EditTripLog: View {
 								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime1))")}
 							}
 						}
-						.cardStyle(backgroundColor: .blue.opacity(0.5))
+						.cardStyle(backgroundColor: Color.accentColor.opacity(0.5))
 						// .ultraThinMaterial reads as barely-there against a dark background —
 						// add a visible tinted border in dark mode only so the card still reads
 						// as its own surface; light mode already has enough contrast.
 						.overlay(
 							RoundedRectangle(cornerRadius: 14, style: .continuous)
-								.stroke(colorScheme == .dark ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1.5)
+								.stroke(colorScheme == .dark ? Color.accentColor.opacity(0.45) : Color.clear, lineWidth: 1.5)
 						)
 						.overlay(alignment: .topLeading) { stopNumberBadge(1) }
 						}
@@ -1551,6 +1957,35 @@ struct EditTripLog: View {
 								let fuelStartText2 = tankReading(fraction: stopFuelLevelStart2, quantity: stopFuelQtyStart2, unitLabel: unit(UnitIndex.fuel))
 								let fuelEndText2 = tankReading(fraction: stopFuelLevelEnd2, quantity: stopFuelQtyEnd2, unitLabel: unit(UnitIndex.fuel))
 								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText2) to \(fuelEndText2)")}
+								if vehicleFuelTankCount > 1 {
+									ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
+										let added = tankNumber <= stopTankAdded2.count ? stopTankAdded2[tankNumber - 1] : 0
+										if added > 0 {
+											HStack{LabelDataNumber(label: "  \(fuelTankName(tankNumber)) Added", data: added, fractionalLength: 1)}
+										}
+									}
+								}
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+									let amount = engineNumber <= stopEngineOilAdded2.count ? stopEngineOilAdded2[engineNumber - 1] : 0
+									if amount > 0 {
+										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Oil Added", data: amount, fractionalLength: 1)}
+									}
+								}
+								if stopDeiceFluidAdded2 > 0 {
+									HStack{LabelDataNumber(label: "  Deice Fluid Added", data: stopDeiceFluidAdded2, fractionalLength: 1)}
+								}
+								if stopHydraulicFluidAdded2 > 0 {
+									HStack{LabelDataNumber(label: "  Hydraulic Fluid Added", data: stopHydraulicFluidAdded2, fractionalLength: 1)}
+								}
+								if stopBrakeFluidAdded2 > 0 {
+									HStack{LabelDataNumber(label: "  Brake Fluid Added", data: stopBrakeFluidAdded2, fractionalLength: 1)}
+								}
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+									let tach = engineNumber <= stopEngineTach2.count ? stopEngineTach2[engineNumber - 1] : 0
+									if tach > 0 {
+										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
+									}
+								}
 								if stopDefLevelStart2 > 0 || stopDefQtyStart2 > 0 {
 									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart2, quantity: stopDefQtyStart2, unitLabel: unit(UnitIndex.def)))}
 								}
@@ -1575,13 +2010,13 @@ struct EditTripLog: View {
 								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime2))")}
 							}
 						}
-						.cardStyle(backgroundColor: .blue.opacity(0.5))
+						.cardStyle(backgroundColor: Color.accentColor.opacity(0.5))
 						// .ultraThinMaterial reads as barely-there against a dark background —
 						// add a visible tinted border in dark mode only so the card still reads
 						// as its own surface; light mode already has enough contrast.
 						.overlay(
 							RoundedRectangle(cornerRadius: 14, style: .continuous)
-								.stroke(colorScheme == .dark ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1.5)
+								.stroke(colorScheme == .dark ? Color.accentColor.opacity(0.45) : Color.clear, lineWidth: 1.5)
 						)
 						.overlay(alignment: .topLeading) { stopNumberBadge(2) }
 						}
@@ -1596,6 +2031,35 @@ struct EditTripLog: View {
 								let fuelStartText3 = tankReading(fraction: stopFuelLevelStart3, quantity: stopFuelQtyStart3, unitLabel: unit(UnitIndex.fuel))
 								let fuelEndText3 = tankReading(fraction: stopFuelLevelEnd3, quantity: stopFuelQtyEnd3, unitLabel: unit(UnitIndex.fuel))
 								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText3) to \(fuelEndText3)")}
+								if vehicleFuelTankCount > 1 {
+									ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
+										let added = tankNumber <= stopTankAdded3.count ? stopTankAdded3[tankNumber - 1] : 0
+										if added > 0 {
+											HStack{LabelDataNumber(label: "  \(fuelTankName(tankNumber)) Added", data: added, fractionalLength: 1)}
+										}
+									}
+								}
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+									let amount = engineNumber <= stopEngineOilAdded3.count ? stopEngineOilAdded3[engineNumber - 1] : 0
+									if amount > 0 {
+										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Oil Added", data: amount, fractionalLength: 1)}
+									}
+								}
+								if stopDeiceFluidAdded3 > 0 {
+									HStack{LabelDataNumber(label: "  Deice Fluid Added", data: stopDeiceFluidAdded3, fractionalLength: 1)}
+								}
+								if stopHydraulicFluidAdded3 > 0 {
+									HStack{LabelDataNumber(label: "  Hydraulic Fluid Added", data: stopHydraulicFluidAdded3, fractionalLength: 1)}
+								}
+								if stopBrakeFluidAdded3 > 0 {
+									HStack{LabelDataNumber(label: "  Brake Fluid Added", data: stopBrakeFluidAdded3, fractionalLength: 1)}
+								}
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+									let tach = engineNumber <= stopEngineTach3.count ? stopEngineTach3[engineNumber - 1] : 0
+									if tach > 0 {
+										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
+									}
+								}
 								if stopDefLevelStart3 > 0 || stopDefQtyStart3 > 0 {
 									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart3, quantity: stopDefQtyStart3, unitLabel: unit(UnitIndex.def)))}
 								}
@@ -1620,13 +2084,13 @@ struct EditTripLog: View {
 								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime3))")}
 							}
 						}
-						.cardStyle(backgroundColor: .blue.opacity(0.5))
+						.cardStyle(backgroundColor: Color.accentColor.opacity(0.5))
 						// .ultraThinMaterial reads as barely-there against a dark background —
 						// add a visible tinted border in dark mode only so the card still reads
 						// as its own surface; light mode already has enough contrast.
 						.overlay(
 							RoundedRectangle(cornerRadius: 14, style: .continuous)
-								.stroke(colorScheme == .dark ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1.5)
+								.stroke(colorScheme == .dark ? Color.accentColor.opacity(0.45) : Color.clear, lineWidth: 1.5)
 						)
 						.overlay(alignment: .topLeading) { stopNumberBadge(3) }
 						}
@@ -1641,6 +2105,35 @@ struct EditTripLog: View {
 								let fuelStartText4 = tankReading(fraction: stopFuelLevelStart4, quantity: stopFuelQtyStart4, unitLabel: unit(UnitIndex.fuel))
 								let fuelEndText4 = tankReading(fraction: stopFuelLevelEnd4, quantity: stopFuelQtyEnd4, unitLabel: unit(UnitIndex.fuel))
 								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText4) to \(fuelEndText4)")}
+								if vehicleFuelTankCount > 1 {
+									ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
+										let added = tankNumber <= stopTankAdded4.count ? stopTankAdded4[tankNumber - 1] : 0
+										if added > 0 {
+											HStack{LabelDataNumber(label: "  \(fuelTankName(tankNumber)) Added", data: added, fractionalLength: 1)}
+										}
+									}
+								}
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+									let amount = engineNumber <= stopEngineOilAdded4.count ? stopEngineOilAdded4[engineNumber - 1] : 0
+									if amount > 0 {
+										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Oil Added", data: amount, fractionalLength: 1)}
+									}
+								}
+								if stopDeiceFluidAdded4 > 0 {
+									HStack{LabelDataNumber(label: "  Deice Fluid Added", data: stopDeiceFluidAdded4, fractionalLength: 1)}
+								}
+								if stopHydraulicFluidAdded4 > 0 {
+									HStack{LabelDataNumber(label: "  Hydraulic Fluid Added", data: stopHydraulicFluidAdded4, fractionalLength: 1)}
+								}
+								if stopBrakeFluidAdded4 > 0 {
+									HStack{LabelDataNumber(label: "  Brake Fluid Added", data: stopBrakeFluidAdded4, fractionalLength: 1)}
+								}
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+									let tach = engineNumber <= stopEngineTach4.count ? stopEngineTach4[engineNumber - 1] : 0
+									if tach > 0 {
+										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
+									}
+								}
 								if stopDefLevelStart4 > 0 || stopDefQtyStart4 > 0 {
 									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart4, quantity: stopDefQtyStart4, unitLabel: unit(UnitIndex.def)))}
 								}
@@ -1665,13 +2158,13 @@ struct EditTripLog: View {
 								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime4))")}
 							}
 						}
-						.cardStyle(backgroundColor: .blue.opacity(0.5))
+						.cardStyle(backgroundColor: Color.accentColor.opacity(0.5))
 						// .ultraThinMaterial reads as barely-there against a dark background —
 						// add a visible tinted border in dark mode only so the card still reads
 						// as its own surface; light mode already has enough contrast.
 						.overlay(
 							RoundedRectangle(cornerRadius: 14, style: .continuous)
-								.stroke(colorScheme == .dark ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1.5)
+								.stroke(colorScheme == .dark ? Color.accentColor.opacity(0.45) : Color.clear, lineWidth: 1.5)
 						)
 						.overlay(alignment: .topLeading) { stopNumberBadge(4) }
 						}
@@ -1686,6 +2179,35 @@ struct EditTripLog: View {
 								let fuelStartText5 = tankReading(fraction: stopFuelLevelStart5, quantity: stopFuelQtyStart5, unitLabel: unit(UnitIndex.fuel))
 								let fuelEndText5 = tankReading(fraction: stopFuelLevelEnd5, quantity: stopFuelQtyEnd5, unitLabel: unit(UnitIndex.fuel))
 								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText5) to \(fuelEndText5)")}
+								if vehicleFuelTankCount > 1 {
+									ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
+										let added = tankNumber <= stopTankAdded5.count ? stopTankAdded5[tankNumber - 1] : 0
+										if added > 0 {
+											HStack{LabelDataNumber(label: "  \(fuelTankName(tankNumber)) Added", data: added, fractionalLength: 1)}
+										}
+									}
+								}
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+									let amount = engineNumber <= stopEngineOilAdded5.count ? stopEngineOilAdded5[engineNumber - 1] : 0
+									if amount > 0 {
+										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Oil Added", data: amount, fractionalLength: 1)}
+									}
+								}
+								if stopDeiceFluidAdded5 > 0 {
+									HStack{LabelDataNumber(label: "  Deice Fluid Added", data: stopDeiceFluidAdded5, fractionalLength: 1)}
+								}
+								if stopHydraulicFluidAdded5 > 0 {
+									HStack{LabelDataNumber(label: "  Hydraulic Fluid Added", data: stopHydraulicFluidAdded5, fractionalLength: 1)}
+								}
+								if stopBrakeFluidAdded5 > 0 {
+									HStack{LabelDataNumber(label: "  Brake Fluid Added", data: stopBrakeFluidAdded5, fractionalLength: 1)}
+								}
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+									let tach = engineNumber <= stopEngineTach5.count ? stopEngineTach5[engineNumber - 1] : 0
+									if tach > 0 {
+										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
+									}
+								}
 								if stopDefLevelStart5 > 0 || stopDefQtyStart5 > 0 {
 									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart5, quantity: stopDefQtyStart5, unitLabel: unit(UnitIndex.def)))}
 								}
@@ -1710,13 +2232,13 @@ struct EditTripLog: View {
 								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime5))")}
 							}
 						}
-						.cardStyle(backgroundColor: .blue.opacity(0.5))
+						.cardStyle(backgroundColor: Color.accentColor.opacity(0.5))
 						// .ultraThinMaterial reads as barely-there against a dark background —
 						// add a visible tinted border in dark mode only so the card still reads
 						// as its own surface; light mode already has enough contrast.
 						.overlay(
 							RoundedRectangle(cornerRadius: 14, style: .continuous)
-								.stroke(colorScheme == .dark ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1.5)
+								.stroke(colorScheme == .dark ? Color.accentColor.opacity(0.45) : Color.clear, lineWidth: 1.5)
 						)
 						.overlay(alignment: .topLeading) { stopNumberBadge(5) }
 						}
@@ -1731,6 +2253,35 @@ struct EditTripLog: View {
 								let fuelStartText6 = tankReading(fraction: stopFuelLevelStart6, quantity: stopFuelQtyStart6, unitLabel: unit(UnitIndex.fuel))
 								let fuelEndText6 = tankReading(fraction: stopFuelLevelEnd6, quantity: stopFuelQtyEnd6, unitLabel: unit(UnitIndex.fuel))
 								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText6) to \(fuelEndText6)")}
+								if vehicleFuelTankCount > 1 {
+									ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
+										let added = tankNumber <= stopTankAdded6.count ? stopTankAdded6[tankNumber - 1] : 0
+										if added > 0 {
+											HStack{LabelDataNumber(label: "  \(fuelTankName(tankNumber)) Added", data: added, fractionalLength: 1)}
+										}
+									}
+								}
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+									let amount = engineNumber <= stopEngineOilAdded6.count ? stopEngineOilAdded6[engineNumber - 1] : 0
+									if amount > 0 {
+										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Oil Added", data: amount, fractionalLength: 1)}
+									}
+								}
+								if stopDeiceFluidAdded6 > 0 {
+									HStack{LabelDataNumber(label: "  Deice Fluid Added", data: stopDeiceFluidAdded6, fractionalLength: 1)}
+								}
+								if stopHydraulicFluidAdded6 > 0 {
+									HStack{LabelDataNumber(label: "  Hydraulic Fluid Added", data: stopHydraulicFluidAdded6, fractionalLength: 1)}
+								}
+								if stopBrakeFluidAdded6 > 0 {
+									HStack{LabelDataNumber(label: "  Brake Fluid Added", data: stopBrakeFluidAdded6, fractionalLength: 1)}
+								}
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+									let tach = engineNumber <= stopEngineTach6.count ? stopEngineTach6[engineNumber - 1] : 0
+									if tach > 0 {
+										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
+									}
+								}
 								if stopDefLevelStart6 > 0 || stopDefQtyStart6 > 0 {
 									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart6, quantity: stopDefQtyStart6, unitLabel: unit(UnitIndex.def)))}
 								}
@@ -1755,13 +2306,13 @@ struct EditTripLog: View {
 								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime6))")}
 							}
 						}
-						.cardStyle(backgroundColor: .blue.opacity(0.5))
+						.cardStyle(backgroundColor: Color.accentColor.opacity(0.5))
 						// .ultraThinMaterial reads as barely-there against a dark background —
 						// add a visible tinted border in dark mode only so the card still reads
 						// as its own surface; light mode already has enough contrast.
 						.overlay(
 							RoundedRectangle(cornerRadius: 14, style: .continuous)
-								.stroke(colorScheme == .dark ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 1.5)
+								.stroke(colorScheme == .dark ? Color.accentColor.opacity(0.45) : Color.clear, lineWidth: 1.5)
 						)
 						.overlay(alignment: .topLeading) { stopNumberBadge(6) }
 						}
@@ -1784,22 +2335,42 @@ struct EditTripLog: View {
 							HStack{LabelDataText(label: "Stop Time", data: "\(sH)h \(String(format: "%02d", sM))m")}
 							HStack{LabelDataText(label: "Time Moving", data: "\(mH)h \(String(format: "%02d", mM))m")}
 						}
+						if Vertical.current.id == .aviation {
+							Divider()
+							ForEach(tripLegs) { leg in
+								if let distanceNM = leg.distanceNM {
+									Text("\(leg.fromLabel) \u{2192} \(leg.toLabel): \(String(format: "%.1f nm", distanceNM))\(leg.speedKts.map { String(format: ", %.1f kts", $0) } ?? "")")
+										.font(.caption2)
+										.foregroundStyle(.secondary)
+										.frame(maxWidth: .infinity, alignment: .trailing)
+								}
+							}
+							if let totalNM = totalLegDistanceNM {
+								Text("Total Departure to Destination: \(String(format: "%.1f nm", totalNM))")
+									.font(.caption2)
+									.foregroundStyle(.secondary)
+									.frame(maxWidth: .infinity, alignment: .trailing)
+							}
+						}
 					}
 					}
 				}
 				
 				CardView {
 					VStack {
-						SectionText(label: "TRAVEL END")
-						HStack{LabelDataText(label: "Arrival", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.tripDateTimeEnd))")}
-						HStack{LabelDataText(label: Vertical.current.primaryMeterLabel, data: "\(dataSet.odometerEnd) \(unit(UnitIndex.distance))")}
-						if dataSet.engHoursEnd > 0 {
-							HStack{LabelDataNumber(label: "Engine Hours:", data: dataSet.engHoursEnd, fractionalLength: 1)}
+						SectionText(label: Vertical.current.id == .aviation ? "ARRIVAL" : "TRAVEL END")
+						HStack{LabelDataText(label: Vertical.current.id == .aviation ? "Arrive" : "Arrival", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.tripDateTimeEnd))")}
+						if Vertical.current.visibleFieldGroups.contains(.odometer) {
+							HStack{LabelDataText(label: Vertical.current.distanceMeterLabel, data: "\(dataSet.odometerEnd) \(unit(UnitIndex.distance))")}
 						}
-						if dataSet.fuelLevelEnd != "" {
+						if vehicleFuelTankCount > 1 {
+							ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
+								HStack{LabelDataText(label: fuelTankName(tankNumber), data: tankReading(fraction: tankLevelEndBinding(tankNumber).wrappedValue, quantity: tankQuantityEndBinding(tankNumber).wrappedValue, unitLabel: unit(UnitIndex.fuel)))}
+							}
+						} else if dataSet.fuelLevelEnd != "" {
 							HStack{LabelDataText(label: "Fuel Level", data: "\(dataSet.fuelLevelEnd) \(dataSet.fuelQuantityEnd)\(unit(UnitIndex.fuel))")}
 						}
-						if dataSet.defLevelEndFraction != "" {
+						if dataSet.defLevelEndFraction != "" && Vertical.current.id != .aviation {
 							let defQtyEnd = dataSet.defQuantityEnd > 0
 							? dataSet.defQuantityEnd
 							: dataSet.defLevelEnd1 * Float(vehicleDetails?.defCapacity ?? 0)
@@ -1809,18 +2380,43 @@ struct EditTripLog: View {
 						if dataSet.locationEnd != "" {
 							HStack{LabelDataText(label: "Location", data: "\(dataSet.locationEnd)")}
 						}
-						let endChecks = checkedFluidList([
-							("Engine Oil", dataSet.endOilChecked),
-							("Engine Coolant", dataSet.endEngineCoolantChecked),
-							("Secondary Coolant", dataSet.endSecondaryCoolantChecked),
-							("Power Steering", dataSet.endPowerSteeringChecked),
-							("Brake", dataSet.endBrakeFluidChecked),
-							("Transmission", dataSet.endTransmissionFluidChecked),
-							("Rear Axle", dataSet.endRearAxleChecked),
-							("Front Axle", dataSet.endFrontAxleChecked),
-							("Fuel/Water Separator", dataSet.endFuelWaterSeparatorChecked),
-							("Air System Water Bleed", dataSet.endAirSystemWaterBleedChecked)
-						])
+						if let distanceNM = departureArrivalDistanceNM {
+							Text("Direct Distance: \(String(format: "%.1f nm", distanceNM))")
+								.font(.caption2)
+								.foregroundStyle(.secondary)
+								.frame(maxWidth: .infinity, alignment: .trailing)
+							if let avgSpeedKts = departureArrivalAvgSpeedKts {
+								Text("Avg Speed: \(String(format: "%.1f kts", avgSpeedKts))")
+									.font(.caption2)
+									.foregroundStyle(.secondary)
+									.frame(maxWidth: .infinity, alignment: .trailing)
+							}
+						}
+						if dataSet.engHoursEnd > 0 {
+							HStack{LabelDataNumber(label: "\(Vertical.current.hoursMeterLabel):", data: dataSet.engHoursEnd, fractionalLength: 1)}
+						}
+						if Vertical.current.id == .aviation {
+							ForEach(1...stopEngineCount, id: \.self) { engineNumber in
+								let tach = engineNumber <= dataSet.engineTachEnd.count ? dataSet.engineTachEnd[engineNumber - 1] : 0
+								if tach > 0 {
+									HStack{LabelDataNumber(label: "\(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
+								}
+							}
+						}
+						let endChecks = Vertical.current.id == .land
+							? checkedFluidList([
+								("Engine Oil", dataSet.endOilChecked),
+								("Engine Coolant", dataSet.endEngineCoolantChecked),
+								("Secondary Coolant", dataSet.endSecondaryCoolantChecked),
+								("Power Steering", dataSet.endPowerSteeringChecked),
+								("Brake", dataSet.endBrakeFluidChecked),
+								("Transmission", dataSet.endTransmissionFluidChecked),
+								("Rear Axle", dataSet.endRearAxleChecked),
+								("Front Axle", dataSet.endFrontAxleChecked),
+								("Fuel/Water Separator", dataSet.endFuelWaterSeparatorChecked),
+								("Air System Water Bleed", dataSet.endAirSystemWaterBleedChecked)
+							])
+							: FluidCheckList.currentLabels.filter { FluidCheckList.unpack(dataSet.endCheckedFluidItemsPacked).contains($0) }.joined(separator: ", ")
 						if !endChecks.isEmpty {
 							HStack{LabelDataText(label: "Fluids Checked", data: endChecks)}
 						}
@@ -1879,7 +2475,7 @@ struct EditTripLog: View {
 							HStack{ LabelDataText(label: "Images Attached", data: "\(stats.imagesCount)") }
 						}
 						// Towed distance
-						if dataSet.vehicleTowed, stats.distance > 0 {
+						if dataSet.vehicleTowed, stats.distance > 0, Vertical.current.id != .aviation {
 							HStack{ LabelDataText(label: "Towed Distance Credited (\(unit(UnitIndex.distance)))", data: "\(stats.distance)") }
 						}
 					}
@@ -1994,11 +2590,25 @@ struct EditTripLog: View {
 			}
 			.onAppear {
 				loadUnitsIfNeeded()
+				// Seed vehicle picker from existing vehicleId — mirrors the details-mode onAppear
+				// above. Without this, a trip opened straight into edit mode (e.g. a brand-new
+				// trip pre-assigned to the fleet's only/default aircraft) leaves `selectedVehicle`
+				// nil until the pilot actually touches the picker, which silently breaks every
+				// helper keyed off it (`vehicleFuelTankCount`, `fuelTankCapacity`, etc.) — including
+				// the multi-tank Departure fuel UI even showing up correctly.
+				if selectedVehicle == nil, !vehicleId.isEmpty {
+					let name = vehicleId
+					var fd = FetchDescriptor<Vehicle8>(predicate: #Predicate { $0.name == name })
+					fd.fetchLimit = 1
+					if let v = try? modelContext.fetch(fd).first {
+						selectedVehicle = v
+					}
+				}
 				refreshVehicleDetails()
 			}
 		}
 	}
-	
+
 	/// Permanently deletes the current `TripLog2` and dismisses the view.
 	///
 	/// - Warning: This action cannot be undone. Use `makeInactive()` for a reversible,
@@ -2035,6 +2645,12 @@ struct EditTripLog: View {
 	/// - Updates `Vehicle8` mileage/engine hours if the trip extends them.
 	/// - Credits towed vehicle virtual mileage when applicable.
 	private func updateItem() {
+		// Multi-tank aircraft: fold each tank's own reading into the aggregate fields below
+		// before the single-tank reconciliation runs, so it sees final summed numbers.
+		reconcileFuelTanksBeforeSave()
+		// Final integrity pass: Hobbs/Tach can never go backwards Departure -> stops ->
+		// Arrival, and a still-zero fuel reading picks up the previous leg's value.
+		syncSequentialTripValues()
 		// The quantity fields are authoritative — a digital readout can be typed straight in.
 		// Bring the eighths dropdown and its fraction label back into line with whatever the
 		// quantities ended up as, so the record reopens self-consistent.
@@ -2097,22 +2713,22 @@ struct EditTripLog: View {
 		let stopExit6 = max(fuelExitTime6, fuelDateTime6)
 		// save fuel log(s) first to return the fuel log id(s) for saving
 		if createFuelLog1 {
-			fuelAdded1Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer1), saveEngineHours: fuelEngHours1, saveQuantity: fuelAdded1, savePrice: fuelPrice1, saveLocation: fuelLocation1, saveLogId: fuelAdded1Log, saveOil: oilAdded1, saveDEF: defAdded1, saveNotes: fuelNotes1, saveOilChecked: oilChecked1, saveEngineCoolantChecked: engineCoolantChecked1, saveSecondaryCoolantChecked: secondaryCoolantChecked1, savePowerSteeringChecked: powerSteeringChecked1, saveBrakeFluidChecked: brakeFluidChecked1, saveTransmissionFluidChecked: transmissionFluidChecked1, saveRearAxleChecked: rearAxleChecked1, saveFrontAxleChecked: frontAxleChecked1, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked1, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked1, saveDateTime: fuelDateTime1, saveImage1: fuelStop1Image1, saveImage2: fuelStop1Image2, saveImage3: fuelStop1Image3, saveFuelLevelStart: stopLevelStart1, saveFuelLevelEnd: stopLevelEnd1, saveDefLevel: stopDefLevelFinal1, saveFuelType: stopFuelType1, saveMatchByOdometer: !stopsForcedNew.contains(1), saveExitTime: stopExit1, saveFuelQuantityStart: stopFuelQtyStart1, saveFuelQuantityEnd: stopFuelQtyEnd1, saveDefQuantity: stopDefQty1, saveDefLevelStart: stopDefLevelStartFinal1, saveDefQuantityStart: stopDefQtyStart1, saveDefPrice: stopDefPrice1)
+			fuelAdded1Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer1), saveEngineHours: fuelEngHours1, saveQuantity: fuelAdded1, savePrice: fuelPrice1, saveLocation: fuelLocation1, saveLogId: fuelAdded1Log, saveOil: oilAdded1, saveDEF: defAdded1, saveNotes: fuelNotes1, saveOilChecked: oilChecked1, saveEngineCoolantChecked: engineCoolantChecked1, saveSecondaryCoolantChecked: secondaryCoolantChecked1, savePowerSteeringChecked: powerSteeringChecked1, saveBrakeFluidChecked: brakeFluidChecked1, saveTransmissionFluidChecked: transmissionFluidChecked1, saveRearAxleChecked: rearAxleChecked1, saveFrontAxleChecked: frontAxleChecked1, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked1, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked1, saveCheckedFluidItems: FluidCheckList.currentLabels.filter { checkedFluidItems1.contains($0) }, saveDateTime: fuelDateTime1, saveImage1: fuelStop1Image1, saveImage2: fuelStop1Image2, saveImage3: fuelStop1Image3, saveFuelLevelStart: stopLevelStart1, saveFuelLevelEnd: stopLevelEnd1, saveDefLevel: stopDefLevelFinal1, saveFuelType: stopFuelType1, saveMatchByOdometer: !stopsForcedNew.contains(1), saveExitTime: stopExit1, saveFuelQuantityStart: stopFuelQtyStart1, saveFuelQuantityEnd: stopFuelQtyEnd1, saveDefQuantity: stopDefQty1, saveDefLevelStart: stopDefLevelStartFinal1, saveDefQuantityStart: stopDefQtyStart1, saveDefPrice: stopDefPrice1, saveTankAdded: stopTankAdded1, saveEngineOilAdded: stopEngineOilAdded1, saveDeiceFluidAdded: stopDeiceFluidAdded1, saveHydraulicFluidAdded: stopHydraulicFluidAdded1, saveBrakeFluidAdded: stopBrakeFluidAdded1, saveEngineTach: stopEngineTach1)
 		}
 		if createFuelLog2 {
-			fuelAdded2Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer2), saveEngineHours: fuelEngHours2, saveQuantity: fuelAdded2, savePrice: fuelPrice2, saveLocation: fuelLocation2, saveLogId: fuelAdded2Log, saveOil: oilAdded2, saveDEF: defAdded2, saveNotes: fuelNotes2, saveOilChecked: oilChecked2, saveEngineCoolantChecked: engineCoolantChecked2, saveSecondaryCoolantChecked: secondaryCoolantChecked2, savePowerSteeringChecked: powerSteeringChecked2, saveBrakeFluidChecked: brakeFluidChecked2, saveTransmissionFluidChecked: transmissionFluidChecked2, saveRearAxleChecked: rearAxleChecked2, saveFrontAxleChecked: frontAxleChecked2, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked2, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked2, saveDateTime: fuelDateTime2, saveImage1: fuelStop2Image1, saveImage2: fuelStop2Image2, saveImage3: fuelStop2Image3, saveFuelLevelStart: stopLevelStart2, saveFuelLevelEnd: stopLevelEnd2, saveDefLevel: stopDefLevelFinal2, saveFuelType: stopFuelType2, saveMatchByOdometer: !stopsForcedNew.contains(2), saveExitTime: stopExit2, saveFuelQuantityStart: stopFuelQtyStart2, saveFuelQuantityEnd: stopFuelQtyEnd2, saveDefQuantity: stopDefQty2, saveDefLevelStart: stopDefLevelStartFinal2, saveDefQuantityStart: stopDefQtyStart2, saveDefPrice: stopDefPrice2)
+			fuelAdded2Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer2), saveEngineHours: fuelEngHours2, saveQuantity: fuelAdded2, savePrice: fuelPrice2, saveLocation: fuelLocation2, saveLogId: fuelAdded2Log, saveOil: oilAdded2, saveDEF: defAdded2, saveNotes: fuelNotes2, saveOilChecked: oilChecked2, saveEngineCoolantChecked: engineCoolantChecked2, saveSecondaryCoolantChecked: secondaryCoolantChecked2, savePowerSteeringChecked: powerSteeringChecked2, saveBrakeFluidChecked: brakeFluidChecked2, saveTransmissionFluidChecked: transmissionFluidChecked2, saveRearAxleChecked: rearAxleChecked2, saveFrontAxleChecked: frontAxleChecked2, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked2, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked2, saveCheckedFluidItems: FluidCheckList.currentLabels.filter { checkedFluidItems2.contains($0) }, saveDateTime: fuelDateTime2, saveImage1: fuelStop2Image1, saveImage2: fuelStop2Image2, saveImage3: fuelStop2Image3, saveFuelLevelStart: stopLevelStart2, saveFuelLevelEnd: stopLevelEnd2, saveDefLevel: stopDefLevelFinal2, saveFuelType: stopFuelType2, saveMatchByOdometer: !stopsForcedNew.contains(2), saveExitTime: stopExit2, saveFuelQuantityStart: stopFuelQtyStart2, saveFuelQuantityEnd: stopFuelQtyEnd2, saveDefQuantity: stopDefQty2, saveDefLevelStart: stopDefLevelStartFinal2, saveDefQuantityStart: stopDefQtyStart2, saveDefPrice: stopDefPrice2, saveTankAdded: stopTankAdded2, saveEngineOilAdded: stopEngineOilAdded2, saveDeiceFluidAdded: stopDeiceFluidAdded2, saveHydraulicFluidAdded: stopHydraulicFluidAdded2, saveBrakeFluidAdded: stopBrakeFluidAdded2, saveEngineTach: stopEngineTach2)
 		}
 		if createFuelLog3 {
-			fuelAdded3Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer3), saveEngineHours: fuelEngHours3, saveQuantity: fuelAdded3, savePrice: fuelPrice3, saveLocation: fuelLocation3, saveLogId: fuelAdded3Log, saveOil: oilAdded3, saveDEF: defAdded3, saveNotes: fuelNotes3, saveOilChecked: oilChecked3, saveEngineCoolantChecked: engineCoolantChecked3, saveSecondaryCoolantChecked: secondaryCoolantChecked3, savePowerSteeringChecked: powerSteeringChecked3, saveBrakeFluidChecked: brakeFluidChecked3, saveTransmissionFluidChecked: transmissionFluidChecked3, saveRearAxleChecked: rearAxleChecked3, saveFrontAxleChecked: frontAxleChecked3, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked3, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked3, saveDateTime: fuelDateTime3, saveImage1: fuelStop3Image1, saveImage2: fuelStop3Image2, saveImage3: fuelStop3Image3, saveFuelLevelStart: stopLevelStart3, saveFuelLevelEnd: stopLevelEnd3, saveDefLevel: stopDefLevelFinal3, saveFuelType: stopFuelType3, saveMatchByOdometer: !stopsForcedNew.contains(3), saveExitTime: stopExit3, saveFuelQuantityStart: stopFuelQtyStart3, saveFuelQuantityEnd: stopFuelQtyEnd3, saveDefQuantity: stopDefQty3, saveDefLevelStart: stopDefLevelStartFinal3, saveDefQuantityStart: stopDefQtyStart3, saveDefPrice: stopDefPrice3)
+			fuelAdded3Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer3), saveEngineHours: fuelEngHours3, saveQuantity: fuelAdded3, savePrice: fuelPrice3, saveLocation: fuelLocation3, saveLogId: fuelAdded3Log, saveOil: oilAdded3, saveDEF: defAdded3, saveNotes: fuelNotes3, saveOilChecked: oilChecked3, saveEngineCoolantChecked: engineCoolantChecked3, saveSecondaryCoolantChecked: secondaryCoolantChecked3, savePowerSteeringChecked: powerSteeringChecked3, saveBrakeFluidChecked: brakeFluidChecked3, saveTransmissionFluidChecked: transmissionFluidChecked3, saveRearAxleChecked: rearAxleChecked3, saveFrontAxleChecked: frontAxleChecked3, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked3, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked3, saveCheckedFluidItems: FluidCheckList.currentLabels.filter { checkedFluidItems3.contains($0) }, saveDateTime: fuelDateTime3, saveImage1: fuelStop3Image1, saveImage2: fuelStop3Image2, saveImage3: fuelStop3Image3, saveFuelLevelStart: stopLevelStart3, saveFuelLevelEnd: stopLevelEnd3, saveDefLevel: stopDefLevelFinal3, saveFuelType: stopFuelType3, saveMatchByOdometer: !stopsForcedNew.contains(3), saveExitTime: stopExit3, saveFuelQuantityStart: stopFuelQtyStart3, saveFuelQuantityEnd: stopFuelQtyEnd3, saveDefQuantity: stopDefQty3, saveDefLevelStart: stopDefLevelStartFinal3, saveDefQuantityStart: stopDefQtyStart3, saveDefPrice: stopDefPrice3, saveTankAdded: stopTankAdded3, saveEngineOilAdded: stopEngineOilAdded3, saveDeiceFluidAdded: stopDeiceFluidAdded3, saveHydraulicFluidAdded: stopHydraulicFluidAdded3, saveBrakeFluidAdded: stopBrakeFluidAdded3, saveEngineTach: stopEngineTach3)
 		}
 		if createFuelLog4 {
-			fuelAdded4Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer4), saveEngineHours: fuelEngHours4, saveQuantity: fuelAdded4, savePrice: fuelPrice4, saveLocation: fuelLocation4, saveLogId: fuelAdded4Log, saveOil: oilAdded4, saveDEF: defAdded4, saveNotes: fuelNotes4, saveOilChecked: oilChecked4, saveEngineCoolantChecked: engineCoolantChecked4, saveSecondaryCoolantChecked: secondaryCoolantChecked4, savePowerSteeringChecked: powerSteeringChecked4, saveBrakeFluidChecked: brakeFluidChecked4, saveTransmissionFluidChecked: transmissionFluidChecked4, saveRearAxleChecked: rearAxleChecked4, saveFrontAxleChecked: frontAxleChecked4, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked4, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked4, saveDateTime: fuelDateTime4, saveImage1: fuelStop4Image1, saveImage2: fuelStop4Image2, saveImage3: fuelStop4Image3, saveFuelLevelStart: stopLevelStart4, saveFuelLevelEnd: stopLevelEnd4, saveDefLevel: stopDefLevelFinal4, saveFuelType: stopFuelType4, saveMatchByOdometer: !stopsForcedNew.contains(4), saveExitTime: stopExit4, saveFuelQuantityStart: stopFuelQtyStart4, saveFuelQuantityEnd: stopFuelQtyEnd4, saveDefQuantity: stopDefQty4, saveDefLevelStart: stopDefLevelStartFinal4, saveDefQuantityStart: stopDefQtyStart4, saveDefPrice: stopDefPrice4)
+			fuelAdded4Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer4), saveEngineHours: fuelEngHours4, saveQuantity: fuelAdded4, savePrice: fuelPrice4, saveLocation: fuelLocation4, saveLogId: fuelAdded4Log, saveOil: oilAdded4, saveDEF: defAdded4, saveNotes: fuelNotes4, saveOilChecked: oilChecked4, saveEngineCoolantChecked: engineCoolantChecked4, saveSecondaryCoolantChecked: secondaryCoolantChecked4, savePowerSteeringChecked: powerSteeringChecked4, saveBrakeFluidChecked: brakeFluidChecked4, saveTransmissionFluidChecked: transmissionFluidChecked4, saveRearAxleChecked: rearAxleChecked4, saveFrontAxleChecked: frontAxleChecked4, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked4, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked4, saveCheckedFluidItems: FluidCheckList.currentLabels.filter { checkedFluidItems4.contains($0) }, saveDateTime: fuelDateTime4, saveImage1: fuelStop4Image1, saveImage2: fuelStop4Image2, saveImage3: fuelStop4Image3, saveFuelLevelStart: stopLevelStart4, saveFuelLevelEnd: stopLevelEnd4, saveDefLevel: stopDefLevelFinal4, saveFuelType: stopFuelType4, saveMatchByOdometer: !stopsForcedNew.contains(4), saveExitTime: stopExit4, saveFuelQuantityStart: stopFuelQtyStart4, saveFuelQuantityEnd: stopFuelQtyEnd4, saveDefQuantity: stopDefQty4, saveDefLevelStart: stopDefLevelStartFinal4, saveDefQuantityStart: stopDefQtyStart4, saveDefPrice: stopDefPrice4, saveTankAdded: stopTankAdded4, saveEngineOilAdded: stopEngineOilAdded4, saveDeiceFluidAdded: stopDeiceFluidAdded4, saveHydraulicFluidAdded: stopHydraulicFluidAdded4, saveBrakeFluidAdded: stopBrakeFluidAdded4, saveEngineTach: stopEngineTach4)
 		}
 		if createFuelLog5 {
-			fuelAdded5Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer5), saveEngineHours: fuelEngHours5, saveQuantity: fuelAdded5, savePrice: fuelPrice5, saveLocation: fuelLocation5, saveLogId: fuelAdded5Log, saveOil: oilAdded5, saveDEF: defAdded5, saveNotes: fuelNotes5, saveOilChecked: oilChecked5, saveEngineCoolantChecked: engineCoolantChecked5, saveSecondaryCoolantChecked: secondaryCoolantChecked5, savePowerSteeringChecked: powerSteeringChecked5, saveBrakeFluidChecked: brakeFluidChecked5, saveTransmissionFluidChecked: transmissionFluidChecked5, saveRearAxleChecked: rearAxleChecked5, saveFrontAxleChecked: frontAxleChecked5, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked5, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked5, saveDateTime: fuelDateTime5, saveImage1: fuelStop5Image1, saveImage2: fuelStop5Image2, saveImage3: fuelStop5Image3, saveFuelLevelStart: stopLevelStart5, saveFuelLevelEnd: stopLevelEnd5, saveDefLevel: stopDefLevelFinal5, saveFuelType: stopFuelType5, saveMatchByOdometer: !stopsForcedNew.contains(5), saveExitTime: stopExit5, saveFuelQuantityStart: stopFuelQtyStart5, saveFuelQuantityEnd: stopFuelQtyEnd5, saveDefQuantity: stopDefQty5, saveDefLevelStart: stopDefLevelStartFinal5, saveDefQuantityStart: stopDefQtyStart5, saveDefPrice: stopDefPrice5)
+			fuelAdded5Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer5), saveEngineHours: fuelEngHours5, saveQuantity: fuelAdded5, savePrice: fuelPrice5, saveLocation: fuelLocation5, saveLogId: fuelAdded5Log, saveOil: oilAdded5, saveDEF: defAdded5, saveNotes: fuelNotes5, saveOilChecked: oilChecked5, saveEngineCoolantChecked: engineCoolantChecked5, saveSecondaryCoolantChecked: secondaryCoolantChecked5, savePowerSteeringChecked: powerSteeringChecked5, saveBrakeFluidChecked: brakeFluidChecked5, saveTransmissionFluidChecked: transmissionFluidChecked5, saveRearAxleChecked: rearAxleChecked5, saveFrontAxleChecked: frontAxleChecked5, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked5, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked5, saveCheckedFluidItems: FluidCheckList.currentLabels.filter { checkedFluidItems5.contains($0) }, saveDateTime: fuelDateTime5, saveImage1: fuelStop5Image1, saveImage2: fuelStop5Image2, saveImage3: fuelStop5Image3, saveFuelLevelStart: stopLevelStart5, saveFuelLevelEnd: stopLevelEnd5, saveDefLevel: stopDefLevelFinal5, saveFuelType: stopFuelType5, saveMatchByOdometer: !stopsForcedNew.contains(5), saveExitTime: stopExit5, saveFuelQuantityStart: stopFuelQtyStart5, saveFuelQuantityEnd: stopFuelQtyEnd5, saveDefQuantity: stopDefQty5, saveDefLevelStart: stopDefLevelStartFinal5, saveDefQuantityStart: stopDefQtyStart5, saveDefPrice: stopDefPrice5, saveTankAdded: stopTankAdded5, saveEngineOilAdded: stopEngineOilAdded5, saveDeiceFluidAdded: stopDeiceFluidAdded5, saveHydraulicFluidAdded: stopHydraulicFluidAdded5, saveBrakeFluidAdded: stopBrakeFluidAdded5, saveEngineTach: stopEngineTach5)
 		}
 		if createFuelLog6 {
-			fuelAdded6Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer6), saveEngineHours: fuelEngHours6, saveQuantity: fuelAdded6, savePrice: fuelPrice6, saveLocation: fuelLocation6, saveLogId: fuelAdded6Log, saveOil: oilAdded6, saveDEF: defAdded6, saveNotes: fuelNotes6, saveOilChecked: oilChecked6, saveEngineCoolantChecked: engineCoolantChecked6, saveSecondaryCoolantChecked: secondaryCoolantChecked6, savePowerSteeringChecked: powerSteeringChecked6, saveBrakeFluidChecked: brakeFluidChecked6, saveTransmissionFluidChecked: transmissionFluidChecked6, saveRearAxleChecked: rearAxleChecked6, saveFrontAxleChecked: frontAxleChecked6, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked6, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked6, saveDateTime: fuelDateTime6, saveImage1: fuelStop6Image1, saveImage2: fuelStop6Image2, saveImage3: fuelStop6Image3, saveFuelLevelStart: stopLevelStart6, saveFuelLevelEnd: stopLevelEnd6, saveDefLevel: stopDefLevelFinal6, saveFuelType: stopFuelType6, saveMatchByOdometer: !stopsForcedNew.contains(6), saveExitTime: stopExit6, saveFuelQuantityStart: stopFuelQtyStart6, saveFuelQuantityEnd: stopFuelQtyEnd6, saveDefQuantity: stopDefQty6, saveDefLevelStart: stopDefLevelStartFinal6, saveDefQuantityStart: stopDefQtyStart6, saveDefPrice: stopDefPrice6)
+			fuelAdded6Log = add_editFuelRecord(saveOdometer: Int(fuelOdometer6), saveEngineHours: fuelEngHours6, saveQuantity: fuelAdded6, savePrice: fuelPrice6, saveLocation: fuelLocation6, saveLogId: fuelAdded6Log, saveOil: oilAdded6, saveDEF: defAdded6, saveNotes: fuelNotes6, saveOilChecked: oilChecked6, saveEngineCoolantChecked: engineCoolantChecked6, saveSecondaryCoolantChecked: secondaryCoolantChecked6, savePowerSteeringChecked: powerSteeringChecked6, saveBrakeFluidChecked: brakeFluidChecked6, saveTransmissionFluidChecked: transmissionFluidChecked6, saveRearAxleChecked: rearAxleChecked6, saveFrontAxleChecked: frontAxleChecked6, saveFuelWaterSeparatorChecked: fuelWaterSeparatorChecked6, saveAirSystemWaterBleedChecked: airSystemWaterBleedChecked6, saveCheckedFluidItems: FluidCheckList.currentLabels.filter { checkedFluidItems6.contains($0) }, saveDateTime: fuelDateTime6, saveImage1: fuelStop6Image1, saveImage2: fuelStop6Image2, saveImage3: fuelStop6Image3, saveFuelLevelStart: stopLevelStart6, saveFuelLevelEnd: stopLevelEnd6, saveDefLevel: stopDefLevelFinal6, saveFuelType: stopFuelType6, saveMatchByOdometer: !stopsForcedNew.contains(6), saveExitTime: stopExit6, saveFuelQuantityStart: stopFuelQtyStart6, saveFuelQuantityEnd: stopFuelQtyEnd6, saveDefQuantity: stopDefQty6, saveDefLevelStart: stopDefLevelStartFinal6, saveDefQuantityStart: stopDefQtyStart6, saveDefPrice: stopDefPrice6, saveTankAdded: stopTankAdded6, saveEngineOilAdded: stopEngineOilAdded6, saveDeiceFluidAdded: stopDeiceFluidAdded6, saveHydraulicFluidAdded: stopHydraulicFluidAdded6, saveBrakeFluidAdded: stopBrakeFluidAdded6, saveEngineTach: stopEngineTach6)
 		}
 
 		dataSet.inactive = inactive
@@ -2134,6 +2750,32 @@ struct EditTripLog: View {
 		dataSet.fuelLevelStart1 = levelStartFraction
 		dataSet.fuelLevelEnd1 = levelEndFraction
 		dataSet.fuelLevelStart = levelStartText
+		dataSet.fuelTank1LevelStart1 = fuelTank1LevelStart1
+		dataSet.fuelTank2LevelStart1 = fuelTank2LevelStart1
+		dataSet.fuelTank3LevelStart1 = fuelTank3LevelStart1
+		dataSet.fuelTank4LevelStart1 = fuelTank4LevelStart1
+		dataSet.fuelTank5LevelStart1 = fuelTank5LevelStart1
+		dataSet.fuelTank6LevelStart1 = fuelTank6LevelStart1
+		dataSet.fuelTank1QuantityStart = fuelTank1QuantityStart
+		dataSet.fuelTank2QuantityStart = fuelTank2QuantityStart
+		dataSet.fuelTank3QuantityStart = fuelTank3QuantityStart
+		dataSet.fuelTank4QuantityStart = fuelTank4QuantityStart
+		dataSet.fuelTank5QuantityStart = fuelTank5QuantityStart
+		dataSet.fuelTank6QuantityStart = fuelTank6QuantityStart
+		dataSet.fuelTank1LevelEnd1 = fuelTank1LevelEnd1
+		dataSet.fuelTank2LevelEnd1 = fuelTank2LevelEnd1
+		dataSet.fuelTank3LevelEnd1 = fuelTank3LevelEnd1
+		dataSet.fuelTank4LevelEnd1 = fuelTank4LevelEnd1
+		dataSet.fuelTank5LevelEnd1 = fuelTank5LevelEnd1
+		dataSet.fuelTank6LevelEnd1 = fuelTank6LevelEnd1
+		dataSet.fuelTank1QuantityEnd = fuelTank1QuantityEnd
+		dataSet.fuelTank2QuantityEnd = fuelTank2QuantityEnd
+		dataSet.fuelTank3QuantityEnd = fuelTank3QuantityEnd
+		dataSet.fuelTank4QuantityEnd = fuelTank4QuantityEnd
+		dataSet.fuelTank5QuantityEnd = fuelTank5QuantityEnd
+		dataSet.fuelTank6QuantityEnd = fuelTank6QuantityEnd
+			dataSet.engineTachStart = engineTachStart
+			dataSet.engineTachEnd = engineTachEnd
 		dataSet.fuelLevelEnd = levelEndText
 		dataSet.defLevel1 = defStartFraction
 		dataSet.defLevelFraction = defStartText
@@ -2183,6 +2825,18 @@ struct EditTripLog: View {
 		dataSet.fuelLocation4 = fuelLocation4
 		dataSet.fuelLocation5 = fuelLocation5
 		dataSet.fuelLocation6 = fuelLocation6
+			dataSet.fuelLocationLat1 = fuelLocationLat1
+			dataSet.fuelLocationLon1 = fuelLocationLon1
+			dataSet.fuelLocationLat2 = fuelLocationLat2
+			dataSet.fuelLocationLon2 = fuelLocationLon2
+			dataSet.fuelLocationLat3 = fuelLocationLat3
+			dataSet.fuelLocationLon3 = fuelLocationLon3
+			dataSet.fuelLocationLat4 = fuelLocationLat4
+			dataSet.fuelLocationLon4 = fuelLocationLon4
+			dataSet.fuelLocationLat5 = fuelLocationLat5
+			dataSet.fuelLocationLon5 = fuelLocationLon5
+			dataSet.fuelLocationLat6 = fuelLocationLat6
+			dataSet.fuelLocationLon6 = fuelLocationLon6
 		dataSet.fuelStop1Image1 = fuelStop1Image1
 		dataSet.fuelStop1Image2 = fuelStop1Image2
 		dataSet.fuelStop1Image3 = fuelStop1Image3
@@ -2203,6 +2857,10 @@ struct EditTripLog: View {
 		dataSet.fuelStop6Image3 = fuelStop6Image3
 		dataSet.locationStart = locationStart
 		dataSet.locationEnd = locationEnd
+			dataSet.locationStartLat = locationStartLat
+			dataSet.locationStartLon = locationStartLon
+			dataSet.locationEndLat = locationEndLat
+			dataSet.locationEndLon = locationEndLon
 		dataSet.startOilChecked = startOilChecked
 		dataSet.startEngineCoolantChecked = startEngineCoolantChecked
 		dataSet.startSecondaryCoolantChecked = startSecondaryCoolantChecked
@@ -2213,6 +2871,7 @@ struct EditTripLog: View {
 		dataSet.startFrontAxleChecked = startFrontAxleChecked
 		dataSet.startFuelWaterSeparatorChecked = startFuelWaterSeparatorChecked
 		dataSet.startAirSystemWaterBleedChecked = startAirSystemWaterBleedChecked
+		dataSet.startCheckedFluidItemsPacked = FluidCheckList.pack(FluidCheckList.currentLabels.filter { startCheckedFluidItems.contains($0) })
 		dataSet.endOilChecked = endOilChecked
 		dataSet.endEngineCoolantChecked = endEngineCoolantChecked
 		dataSet.endSecondaryCoolantChecked = endSecondaryCoolantChecked
@@ -2223,6 +2882,7 @@ struct EditTripLog: View {
 		dataSet.endFrontAxleChecked = endFrontAxleChecked
 		dataSet.endFuelWaterSeparatorChecked = endFuelWaterSeparatorChecked
 		dataSet.endAirSystemWaterBleedChecked = endAirSystemWaterBleedChecked
+		dataSet.endCheckedFluidItemsPacked = FluidCheckList.pack(FluidCheckList.currentLabels.filter { endCheckedFluidItems.contains($0) })
 		dataSet.vehicleTowed = vehicleTowed
 		dataSet.image1 = image1
 		dataSet.image2 = image2
@@ -2288,6 +2948,38 @@ struct EditTripLog: View {
 				}
 				if engHoursEnd > vehicleRecord.engHours {
 					vehicleRecord.engHours = engHoursEnd
+				}
+				// Carry each engine's ending Tach back to its ComponentTimes record. Skipped for an
+				// engine that derives its time from the Hobbs meter (`derivesFromMeter`) — its
+				// `totalTime` is a computed snapshot-plus-accrual value maintained elsewhere (see
+				// `importCurrentHobbsAndTachIfNeeded`), not something a trip should overwrite by hand.
+				//
+				// A tach gauge can be replaced with one reading a different, unrelated value, so
+				// `totalTime` is never set *from* the tach directly — instead each save advances
+				// `totalTime` by only the *change* in tach since the last known reading
+				// (`currentTachTime`), then moves `currentTachTime` up to match. That keeps a tach
+				// swap from corrupting accumulated engine time (just correct `currentTachTime` once
+				// in EditComponentTimes.swift to the new gauge's reading).
+				//
+				// `currentTachTime == 0` means this engine has never been tach-tracked under this
+				// scheme yet (existing data, or a brand-new engine) — fall back to `totalTime` as
+				// the baseline so the first tach-tracked save doesn't count the engine's entire
+				// pre-existing life as "this flight's" accrual.
+				//
+				// The baseline never moves backward, so re-saving an older trip (whose tach
+				// reading has since been superseded by a later trip) is a safe no-op rather than
+				// dragging engine time or currentTachTime back down.
+				if Vertical.current.id == .aviation {
+					for (index, engine) in engineComponents.enumerated() {
+						guard !engine.derivesFromMeter else { continue }
+						let slot = engineSlotNumber(engine, fallback: index + 1)
+						guard (1...6).contains(slot) else { continue }
+						let newTachEnd = tachBinding($engineTachEnd, slot).wrappedValue
+						let baseline = engine.currentTachTime > 0 ? engine.currentTachTime : engine.totalTime
+						guard newTachEnd > baseline else { continue }
+						engine.totalTime += newTachEnd - baseline
+						engine.currentTachTime = newTachEnd
+					}
 				}
 				try? modelContext.save()
 			}
@@ -2356,7 +3048,7 @@ struct EditTripLog: View {
 	/// - If an existing record is found (via `searchFuelRecord`), it is updated; otherwise,
 	///   a new record is created and inserted.
 	/// - Returns: The `logId` of the created/updated record.
-	private func add_editFuelRecord(saveOdometer: Int, saveEngineHours: Float, saveQuantity: Float, savePrice: Float, saveLocation: String, saveLogId: String, saveOil: Float, saveDEF: Float, saveNotes: String, saveOilChecked: Bool, saveEngineCoolantChecked: Bool = false, saveSecondaryCoolantChecked: Bool = false, savePowerSteeringChecked: Bool = false, saveBrakeFluidChecked: Bool = false, saveTransmissionFluidChecked: Bool = false, saveRearAxleChecked: Bool = false, saveFrontAxleChecked: Bool = false, saveFuelWaterSeparatorChecked: Bool = false, saveAirSystemWaterBleedChecked: Bool = false, saveDateTime: Date = Date(), saveImage1: Data? = nil, saveImage2: Data? = nil, saveImage3: Data? = nil, saveFuelLevelStart: Float = 0.25, saveFuelLevelEnd: Float = 1.0, saveDefLevel: Float = 0.0, saveFuelType: String = "", saveMatchByOdometer: Bool = true, saveExitTime: Date? = nil, saveFuelQuantityStart: Float = 0, saveFuelQuantityEnd: Float = 0, saveDefQuantity: Float = 0, saveDefLevelStart: Float = 0, saveDefQuantityStart: Float = 0, saveDefPrice: Float = 0) -> String {
+	private func add_editFuelRecord(saveOdometer: Int, saveEngineHours: Float, saveQuantity: Float, savePrice: Float, saveLocation: String, saveLogId: String, saveOil: Float, saveDEF: Float, saveNotes: String, saveOilChecked: Bool, saveEngineCoolantChecked: Bool = false, saveSecondaryCoolantChecked: Bool = false, savePowerSteeringChecked: Bool = false, saveBrakeFluidChecked: Bool = false, saveTransmissionFluidChecked: Bool = false, saveRearAxleChecked: Bool = false, saveFrontAxleChecked: Bool = false, saveFuelWaterSeparatorChecked: Bool = false, saveAirSystemWaterBleedChecked: Bool = false, saveCheckedFluidItems: [String] = [], saveDateTime: Date = Date(), saveImage1: Data? = nil, saveImage2: Data? = nil, saveImage3: Data? = nil, saveFuelLevelStart: Float = 0.25, saveFuelLevelEnd: Float = 1.0, saveDefLevel: Float = 0.0, saveFuelType: String = "", saveMatchByOdometer: Bool = true, saveExitTime: Date? = nil, saveFuelQuantityStart: Float = 0, saveFuelQuantityEnd: Float = 0, saveDefQuantity: Float = 0, saveDefLevelStart: Float = 0, saveDefQuantityStart: Float = 0, saveDefPrice: Float = 0, saveTankAdded: [Float] = [], saveEngineOilAdded: [Float] = [], saveDeiceFluidAdded: Float = 0, saveHydraulicFluidAdded: Float = 0, saveBrakeFluidAdded: Float = 0, saveEngineTach: [Float] = []) -> String {
 		var logId: String = ""
 		
 		// get vehicle details (via Vehicle8)
@@ -2397,6 +3089,7 @@ struct EditTripLog: View {
 					existing.frontAxleChecked = saveFrontAxleChecked
 					existing.fuelWaterSeparatorChecked = saveFuelWaterSeparatorChecked
 					existing.airSystemWaterBleedChecked = saveAirSystemWaterBleedChecked
+					existing.checkedFluidItemsPacked = FluidCheckList.pack(saveCheckedFluidItems)
 					existing.fuelLevelStart1 = saveFuelLevelStart
 					existing.fuelLevelEnd1 = saveFuelLevelEnd
 					existing.fuelLevelStartFraction = functions.getFuelLevel(unit: saveFuelLevelStart)
@@ -2417,6 +3110,7 @@ struct EditTripLog: View {
 					existing.image2 = saveImage2
 					existing.image3 = saveImage3
 					existing.updatedAt = Date()
+					applyTankAndFluidsAdded(to: existing, tank: saveTankAdded, engineOil: saveEngineOilAdded, deice: saveDeiceFluidAdded, hydraulic: saveHydraulicFluidAdded, brake: saveBrakeFluidAdded, engineTach: saveEngineTach)
 					try? modelContext.save()
 					return logId
 				}
@@ -2444,6 +3138,7 @@ struct EditTripLog: View {
 					existing.frontAxleChecked = saveFrontAxleChecked
 					existing.fuelWaterSeparatorChecked = saveFuelWaterSeparatorChecked
 					existing.airSystemWaterBleedChecked = saveAirSystemWaterBleedChecked
+					existing.checkedFluidItemsPacked = FluidCheckList.pack(saveCheckedFluidItems)
 					existing.fuelLevelStart1 = saveFuelLevelStart
 					existing.fuelLevelEnd1 = saveFuelLevelEnd
 					existing.fuelLevelStartFraction = functions.getFuelLevel(unit: saveFuelLevelStart)
@@ -2464,6 +3159,7 @@ struct EditTripLog: View {
 					existing.image2 = saveImage2
 					existing.image3 = saveImage3
 					existing.updatedAt = Date()
+					applyTankAndFluidsAdded(to: existing, tank: saveTankAdded, engineOil: saveEngineOilAdded, deice: saveDeiceFluidAdded, hydraulic: saveHydraulicFluidAdded, brake: saveBrakeFluidAdded, engineTach: saveEngineTach)
 					try? modelContext.save()
 					return logId
 				}
@@ -2527,6 +3223,8 @@ struct EditTripLog: View {
 			image2: saveImage2,
 			image3: saveImage3
 		)
+		applyTankAndFluidsAdded(to: newRecord, tank: saveTankAdded, engineOil: saveEngineOilAdded, deice: saveDeiceFluidAdded, hydraulic: saveHydraulicFluidAdded, brake: saveBrakeFluidAdded, engineTach: saveEngineTach)
+		newRecord.checkedFluidItemsPacked = FluidCheckList.pack(saveCheckedFluidItems)
 		modelContext.insert(newRecord)
 		do { try modelContext.save() } catch {}
 		return logId
@@ -2556,6 +3254,7 @@ struct EditTripLog: View {
 		var frontAxleChecked: Bool = false
 		var fuelWaterSeparatorChecked: Bool = false
 		var airSystemWaterBleedChecked: Bool = false
+		var checkedFluidItems: [String] = []
 		var fuelDateTime: Date = Date()
 		var fuelExitTime: Date? = nil
 		var image1: Data? = nil
@@ -2571,6 +3270,12 @@ struct EditTripLog: View {
 		var defQuantityStart: Float = 0
 		var defPrice: Float = 0
 		var fuelType: String = ""
+		var tankAdded: [Float] = []
+		var engineOilAdded: [Float] = []
+		var deiceFluidAdded: Float = 0
+		var hydraulicFluidAdded: Float = 0
+		var brakeFluidAdded: Float = 0
+		var engineTach: [Float] = []
 	}
 	
 	/// Loads persisted fuel stop attributes for a linked `FuelLog1`.
@@ -2601,6 +3306,7 @@ struct EditTripLog: View {
 				data.frontAxleChecked = fetchModel.frontAxleChecked
 				data.fuelWaterSeparatorChecked = fetchModel.fuelWaterSeparatorChecked
 				data.airSystemWaterBleedChecked = fetchModel.airSystemWaterBleedChecked
+				data.checkedFluidItems = FluidCheckList.currentLabels.filter { FluidCheckList.unpack(fetchModel.checkedFluidItemsPacked).contains($0) }
 				data.fuelDateTime = fetchModel.fuelDateTime
 				data.fuelExitTime = fetchModel.fuelExitTime
 				data.image1 = fetchModel.image1
@@ -2616,6 +3322,12 @@ struct EditTripLog: View {
 				data.defQuantityStart = fetchModel.defQuantityStart
 				data.defPrice = fetchModel.defPrice
 				data.fuelType = fetchModel.fuelType
+				data.tankAdded = [fetchModel.fuelTank1Added, fetchModel.fuelTank2Added, fetchModel.fuelTank3Added, fetchModel.fuelTank4Added, fetchModel.fuelTank5Added, fetchModel.fuelTank6Added]
+				data.engineOilAdded = [fetchModel.oilAddedEngine1, fetchModel.oilAddedEngine2, fetchModel.oilAddedEngine3, fetchModel.oilAddedEngine4, fetchModel.oilAddedEngine5, fetchModel.oilAddedEngine6]
+				data.deiceFluidAdded = fetchModel.deiceFluidAdded
+				data.hydraulicFluidAdded = fetchModel.hydraulicFluidAdded
+				data.brakeFluidAdded = fetchModel.brakeFluidAdded
+				data.engineTach = fetchModel.engineTach
 			}
 		} catch {}
 		return data
@@ -2725,7 +3437,8 @@ struct EditTripLog: View {
 		case 1:
 			fuelAdded1 = d.fuelAdded; fuelPrice1 = d.fuelPrice; fuelOdometer1 = d.fuelOdometer; fuelEngHours1 = d.fuelEngHours
 			fuelLocation1 = d.fuelLocation; oilAdded1 = d.oilAdded; defAdded1 = d.defAdded; fuelNotes1 = d.fuelNotes
-			oilChecked1 = d.oilChecked; engineCoolantChecked1 = d.engineCoolantChecked; secondaryCoolantChecked1 = d.secondaryCoolantChecked; powerSteeringChecked1 = d.powerSteeringChecked; brakeFluidChecked1 = d.brakeFluidChecked; transmissionFluidChecked1 = d.transmissionFluidChecked; rearAxleChecked1 = d.rearAxleChecked; frontAxleChecked1 = d.frontAxleChecked; fuelWaterSeparatorChecked1 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked1 = d.airSystemWaterBleedChecked
+			stopTankAdded1 = d.tankAdded; stopEngineOilAdded1 = d.engineOilAdded; stopDeiceFluidAdded1 = d.deiceFluidAdded; stopHydraulicFluidAdded1 = d.hydraulicFluidAdded; stopBrakeFluidAdded1 = d.brakeFluidAdded; stopEngineTach1 = d.engineTach
+			oilChecked1 = d.oilChecked; engineCoolantChecked1 = d.engineCoolantChecked; secondaryCoolantChecked1 = d.secondaryCoolantChecked; powerSteeringChecked1 = d.powerSteeringChecked; brakeFluidChecked1 = d.brakeFluidChecked; transmissionFluidChecked1 = d.transmissionFluidChecked; rearAxleChecked1 = d.rearAxleChecked; frontAxleChecked1 = d.frontAxleChecked; fuelWaterSeparatorChecked1 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked1 = d.airSystemWaterBleedChecked; checkedFluidItems1 = Set(d.checkedFluidItems)
 			fuelDateTime1 = d.fuelDateTime
 			fuelStop1Image1 = d.image1; fuelStop1Image2 = d.image2; fuelStop1Image3 = d.image3
 			stopFuelLevelStart1 = d.fuelLevelStart; stopFuelLevelEnd1 = d.fuelLevelEnd; stopDefLevel1 = d.defLevel; stopFuelType1 = d.fuelType
@@ -2738,7 +3451,8 @@ struct EditTripLog: View {
 		case 2:
 			fuelAdded2 = d.fuelAdded; fuelPrice2 = d.fuelPrice; fuelOdometer2 = d.fuelOdometer; fuelEngHours2 = d.fuelEngHours
 			fuelLocation2 = d.fuelLocation; oilAdded2 = d.oilAdded; defAdded2 = d.defAdded; fuelNotes2 = d.fuelNotes
-			oilChecked2 = d.oilChecked; engineCoolantChecked2 = d.engineCoolantChecked; secondaryCoolantChecked2 = d.secondaryCoolantChecked; powerSteeringChecked2 = d.powerSteeringChecked; brakeFluidChecked2 = d.brakeFluidChecked; transmissionFluidChecked2 = d.transmissionFluidChecked; rearAxleChecked2 = d.rearAxleChecked; frontAxleChecked2 = d.frontAxleChecked; fuelWaterSeparatorChecked2 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked2 = d.airSystemWaterBleedChecked
+			stopTankAdded2 = d.tankAdded; stopEngineOilAdded2 = d.engineOilAdded; stopDeiceFluidAdded2 = d.deiceFluidAdded; stopHydraulicFluidAdded2 = d.hydraulicFluidAdded; stopBrakeFluidAdded2 = d.brakeFluidAdded; stopEngineTach2 = d.engineTach
+			oilChecked2 = d.oilChecked; engineCoolantChecked2 = d.engineCoolantChecked; secondaryCoolantChecked2 = d.secondaryCoolantChecked; powerSteeringChecked2 = d.powerSteeringChecked; brakeFluidChecked2 = d.brakeFluidChecked; transmissionFluidChecked2 = d.transmissionFluidChecked; rearAxleChecked2 = d.rearAxleChecked; frontAxleChecked2 = d.frontAxleChecked; fuelWaterSeparatorChecked2 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked2 = d.airSystemWaterBleedChecked; checkedFluidItems2 = Set(d.checkedFluidItems)
 			fuelDateTime2 = d.fuelDateTime
 			fuelStop2Image1 = d.image1; fuelStop2Image2 = d.image2; fuelStop2Image3 = d.image3
 			stopFuelLevelStart2 = d.fuelLevelStart; stopFuelLevelEnd2 = d.fuelLevelEnd; stopDefLevel2 = d.defLevel; stopFuelType2 = d.fuelType
@@ -2751,7 +3465,8 @@ struct EditTripLog: View {
 		case 3:
 			fuelAdded3 = d.fuelAdded; fuelPrice3 = d.fuelPrice; fuelOdometer3 = d.fuelOdometer; fuelEngHours3 = d.fuelEngHours
 			fuelLocation3 = d.fuelLocation; oilAdded3 = d.oilAdded; defAdded3 = d.defAdded; fuelNotes3 = d.fuelNotes
-			oilChecked3 = d.oilChecked; engineCoolantChecked3 = d.engineCoolantChecked; secondaryCoolantChecked3 = d.secondaryCoolantChecked; powerSteeringChecked3 = d.powerSteeringChecked; brakeFluidChecked3 = d.brakeFluidChecked; transmissionFluidChecked3 = d.transmissionFluidChecked; rearAxleChecked3 = d.rearAxleChecked; frontAxleChecked3 = d.frontAxleChecked; fuelWaterSeparatorChecked3 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked3 = d.airSystemWaterBleedChecked
+			stopTankAdded3 = d.tankAdded; stopEngineOilAdded3 = d.engineOilAdded; stopDeiceFluidAdded3 = d.deiceFluidAdded; stopHydraulicFluidAdded3 = d.hydraulicFluidAdded; stopBrakeFluidAdded3 = d.brakeFluidAdded; stopEngineTach3 = d.engineTach
+			oilChecked3 = d.oilChecked; engineCoolantChecked3 = d.engineCoolantChecked; secondaryCoolantChecked3 = d.secondaryCoolantChecked; powerSteeringChecked3 = d.powerSteeringChecked; brakeFluidChecked3 = d.brakeFluidChecked; transmissionFluidChecked3 = d.transmissionFluidChecked; rearAxleChecked3 = d.rearAxleChecked; frontAxleChecked3 = d.frontAxleChecked; fuelWaterSeparatorChecked3 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked3 = d.airSystemWaterBleedChecked; checkedFluidItems3 = Set(d.checkedFluidItems)
 			fuelDateTime3 = d.fuelDateTime
 			fuelStop3Image1 = d.image1; fuelStop3Image2 = d.image2; fuelStop3Image3 = d.image3
 			stopFuelLevelStart3 = d.fuelLevelStart; stopFuelLevelEnd3 = d.fuelLevelEnd; stopDefLevel3 = d.defLevel; stopFuelType3 = d.fuelType
@@ -2764,7 +3479,8 @@ struct EditTripLog: View {
 		case 4:
 			fuelAdded4 = d.fuelAdded; fuelPrice4 = d.fuelPrice; fuelOdometer4 = d.fuelOdometer; fuelEngHours4 = d.fuelEngHours
 			fuelLocation4 = d.fuelLocation; oilAdded4 = d.oilAdded; defAdded4 = d.defAdded; fuelNotes4 = d.fuelNotes
-			oilChecked4 = d.oilChecked; engineCoolantChecked4 = d.engineCoolantChecked; secondaryCoolantChecked4 = d.secondaryCoolantChecked; powerSteeringChecked4 = d.powerSteeringChecked; brakeFluidChecked4 = d.brakeFluidChecked; transmissionFluidChecked4 = d.transmissionFluidChecked; rearAxleChecked4 = d.rearAxleChecked; frontAxleChecked4 = d.frontAxleChecked; fuelWaterSeparatorChecked4 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked4 = d.airSystemWaterBleedChecked
+			stopTankAdded4 = d.tankAdded; stopEngineOilAdded4 = d.engineOilAdded; stopDeiceFluidAdded4 = d.deiceFluidAdded; stopHydraulicFluidAdded4 = d.hydraulicFluidAdded; stopBrakeFluidAdded4 = d.brakeFluidAdded; stopEngineTach4 = d.engineTach
+			oilChecked4 = d.oilChecked; engineCoolantChecked4 = d.engineCoolantChecked; secondaryCoolantChecked4 = d.secondaryCoolantChecked; powerSteeringChecked4 = d.powerSteeringChecked; brakeFluidChecked4 = d.brakeFluidChecked; transmissionFluidChecked4 = d.transmissionFluidChecked; rearAxleChecked4 = d.rearAxleChecked; frontAxleChecked4 = d.frontAxleChecked; fuelWaterSeparatorChecked4 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked4 = d.airSystemWaterBleedChecked; checkedFluidItems4 = Set(d.checkedFluidItems)
 			fuelDateTime4 = d.fuelDateTime
 			fuelStop4Image1 = d.image1; fuelStop4Image2 = d.image2; fuelStop4Image3 = d.image3
 			stopFuelLevelStart4 = d.fuelLevelStart; stopFuelLevelEnd4 = d.fuelLevelEnd; stopDefLevel4 = d.defLevel; stopFuelType4 = d.fuelType
@@ -2777,7 +3493,8 @@ struct EditTripLog: View {
 		case 5:
 			fuelAdded5 = d.fuelAdded; fuelPrice5 = d.fuelPrice; fuelOdometer5 = d.fuelOdometer; fuelEngHours5 = d.fuelEngHours
 			fuelLocation5 = d.fuelLocation; oilAdded5 = d.oilAdded; defAdded5 = d.defAdded; fuelNotes5 = d.fuelNotes
-			oilChecked5 = d.oilChecked; engineCoolantChecked5 = d.engineCoolantChecked; secondaryCoolantChecked5 = d.secondaryCoolantChecked; powerSteeringChecked5 = d.powerSteeringChecked; brakeFluidChecked5 = d.brakeFluidChecked; transmissionFluidChecked5 = d.transmissionFluidChecked; rearAxleChecked5 = d.rearAxleChecked; frontAxleChecked5 = d.frontAxleChecked; fuelWaterSeparatorChecked5 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked5 = d.airSystemWaterBleedChecked
+			stopTankAdded5 = d.tankAdded; stopEngineOilAdded5 = d.engineOilAdded; stopDeiceFluidAdded5 = d.deiceFluidAdded; stopHydraulicFluidAdded5 = d.hydraulicFluidAdded; stopBrakeFluidAdded5 = d.brakeFluidAdded; stopEngineTach5 = d.engineTach
+			oilChecked5 = d.oilChecked; engineCoolantChecked5 = d.engineCoolantChecked; secondaryCoolantChecked5 = d.secondaryCoolantChecked; powerSteeringChecked5 = d.powerSteeringChecked; brakeFluidChecked5 = d.brakeFluidChecked; transmissionFluidChecked5 = d.transmissionFluidChecked; rearAxleChecked5 = d.rearAxleChecked; frontAxleChecked5 = d.frontAxleChecked; fuelWaterSeparatorChecked5 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked5 = d.airSystemWaterBleedChecked; checkedFluidItems5 = Set(d.checkedFluidItems)
 			fuelDateTime5 = d.fuelDateTime
 			fuelStop5Image1 = d.image1; fuelStop5Image2 = d.image2; fuelStop5Image3 = d.image3
 			stopFuelLevelStart5 = d.fuelLevelStart; stopFuelLevelEnd5 = d.fuelLevelEnd; stopDefLevel5 = d.defLevel; stopFuelType5 = d.fuelType
@@ -2790,7 +3507,8 @@ struct EditTripLog: View {
 		case 6:
 			fuelAdded6 = d.fuelAdded; fuelPrice6 = d.fuelPrice; fuelOdometer6 = d.fuelOdometer; fuelEngHours6 = d.fuelEngHours
 			fuelLocation6 = d.fuelLocation; oilAdded6 = d.oilAdded; defAdded6 = d.defAdded; fuelNotes6 = d.fuelNotes
-			oilChecked6 = d.oilChecked; engineCoolantChecked6 = d.engineCoolantChecked; secondaryCoolantChecked6 = d.secondaryCoolantChecked; powerSteeringChecked6 = d.powerSteeringChecked; brakeFluidChecked6 = d.brakeFluidChecked; transmissionFluidChecked6 = d.transmissionFluidChecked; rearAxleChecked6 = d.rearAxleChecked; frontAxleChecked6 = d.frontAxleChecked; fuelWaterSeparatorChecked6 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked6 = d.airSystemWaterBleedChecked
+			stopTankAdded6 = d.tankAdded; stopEngineOilAdded6 = d.engineOilAdded; stopDeiceFluidAdded6 = d.deiceFluidAdded; stopHydraulicFluidAdded6 = d.hydraulicFluidAdded; stopBrakeFluidAdded6 = d.brakeFluidAdded; stopEngineTach6 = d.engineTach
+			oilChecked6 = d.oilChecked; engineCoolantChecked6 = d.engineCoolantChecked; secondaryCoolantChecked6 = d.secondaryCoolantChecked; powerSteeringChecked6 = d.powerSteeringChecked; brakeFluidChecked6 = d.brakeFluidChecked; transmissionFluidChecked6 = d.transmissionFluidChecked; rearAxleChecked6 = d.rearAxleChecked; frontAxleChecked6 = d.frontAxleChecked; fuelWaterSeparatorChecked6 = d.fuelWaterSeparatorChecked; airSystemWaterBleedChecked6 = d.airSystemWaterBleedChecked; checkedFluidItems6 = Set(d.checkedFluidItems)
 			fuelDateTime6 = d.fuelDateTime
 			fuelStop6Image1 = d.image1; fuelStop6Image2 = d.image2; fuelStop6Image3 = d.image3
 			stopFuelLevelStart6 = d.fuelLevelStart; stopFuelLevelEnd6 = d.fuelLevelEnd; stopDefLevel6 = d.defLevel; stopFuelType6 = d.fuelType
@@ -2832,8 +3550,274 @@ struct EditTripLog: View {
 	/// Refreshes cached `vehicleDetails` from the current `vehicleId`.
 	///
 	/// Used to derive fuel quantities and other vehicle-specific computations.
+	/// Loads this vehicle's `ComponentTimes` engine rows for the per-engine Oil Added
+	/// fields at each enroute stop. Aviation only — mirrors EditFuelLog.swift exactly.
+	private func loadEngineComponents() {
+		guard Vertical.current.id == .aviation else { return }
+		let vid = vehicleId
+		let fd = FetchDescriptor<ComponentTimes>(
+			predicate: #Predicate { $0.vehicleId == vid && $0.componentType == "Engine" },
+			sortBy: [SortDescriptor(\.componentName, order: .forward)]
+		)
+		engineComponents = (try? modelContext.fetch(fd)) ?? []
+	}
+
+	/// Prefills Departure Hobbs and each engine's Departure Tach from the aircraft's
+	/// current readings — called whenever the vehicle picker changes and once on first
+	/// appear (both already route through `refreshVehicleDetails()`). Only ever fills a
+	/// field that's still 0; never overwrites a value the pilot already typed, so
+	/// reopening an existing trip is unaffected. Mirrors EditComponentTimes' own
+	/// `derivesFromMeter` accrual so an engine tracking off the aircraft's Hobbs meter
+	/// shows its true current tach rather than a stale hand-entered `totalTime`.
+	private func importCurrentHobbsAndTachIfNeeded() {
+		guard Vertical.current.id == .aviation else { return }
+		let meter = functions.loadVehicleMeter(context: modelContext, vehicleId: vehicleId)
+		if engHoursStart == 0, meter.known, meter.hours > 0 {
+			engHoursStart = meter.hours
+		}
+		for (index, engine) in engineComponents.enumerated() {
+			let slot = engineSlotNumber(engine, fallback: index + 1)
+			guard (1...6).contains(slot) else { continue }
+			let binding = tachBinding($engineTachStart, slot)
+			guard binding.wrappedValue == 0 else { continue }
+			let currentTach: Float
+			if engine.derivesFromMeter {
+				let accrued = PartTimeMath.accruedHours(installMeter: engine.snapshotMeterHours, installMeterKnown: true, currentMeter: meter).hours
+				currentTach = engine.totalTimeAtSnapshot + accrued
+			} else {
+				// Prefer the engine's own last-known tach reading over `totalTime` once one
+				// exists, since a tach swap can leave the two on unrelated scales.
+				currentTach = engine.currentTachTime > 0 ? engine.currentTachTime : engine.totalTime
+			}
+			guard currentTach > 0 else { continue }
+			binding.wrappedValue = currentTach
+		}
+	}
+
+	/// Prefills Departure fuel quantity from the most recent previous trip's ending
+	/// quantity for this aircraft — there's no live "fuel onboard" field on the vehicle
+	/// record itself (unlike Hobbs), so the last trip's `fuelQuantityEnd` is the closest
+	/// thing to a current reading. Only fires when Departure is still 0, and excludes
+	/// this trip itself so reopening an existing (possibly all-zero) trip is unaffected.
+	/// A multi-tank aircraft (`vehicleFuelTankCount > 1`) shows per-tank Departure fields
+	/// instead of the aggregate ones, so each tank is seeded from its own last-trip ending
+	/// reading too — seeding only the aggregate silently did nothing on those aircraft.
+	/// When there's no previous trip at all yet (a freshly added aircraft), falls back to
+	/// full tanks — there's nothing else to assume a brand-new aircraft's fuel state from.
+	private func importCurrentFuelIfNeeded() {
+		guard Vertical.current.id == .aviation else { return }
+		let vid = vehicleId
+		var fetchDescriptor = FetchDescriptor<TripLog2>(
+			predicate: #Predicate { $0.vehicleId == vid },
+			sortBy: [SortDescriptor(\.tripDateTimeEnd, order: .reverse)]
+		)
+		fetchDescriptor.fetchLimit = 2
+		let last = (try? modelContext.fetch(fetchDescriptor))?.first(where: { $0 !== dataSet })
+
+		if fuelQuantityStart == 0 {
+			if let last, last.fuelQuantityEnd > 0 {
+				fuelQuantityStart = last.fuelQuantityEnd
+				fuelLevelStart1 = last.fuelLevelEnd1
+				fuelLevelStart = last.fuelLevelEnd
+			} else if vehicleFuelTankCount <= 1, let capacity = vehicleDetails?.fuelCapacity, capacity > 0 {
+				fuelQuantityStart = Float(capacity)
+				fuelLevelStart1 = 1.0
+				fuelLevelStart = functions.getFuelLevel(unit: 1.0)
+			}
+		}
+
+		let tankEndings: [(quantity: Float, level: Float)] = [
+			(last?.fuelTank1QuantityEnd ?? 0, last?.fuelTank1LevelEnd1 ?? 0),
+			(last?.fuelTank2QuantityEnd ?? 0, last?.fuelTank2LevelEnd1 ?? 0),
+			(last?.fuelTank3QuantityEnd ?? 0, last?.fuelTank3LevelEnd1 ?? 0),
+			(last?.fuelTank4QuantityEnd ?? 0, last?.fuelTank4LevelEnd1 ?? 0),
+			(last?.fuelTank5QuantityEnd ?? 0, last?.fuelTank5LevelEnd1 ?? 0),
+			(last?.fuelTank6QuantityEnd ?? 0, last?.fuelTank6LevelEnd1 ?? 0),
+		]
+		for tankNumber in 1...6 {
+			let quantityBinding = tankQuantityStartBinding(tankNumber)
+			guard quantityBinding.wrappedValue == 0 else { continue }
+			let ending = tankEndings[tankNumber - 1]
+			if ending.quantity > 0 {
+				quantityBinding.wrappedValue = ending.quantity
+				tankLevelStartBinding(tankNumber).wrappedValue = ending.level
+			} else {
+				let capacity = fuelTankCapacity(tankNumber)
+				guard capacity > 0 else { continue }
+				quantityBinding.wrappedValue = capacity
+				tankLevelStartBinding(tankNumber).wrappedValue = 1.0
+			}
+		}
+	}
+
+	/// Whether enroute stop N has actually been used — mirrors the predicate
+	/// `tripWaypoints`/`tripLegs` use, but reads the live `@State` so it stays correct
+	/// while the pilot is still typing (those two read back from `dataSet` instead).
+	/// Also true the moment the pilot flips "Create Fuel Log" on for a stop, even before
+	/// they've typed a quantity or reason — that toggle *is* the act of creating the stop,
+	/// and is what the Hobbs/Tach/fuel starting-point transfer below hooks into.
+	private func stopIsActive(_ n: Int) -> Bool {
+		switch n {
+		case 1: return createFuelLog1 || fuelAdded1 > 0 || !stopReason1.isEmpty
+		case 2: return createFuelLog2 || fuelAdded2 > 0 || !stopReason2.isEmpty
+		case 3: return createFuelLog3 || fuelAdded3 > 0 || !stopReason3.isEmpty
+		case 4: return createFuelLog4 || fuelAdded4 > 0 || !stopReason4.isEmpty
+		case 5: return createFuelLog5 || fuelAdded5 > 0 || !stopReason5.isEmpty
+		default: return createFuelLog6 || fuelAdded6 > 0 || !stopReason6.isEmpty
+		}
+	}
+
+	/// Seeds a freshly-created stop's Arrival Time from Departure's time, as a starting
+	/// point the pilot then adjusts — called once, right on the creation transition, never
+	/// on later edits (see the onChange handlers that call this).
+	private func seedStopDateTime(_ n: Int) {
+		switch n {
+		case 1: fuelDateTime1 = tripDateTimeStart
+		case 2: fuelDateTime2 = tripDateTimeStart
+		case 3: fuelDateTime3 = tripDateTimeStart
+		case 4: fuelDateTime4 = tripDateTimeStart
+		case 5: fuelDateTime5 = tripDateTimeStart
+		default: fuelDateTime6 = tripDateTimeStart
+		}
+	}
+
+	/// Hobbs readings in flight order — Departure, each stop actually used (in order),
+	/// then Arrival. Unlike Tach there's only one Hobbs meter (no per-engine dimension).
+	private func hobbsChain() -> [Binding<Float>] {
+		var chain = [$engHoursStart]
+		let stopBindings: [(Bool, Binding<Float>)] = [
+			(stopIsActive(1), $fuelEngHours1), (stopIsActive(2), $fuelEngHours2),
+			(stopIsActive(3), $fuelEngHours3), (stopIsActive(4), $fuelEngHours4),
+			(stopIsActive(5), $fuelEngHours5), (stopIsActive(6), $fuelEngHours6),
+		]
+		for (active, binding) in stopBindings where active {
+			chain.append(binding)
+		}
+		chain.append($engHoursEnd)
+		return chain
+	}
+
+	/// One engine's Tach readings in flight order — Departure, each stop actually
+	/// used (in order), then Arrival.
+	private func tachChain(engine slot: Int) -> [Binding<Float>] {
+		var chain = [tachBinding($engineTachStart, slot)]
+		let stopArrays: [(Bool, Binding<[Float]>)] = [
+			(stopIsActive(1), $stopEngineTach1), (stopIsActive(2), $stopEngineTach2),
+			(stopIsActive(3), $stopEngineTach3), (stopIsActive(4), $stopEngineTach4),
+			(stopIsActive(5), $stopEngineTach5), (stopIsActive(6), $stopEngineTach6),
+		]
+		for (active, array) in stopArrays where active {
+			chain.append(tachBinding(array, slot))
+		}
+		chain.append(tachBinding($engineTachEnd, slot))
+		return chain
+	}
+
+	/// The aggregate fuel quantity readings in flight order — Departure, each active
+	/// stop's arrival/departure quantity, then Arrival. Per-tank quantities aren't
+	/// chained here: a stop only ever records how much was *added* to each tank, not
+	/// a per-tank running level, so the aggregate is the only true start/end sequence.
+	private func fuelQuantityChain() -> [Binding<Float>] {
+		var chain = [$fuelQuantityStart]
+		let stops: [(Bool, Binding<Float>, Binding<Float>)] = [
+			(stopIsActive(1), $stopFuelQtyStart1, $stopFuelQtyEnd1),
+			(stopIsActive(2), $stopFuelQtyStart2, $stopFuelQtyEnd2),
+			(stopIsActive(3), $stopFuelQtyStart3, $stopFuelQtyEnd3),
+			(stopIsActive(4), $stopFuelQtyStart4, $stopFuelQtyEnd4),
+			(stopIsActive(5), $stopFuelQtyStart5, $stopFuelQtyEnd5),
+			(stopIsActive(6), $stopFuelQtyStart6, $stopFuelQtyEnd6),
+		]
+		for (active, start, end) in stops where active {
+			chain.append(start)
+			chain.append(end)
+		}
+		chain.append($fuelQuantityEnd)
+		return chain
+	}
+
+	/// Walks a chain of same-meter readings forward (Hobbs, or one engine's Tach)
+	/// raising any reading that's below the one before it. This both fills in a
+	/// still-unentered (0) field and stops a lower entry from sticking, since these
+	/// meters only ever count up across a single flight.
+	private func syncAscendingChain(_ chain: [Binding<Float>]) {
+		var minimum: Float = 0
+		for binding in chain {
+			if binding.wrappedValue < minimum {
+				binding.wrappedValue = minimum
+			}
+			minimum = max(minimum, binding.wrappedValue)
+		}
+	}
+
+	/// Walks a chain of fuel readings forward, filling a still-unentered (0) reading
+	/// from the one before it. Unlike `syncAscendingChain`, later values are free to
+	/// drop below earlier ones — fuel burns down between stops — so this only ever
+	/// carries a starting point forward, never clamps a typed value.
+	private func syncForwardChain(_ chain: [Binding<Float>]) {
+		var carry: Float = 0
+		for binding in chain {
+			if binding.wrappedValue == 0 {
+				binding.wrappedValue = carry
+			} else {
+				carry = binding.wrappedValue
+			}
+		}
+	}
+
+	/// Enforces the Hobbs/Tach/fuel sequencing across Departure -> enroute stops ->
+	/// Arrival in one pass — called on load/vehicle-change (so newly-revealed stop
+	/// fields start from a sensible value) and again right before save (so the
+	/// invariant holds no matter what order the pilot filled fields in).
+	private func syncSequentialTripValues() {
+		guard Vertical.current.id == .aviation else { return }
+		syncAscendingChain(hobbsChain())
+		for slot in 1...6 {
+			syncAscendingChain(tachChain(engine: slot))
+		}
+		syncForwardChain(fuelQuantityChain())
+	}
+
+	/// The engine's slot number (1-6) parsed from its `componentName` ("Engine 3" -> 3),
+	/// falling back to array position if that ever doesn't parse. Mirrors EditFuelLog.swift.
+	private func engineSlotNumber(_ engine: ComponentTimes, fallback: Int) -> Int {
+		if let last = engine.componentName.split(separator: " ").last, let n = Int(last), (1...6).contains(n) {
+			return n
+		}
+		return fallback
+	}
+
+	/// Engine count for the per-stop "Fluids Added" section — at least 1 so a single-engine
+	/// aircraft (or one with no ComponentTimes rows yet) still gets a plain "Oil Added" field.
+	private var stopEngineCount: Int {
+		guard Vertical.current.id == .aviation else { return 1 }
+		return max(1, engineComponents.count)
+	}
+
+	/// "Engine 1 (Lycoming O-360)" for the given stop slot, falling back to just the slot
+	/// name when the engine's make hasn't been entered, or it doesn't exist yet.
+	private func stopEngineName(_ slot: Int) -> String {
+		guard let engine = engineComponents.first(where: { engineSlotNumber($0, fallback: 0) == slot }) else {
+			return "Engine \(slot)"
+		}
+		let suffix = engine.make.isEmpty ? "" : " (\(engine.make))"
+		return "\(engine.componentName)\(suffix)"
+	}
+
+	/// Same slot lookup as `stopEngineName`, without the "(manufacturer)" suffix — used for
+	/// Tach labels, which only need "Engine 1", not "Engine 1 (Lycoming O-360)".
+	private func stopEngineNameShort(_ slot: Int) -> String {
+		guard let engine = engineComponents.first(where: { engineSlotNumber($0, fallback: 0) == slot }) else {
+			return "Engine \(slot)"
+		}
+		return engine.componentName
+	}
+
 	private func refreshVehicleDetails() {
 		self.vehicleDetails = functions.loadVehicleDetails(context: modelContext, vehicleId: vehicleId)
+		loadEngineComponents()
+		importCurrentHobbsAndTachIfNeeded()
+		importCurrentFuelIfNeeded()
+		syncSequentialTripValues()
 		// Start each stop's fuel type off at the vehicle's own fuel type. A stop that already
 		// carries a value (typed here or read back from its fuel log) is left alone.
 		let type = vehicleDetails?.fuelType ?? ""
@@ -2924,7 +3908,7 @@ struct EditTripLog: View {
 			.font(.caption2.bold())
 			.foregroundStyle(.white)
 			.frame(width: 20, height: 20)
-			.background(Circle().fill(Color.blue))
+			.background(Circle().fill(Color.accentColor))
 			.offset(x: -8, y: -8)
 	}
 
@@ -2937,9 +3921,232 @@ struct EditTripLog: View {
 	/// Snaps a 0...1 tank ratio to the nearest eighth, matching the dropdown's choices.
 	/// - Note: `Functions.getFuelLevel(unit:)` only labels exact eighths, so a raw ratio
 	///   has to be snapped before it can be turned into a fraction label.
+	/// Writes the per-tank Added and per-engine fluids-added arrays onto a `FuelLog1`'s
+	/// own fuelTankNAdded/oilAddedEngineN/deice/hydraulic/brake fields — shared by
+	/// add_editFuelRecord's update and create branches so the mapping lives in one place.
+	private func applyTankAndFluidsAdded(to record: FuelLog1, tank: [Float], engineOil: [Float], deice: Float, hydraulic: Float, brake: Float, engineTach: [Float]) {
+		record.engineTach = engineTach
+		func value(_ array: [Float], _ index: Int) -> Float { index < array.count ? array[index] : 0 }
+		record.fuelTank1Added = value(tank, 0)
+		record.fuelTank2Added = value(tank, 1)
+		record.fuelTank3Added = value(tank, 2)
+		record.fuelTank4Added = value(tank, 3)
+		record.fuelTank5Added = value(tank, 4)
+		record.fuelTank6Added = value(tank, 5)
+		record.oilAddedEngine1 = value(engineOil, 0)
+		record.oilAddedEngine2 = value(engineOil, 1)
+		record.oilAddedEngine3 = value(engineOil, 2)
+		record.oilAddedEngine4 = value(engineOil, 3)
+		record.oilAddedEngine5 = value(engineOil, 4)
+		record.oilAddedEngine6 = value(engineOil, 5)
+		record.deiceFluidAdded = deice
+		record.hydraulicFluidAdded = hydraulic
+		record.brakeFluidAdded = brake
+	}
+
 	private func nearestFuelEighth(_ ratio: Float) -> Float {
 		let clamped = min(1, max(0, ratio))
 		return (clamped * 8).rounded() / 8
+	}
+
+	// MARK: - Multi-tank fuel (AeroTrax) — trip-level start/end reading, mirrors
+	// EditFuelLog's equivalent helpers exactly, scoped to this view's own tank @State.
+
+	private var vehicleFuelTankCount: Int {
+		guard Vertical.current.id == .aviation else { return 1 }
+		return max(1, min(6, selectedVehicle?.numberOfFuelTanks ?? 1))
+	}
+
+	private func fuelTankName(_ tankNumber: Int) -> String {
+		let raw: String
+		switch tankNumber {
+		case 1: raw = selectedVehicle?.fuelTank1Name ?? ""
+		case 2: raw = selectedVehicle?.fuelTank2Name ?? ""
+		case 3: raw = selectedVehicle?.fuelTank3Name ?? ""
+		case 4: raw = selectedVehicle?.fuelTank4Name ?? ""
+		case 5: raw = selectedVehicle?.fuelTank5Name ?? ""
+		default: raw = selectedVehicle?.fuelTank6Name ?? ""
+		}
+		return raw.isEmpty ? "Tank \(tankNumber)" : raw
+	}
+
+	private func fuelTankCapacity(_ tankNumber: Int) -> Float {
+		switch tankNumber {
+		case 1: return Float(selectedVehicle?.fuelTank1Capacity ?? 0)
+		case 2: return Float(selectedVehicle?.fuelTank2Capacity ?? 0)
+		case 3: return Float(selectedVehicle?.fuelTank3Capacity ?? 0)
+		case 4: return Float(selectedVehicle?.fuelTank4Capacity ?? 0)
+		case 5: return Float(selectedVehicle?.fuelTank5Capacity ?? 0)
+		default: return Float(selectedVehicle?.fuelTank6Capacity ?? 0)
+		}
+	}
+
+	private func tankLevelStartBinding(_ tankNumber: Int) -> Binding<Float> {
+		switch tankNumber {
+		case 1: return $fuelTank1LevelStart1
+		case 2: return $fuelTank2LevelStart1
+		case 3: return $fuelTank3LevelStart1
+		case 4: return $fuelTank4LevelStart1
+		case 5: return $fuelTank5LevelStart1
+		default: return $fuelTank6LevelStart1
+		}
+	}
+
+	private func tankQuantityStartBinding(_ tankNumber: Int) -> Binding<Float> {
+		switch tankNumber {
+		case 1: return $fuelTank1QuantityStart
+		case 2: return $fuelTank2QuantityStart
+		case 3: return $fuelTank3QuantityStart
+		case 4: return $fuelTank4QuantityStart
+		case 5: return $fuelTank5QuantityStart
+		default: return $fuelTank6QuantityStart
+		}
+	}
+
+	private func tankLevelEndBinding(_ tankNumber: Int) -> Binding<Float> {
+		switch tankNumber {
+		case 1: return $fuelTank1LevelEnd1
+		case 2: return $fuelTank2LevelEnd1
+		case 3: return $fuelTank3LevelEnd1
+		case 4: return $fuelTank4LevelEnd1
+		case 5: return $fuelTank5LevelEnd1
+		default: return $fuelTank6LevelEnd1
+		}
+	}
+
+	private func tankQuantityEndBinding(_ tankNumber: Int) -> Binding<Float> {
+		switch tankNumber {
+		case 1: return $fuelTank1QuantityEnd
+		case 2: return $fuelTank2QuantityEnd
+		case 3: return $fuelTank3QuantityEnd
+		case 4: return $fuelTank4QuantityEnd
+		case 5: return $fuelTank5QuantityEnd
+		default: return $fuelTank6QuantityEnd
+		}
+	}
+
+	/// Straight-line (great-circle) distance between the departure and arrival
+	/// coordinates, when both are known — independent of the odometer-based `stats.distance`,
+	/// which aviation never populates (odometer is hidden for that vertical). `nil` until
+	/// both ends have a coordinate, from either a "Use" tap or a resolved airport code.
+	private var departureArrivalDistanceNM: Double? {
+		guard let lat1 = locationStartLat, let lon1 = locationStartLon,
+			  let lat2 = locationEndLat, let lon2 = locationEndLon else { return nil }
+		return AirportDatabase.greatCircleNM(lat1, lon1, lat2, lon2)
+	}
+
+	/// Average groundspeed implied by `departureArrivalDistanceNM` and the departure/
+	/// arrival timestamps — `nil` unless the distance is known and positive and the
+	/// elapsed time is positive (guards the divide and skips showing a speed for a
+	/// same-instant or backwards-dated trip).
+	private var departureArrivalAvgSpeedKts: Double? {
+		guard let distanceNM = departureArrivalDistanceNM, distanceNM > 0 else { return nil }
+		let hours = tripDateTimeEnd.timeIntervalSince(tripDateTimeStart) / 3600.0
+		guard hours > 0 else { return nil }
+		return distanceNM / hours
+	}
+
+	/// One point along the trip — Departure, an active enroute stop, or Destination —
+	/// with the coordinate and times `tripLegs` needs to compute the leg on either side.
+	/// `arrivalTime` ends the leg coming in; `departureTime` starts the leg going out.
+	/// Equal for Departure/Destination themselves (each only has one adjoining leg).
+	private struct TripWaypoint {
+		let label: String
+		let lat: Double?
+		let lon: Double?
+		let arrivalTime: Date
+		let departureTime: Date
+	}
+
+	/// Departure, every *active* enroute stop (matching `hasStopsEnroute`'s own per-stop
+	/// check) in order, then Destination — the backbone `tripLegs` walks pairwise.
+	private var tripWaypoints: [TripWaypoint] {
+		var points = [TripWaypoint(label: "Departure", lat: locationStartLat, lon: locationStartLon, arrivalTime: tripDateTimeStart, departureTime: tripDateTimeStart)]
+		let stops: [(active: Bool, label: String, lat: Double?, lon: Double?, arrival: Date, departure: Date)] = [
+			(dataSet.fuelAdded1 > 0 || !stopReason1.isEmpty, "Stop 1", fuelLocationLat1, fuelLocationLon1, fuelDateTime1, fuelExitTime1),
+			(dataSet.fuelAdded2 > 0 || !stopReason2.isEmpty, "Stop 2", fuelLocationLat2, fuelLocationLon2, fuelDateTime2, fuelExitTime2),
+			(dataSet.fuelAdded3 > 0 || !stopReason3.isEmpty, "Stop 3", fuelLocationLat3, fuelLocationLon3, fuelDateTime3, fuelExitTime3),
+			(dataSet.fuelAdded4 > 0 || !stopReason4.isEmpty, "Stop 4", fuelLocationLat4, fuelLocationLon4, fuelDateTime4, fuelExitTime4),
+			(dataSet.fuelAdded5 > 0 || !stopReason5.isEmpty, "Stop 5", fuelLocationLat5, fuelLocationLon5, fuelDateTime5, fuelExitTime5),
+			(dataSet.fuelAdded6 > 0 || !stopReason6.isEmpty, "Stop 6", fuelLocationLat6, fuelLocationLon6, fuelDateTime6, fuelExitTime6)
+		]
+		for stop in stops where stop.active {
+			points.append(TripWaypoint(label: stop.label, lat: stop.lat, lon: stop.lon, arrivalTime: stop.arrival, departureTime: stop.departure))
+		}
+		points.append(TripWaypoint(label: "Destination", lat: locationEndLat, lon: locationEndLon, arrivalTime: tripDateTimeEnd, departureTime: tripDateTimeEnd))
+		return points
+	}
+
+	private struct TripLeg: Identifiable {
+		var id: String { "\(fromLabel)-\(toLabel)" }
+		let fromLabel: String
+		let toLabel: String
+		let distanceNM: Double?
+		let speedKts: Double?
+	}
+
+	/// Distance/speed for Departure→1st stop, each stop→next stop, and last stop→
+	/// Destination — `nil` distance on a leg missing either endpoint's coordinate; `nil`
+	/// speed additionally when the elapsed time isn't positive.
+	private var tripLegs: [TripLeg] {
+		let points = tripWaypoints
+		guard points.count >= 2 else { return [] }
+		var legs: [TripLeg] = []
+		for i in 0..<(points.count - 1) {
+			let from = points[i]
+			let to = points[i + 1]
+			var distance: Double? = nil
+			if let lat1 = from.lat, let lon1 = from.lon, let lat2 = to.lat, let lon2 = to.lon {
+				distance = AirportDatabase.greatCircleNM(lat1, lon1, lat2, lon2)
+			}
+			var speed: Double? = nil
+			if let distance, distance > 0 {
+				let hours = to.arrivalTime.timeIntervalSince(from.departureTime) / 3600.0
+				if hours > 0 { speed = distance / hours }
+			}
+			legs.append(TripLeg(fromLabel: from.label, toLabel: to.label, distanceNM: distance, speedKts: speed))
+		}
+		return legs
+	}
+
+	/// Sum of every leg's known distance — the actual flown distance via all stops, as
+	/// opposed to `departureArrivalDistanceNM`'s straight line ignoring them. `nil` when
+	/// no leg has a computable distance yet.
+	private var totalLegDistanceNM: Double? {
+		let distances = tripLegs.compactMap { $0.distanceNM }
+		guard !distances.isEmpty else { return nil }
+		return distances.reduce(0, +)
+	}
+
+	/// Binding into one slot of a fixed per-engine tach array (departure/arrival or a
+	/// stop's own) — mirrors LabelDataTextview_Numberpad_Fuel's tankAddedBinding(_:_:).
+	private func tachBinding(_ array: Binding<[Float]>, _ engineNumber: Int) -> Binding<Float> {
+		Binding(
+			get: { engineNumber - 1 < array.wrappedValue.count ? array.wrappedValue[engineNumber - 1] : 0 },
+			set: { newValue in
+				var values = array.wrappedValue
+				while values.count < engineNumber { values.append(0) }
+				values[engineNumber - 1] = newValue
+				array.wrappedValue = values
+			}
+		)
+	}
+
+	/// Multi-tank aircraft only — mirrors EditFuelLog's recomputeAggregateFuelFromTanks:
+	/// reconciles each tank's eighths dropdown to its quantity, then sums the tanks into
+	/// the aggregate fuelQuantityStart/End so the existing single-tank math (economy,
+	/// fuel burned, etc.) keeps working unchanged for a multi-tank aircraft.
+	private func reconcileFuelTanksBeforeSave() {
+		guard vehicleFuelTankCount > 1 else { return }
+		let tanks = 1...vehicleFuelTankCount
+		for tankNumber in tanks {
+			let capacity = fuelTankCapacity(tankNumber)
+			guard capacity > 0 else { continue }
+			tankLevelStartBinding(tankNumber).wrappedValue = nearestFuelEighth(tankQuantityStartBinding(tankNumber).wrappedValue / capacity)
+			tankLevelEndBinding(tankNumber).wrappedValue = nearestFuelEighth(tankQuantityEndBinding(tankNumber).wrappedValue / capacity)
+		}
+		fuelQuantityStart = tanks.reduce(0) { $0 + tankQuantityStartBinding($1).wrappedValue }
+		fuelQuantityEnd = tanks.reduce(0) { $0 + tankQuantityEndBinding($1).wrappedValue }
 	}
 }
 

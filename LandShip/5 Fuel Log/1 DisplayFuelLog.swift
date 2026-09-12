@@ -89,6 +89,8 @@ struct DisplayFuelLog: View {
 	/// Navigation to PDF report with a frozen scope to avoid feedback loops
 	private struct ReportDestination: Hashable { let scope: String }
 	@State private var reportDestination: ReportDestination?
+	/// Fuel Program report navigation — AeroTrax only (Vertical.enabledFeatures.fuelOperations).
+	@State private var programReportDestination: ReportDestination?
 
 	/// Sorting options for the list of fuel logs. Each case maps to one or more `SortDescriptor` values.
 	private enum PartsSort: String, CaseIterable, Identifiable {
@@ -220,6 +222,11 @@ struct DisplayFuelLog: View {
 								return records
 						}
 				}()
+				// Data-quality flags per row — see FuelMath.interval. Computed once per render
+				// rather than per row so the batch loader's one-fetch-per-vehicle cost applies.
+				let fuelFlagsByRecord: [PersistentIdentifier: Set<FuelDataFlag>] = functions
+					.loadFuelIntervalStatsBatch(context: modelContext, logs: filteredRecords)
+					.mapValues { $0.flags }
 				// Empty state encourages the user to create their first fuel log with helpful instructions.
 				if filteredRecords.isEmpty {
 					List {
@@ -251,13 +258,30 @@ struct DisplayFuelLog: View {
 											Text("Date: \(mxDate)")
 												.font(.subheadline)
 												.foregroundStyle(.secondary)
-											Text("Odometer: \(record.odometer)")
-												.font(.subheadline)
-												.foregroundStyle(.secondary)
+											if Vertical.current.visibleFieldGroups.contains(.odometer) {
+												Text("\(Vertical.current.distanceMeterLabel): \(record.odometer)")
+													.font(.subheadline)
+													.foregroundStyle(.secondary)
+											} else {
+												Text("\(Vertical.current.hoursMeterLabel): \(record.engHours.formatted(.number.precision(.fractionLength(1))))")
+													.font(.subheadline)
+													.foregroundStyle(.secondary)
+											}
 											if record.fuelAdded != 0 {
 												Text("Fuel: \(record.fuelAdded.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.fuel)) · \(record.fuelCost.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD"))) · \(record.fuelPrice.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")))/\(unit(UnitIndex.fuel))")
 													.font(.subheadline)
 													.foregroundStyle(.secondary)
+											}
+											if !record.fillTypeRaw.isEmpty {
+												HStack(spacing: 4) {
+													Text(record.fillTypeRaw)
+													if let flags = fuelFlagsByRecord[record.persistentModelID], !flags.isEmpty {
+														Image(systemName: "exclamationmark.triangle.fill")
+															.foregroundStyle(.orange)
+													}
+												}
+												.font(.caption)
+												.foregroundStyle(.secondary)
 											}
 											if record.defAdded != 0 {
 												Text("DEF: \(record.defAdded.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.def)) · \(record.defPrice.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")))/\(unit(UnitIndex.def))")
@@ -299,6 +323,27 @@ struct DisplayFuelLog: View {
 								}
 								.help("Report")
 								.accessibilityLabel("Report")
+							}
+							// Fuel Program report — price/contract trend and fee-waiver misses. AeroTrax only.
+							if Vertical.current.enabledFeatures.contains(.fuelOperations) {
+								ToolbarItem(placement: .automatic) {
+									Button {
+										let frozen = trackVehicleSelected
+										programReportDestination = ReportDestination(scope: frozen)
+									} label: {
+#if os(macOS)
+										Image(systemName: "chart.line.uptrend.xyaxis")
+#else
+										VStack(spacing: 2) {
+										Image(systemName: "chart.line.uptrend.xyaxis")
+										Text("Program")
+											.font(.caption2)
+									}
+#endif
+									}
+									.help("Fuel Program Report")
+									.accessibilityLabel("Fuel Program Report")
+								}
 							}
 							// Sorting menu to choose among predefined sort orders.
 							ToolbarItem(placement: .automatic) {
@@ -366,6 +411,14 @@ struct DisplayFuelLog: View {
 							}
 							if totalDistance > 0 {
 								Text("Distance: \(totalDistance) \(unit(UnitIndex.distance)) · Avg Economy: \(avgEconomy.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.distance))/\(unit(UnitIndex.fuel))")
+								// This aggregate spans first-to-last odometer over total fuel — a coarser
+								// approximation than the per-record full-to-full gating in EditFuelLog.
+								// Flag rather than silently recompute, so the header can't quietly disagree
+								// with the detail screen without saying so.
+								if sortedByDate.contains(where: { !(FuelFillType(rawValue: $0.fillTypeRaw)?.establishesKnownFullPoint ?? true) }) {
+									Text("Includes a partial fill — see individual entries for exact economy.")
+										.foregroundStyle(.orange)
+								}
 							}
 						}
 						.font(.caption)
@@ -389,6 +442,10 @@ struct DisplayFuelLog: View {
 		// so no .id() here — that would reset the user's picker selection on navigation.
 		.navigationDestination(item: $reportDestination) { dest in
 			pdfReportFuel(trackVehicleSelected: dest.scope)
+				.ignoresSafeArea()
+		}
+		.navigationDestination(item: $programReportDestination) { dest in
+			pdfReportFuelProgram(trackVehicleSelected: dest.scope)
 				.ignoresSafeArea()
 		}
 		// After creating a new record, navigate directly to its edit screen in editing mode.

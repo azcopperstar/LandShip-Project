@@ -55,6 +55,7 @@ struct EditParts: View {
 
 	@Environment(\.modelContext) var modelContext
 	@Environment(\.dismiss) private var dismiss
+	@Environment(\.entitlements) private var entitlements
 	let functions: Functions = Functions()
 	// Access settings (units) without storing them in @State
 	let prefsFunc: PrefsFunctions = PrefsFunctions()
@@ -101,6 +102,22 @@ struct EditParts: View {
 
 	@State private var selectedVehicle: Vehicle8?
 	@State private var selectedVendor: Vendors1?
+
+	// Aviation compliance (AeroTrax only, see Vertical.enabledFeatures.partCompliance).
+	// Identity/Approval/Life/Commercial edit through sub-editor sheets rather than inline
+	// fields — this file already has every section written twice (edit + details mode);
+	// see multi-vertical-expansion memory for why that ruled out ~50 more inline fields.
+	@State private var showingIdentitySheet = false
+	@State private var showingApprovalSheet = false
+	@State private var showingLifeSheet = false
+	@State private var showingCommercialSheet = false
+	@State private var installations: [PartInstallation] = []
+	@State private var installationToEdit: PartInstallation?
+	@State private var showingAddInstallation = false
+	@State private var partTimeSnapshot: PartTimeSnapshot?
+	@State private var applicableDirectives: [AirworthinessDirective] = []
+	@State private var showingAddDirective = false
+	@State private var directiveToEdit: AirworthinessDirective?
 
 	@Query private var vehicles: [Vehicle8]
 	@Query private var vendors: [Vendors1]
@@ -260,7 +277,156 @@ struct EditParts: View {
 						HStack{LabelDataTextview(label: "Status", data: $partStatus)}
 					}
 				}
-				
+
+				if Vertical.current.enabledFeatures.contains(.partCompliance) {
+					CardView {
+						VStack(alignment: .leading, spacing: 8) {
+							HStack {
+								SectionText(label: "IDENTITY")
+								Spacer()
+								Button { showingIdentitySheet = true } label: { Image(systemName: "pencil.circle") }
+									.buttonStyle(.plain)
+							}
+							if dataSet.serialNumber.isEmpty && dataSet.nomenclature.isEmpty && dataSet.partClass.isEmpty && dataSet.ataChapter.isEmpty {
+								Text("Not set.").font(.subheadline).foregroundStyle(.secondary)
+							} else {
+								if !dataSet.serialNumber.isEmpty { HStack{LabelDataText(label: "Serial Number", data: dataSet.serialNumber)} }
+								if !dataSet.partClass.isEmpty { HStack{LabelDataText(label: "Part Class", data: dataSet.partClass)} }
+								if !dataSet.ataChapter.isEmpty { HStack{LabelDataText(label: "ATA Chapter", data: dataSet.ataChapter)} }
+							}
+						}
+					}
+					CardView {
+						VStack(alignment: .leading, spacing: 8) {
+							HStack {
+								SectionText(label: "APPROVAL BASIS")
+								Spacer()
+								Button { showingApprovalSheet = true } label: { Image(systemName: "pencil.circle") }
+									.buttonStyle(.plain)
+							}
+							if dataSet.approvalBasis.isEmpty {
+								Text("Not set.").font(.subheadline).foregroundStyle(.secondary)
+							} else {
+								HStack{LabelDataText(label: "Basis", data: dataSet.approvalBasis)}
+								if !dataSet.releaseDocumentType.isEmpty { HStack{LabelDataText(label: "Release Document", data: dataSet.releaseDocumentType)} }
+							}
+						}
+					}
+					CardView {
+						VStack(alignment: .leading, spacing: 8) {
+							HStack {
+								SectionText(label: "LIFE & CONDITION")
+								Spacer()
+								Button { showingLifeSheet = true } label: { Image(systemName: "pencil.circle") }
+									.buttonStyle(.plain)
+							}
+							if let snapshot = partTimeSnapshot {
+								HStack{LabelDataText(label: "TSN", data: "\(snapshot.tsn.formatted(.number.precision(.fractionLength(1)))) hrs")}
+								if snapshot.tso != snapshot.tsn {
+									HStack{LabelDataText(label: "TSO", data: "\(snapshot.tso.formatted(.number.precision(.fractionLength(1)))) hrs")}
+								}
+								if !snapshot.flags.isEmpty {
+									Text(flagsDescription(snapshot.flags))
+										.font(.caption)
+										.foregroundStyle(.orange)
+										.frame(maxWidth: .infinity, alignment: .leading)
+								}
+							}
+							if !dataSet.conditionCode.isEmpty { HStack{LabelDataText(label: "Condition", data: dataSet.conditionCode)} }
+							if !dataSet.limitType.isEmpty { HStack{LabelDataText(label: "Limit Type", data: dataSet.limitType)} }
+						}
+					}
+					CardView {
+						VStack(alignment: .leading, spacing: 8) {
+							HStack {
+								SectionText(label: "COMMERCIAL")
+								Spacer()
+								Button { showingCommercialSheet = true } label: { Image(systemName: "pencil.circle") }
+									.buttonStyle(.plain)
+							}
+							if dataSet.isExchangeUnit {
+								HStack{LabelDataText(label: "Exchange Unit", data: "Yes")}
+							}
+							if dataSet.poNumber.isEmpty && dataSet.invoiceNumber.isEmpty && !dataSet.isExchangeUnit {
+								Text("Not set.").font(.subheadline).foregroundStyle(.secondary)
+							}
+						}
+					}
+					CardView {
+						VStack(alignment: .leading, spacing: 8) {
+							HStack {
+								SectionText(label: "INSTALLATION HISTORY")
+								Spacer()
+								Button {
+									guard entitlements.requestCreate(PartInstallation.self, in: modelContext) else { return }
+									showingAddInstallation = true
+								} label: { Image(systemName: "plus.capsule") }
+							}
+							if installations.isEmpty {
+								Text("Not tracked — record an installation to derive TSN/TSO from aircraft time.")
+									.font(.subheadline)
+									.foregroundStyle(.secondary)
+							} else {
+								ForEach(installations) { installation in
+									HStack(alignment: .top) {
+										VStack(alignment: .leading, spacing: 2) {
+											Text(installation.isInstalled ? "Installed" : "Removed").font(.subheadline).bold()
+											Text("\(Functions().getVehicleDisplayName(vehicleId: installation.vehicleId, context: modelContext))\(installation.position.isEmpty ? "" : " — \(installation.position)")")
+												.font(.caption).foregroundStyle(.secondary)
+											Text("Installed \(functions.formatDate_DDMMMyy(date: installation.installDate))\(installation.removalDate.map { " · Removed \(functions.formatDate_DDMMMyy(date: $0))" } ?? "")")
+												.font(.caption).foregroundStyle(.secondary)
+										}
+										Spacer()
+										Button { installationToEdit = installation } label: { Image(systemName: "pencil.circle").imageScale(.large) }
+											.buttonStyle(.plain)
+									}
+									.padding(.vertical, 4)
+									Divider()
+								}
+							}
+						}
+					}
+					CardView {
+						VStack(alignment: .leading, spacing: 8) {
+							HStack {
+								SectionText(label: "DIRECTIVES & BULLETINS")
+								Spacer()
+								Button {
+									guard entitlements.requestCreate(AirworthinessDirective.self, in: modelContext) else { return }
+									showingAddDirective = true
+								} label: { Image(systemName: "plus.capsule") }
+							}
+							Text("Applies by part number (\(dataSet.partNumber.isEmpty ? "not set" : dataSet.partNumber)) to every aircraft this part is installed on.")
+								.font(.caption)
+								.foregroundStyle(.secondary)
+								.frame(maxWidth: .infinity, alignment: .leading)
+							if applicableDirectives.isEmpty {
+								Text("None recorded for this part number.")
+									.font(.subheadline)
+									.foregroundStyle(.secondary)
+							} else {
+								ForEach(applicableDirectives) { directive in
+									HStack(alignment: .top) {
+										VStack(alignment: .leading, spacing: 2) {
+											Text(directive.adNumber).font(.subheadline).bold()
+											if !directive.title.isEmpty {
+												Text(directive.title).font(.caption).foregroundStyle(.secondary)
+											}
+											Text("Next Due: \(functions.formatDate_DDMMMyy(date: directive.nextDueDate))")
+												.font(.caption).foregroundStyle(.secondary)
+										}
+										Spacer()
+										Button { directiveToEdit = directive } label: { Image(systemName: "pencil.circle").imageScale(.large) }
+											.buttonStyle(.plain)
+									}
+									.padding(.vertical, 4)
+									Divider()
+								}
+							}
+						}
+					}
+				}
+
 				CardView {
 					VStack {
 #if os(macOS)
@@ -272,6 +438,9 @@ struct EditParts: View {
 						HStack {Image_Edit(label: "2", imageData: $image2, imageDescription: $image2Description)}
 						HStack {Image_Edit(label: "3", imageData: $image3, imageDescription: $image3Description)}
 					}
+				}
+				CardView {
+					AttachmentsSection(ownerType: "MxParts1", ownerKey: dataSet.partName)
 				}
 				CardView {
 					VStack {
@@ -305,6 +474,31 @@ struct EditParts: View {
 					supplierWebsite = ""
 				}
 				newSupplierName = ""
+				refreshInstallationData()
+			}
+			.sheet(isPresented: $showingIdentitySheet, onDismiss: refreshInstallationData) {
+				EditPartIdentity(part: dataSet)
+			}
+			.sheet(isPresented: $showingApprovalSheet, onDismiss: refreshInstallationData) {
+				EditPartApproval(part: dataSet)
+			}
+			.sheet(isPresented: $showingLifeSheet, onDismiss: refreshInstallationData) {
+				EditPartLife(part: dataSet)
+			}
+			.sheet(isPresented: $showingCommercialSheet, onDismiss: refreshInstallationData) {
+				EditPartCommercial(part: dataSet)
+			}
+			.sheet(isPresented: $showingAddInstallation, onDismiss: refreshInstallationData) {
+				EditPartInstallation(fixedPartName: dataSet.partName)
+			}
+			.sheet(item: $installationToEdit, onDismiss: refreshInstallationData) { installation in
+				EditPartInstallation(installation: installation, fixedPartName: dataSet.partName)
+			}
+			.sheet(isPresented: $showingAddDirective, onDismiss: refreshInstallationData) {
+				EditAirworthinessDirective(vehicleId: "", fixedPartNumber: dataSet.partNumber)
+			}
+			.sheet(item: $directiveToEdit, onDismiss: refreshInstallationData) { directive in
+				EditAirworthinessDirective(vehicleId: directive.vehicleId, directive: directive)
 			}
 			.frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -504,6 +698,106 @@ struct EditParts: View {
 					}
 				}
 
+				// Aviation compliance summary — hidden when nothing has been recorded, mirroring
+				// how the AD/Inspection Cycle cards in EditVehicle.swift behave in display mode.
+				if Vertical.current.enabledFeatures.contains(.partCompliance) {
+					if hasIdentity {
+						CardView {
+						VStack {
+							SectionText(label: "IDENTITY")
+							if dataSet.serialNumber != "" { HStack{LabelDataText(label: "Serial Number", data: dataSet.serialNumber)} }
+							if dataSet.lotNumber != "" { HStack{LabelDataText(label: "Lot/Batch Number", data: dataSet.lotNumber)} }
+							if dataSet.nomenclature != "" { HStack{LabelDataText(label: "Nomenclature", data: dataSet.nomenclature)} }
+							if dataSet.partClass != "" { HStack{LabelDataText(label: "Part Class", data: dataSet.partClass)} }
+							if dataSet.ataChapter != "" { HStack{LabelDataText(label: "ATA Chapter", data: dataSet.ataChapter)} }
+							if dataSet.alternatePartNumbers != "" { HStack{LabelDataText(label: "Alternate P/Ns", data: dataSet.alternatePartNumbers)} }
+							if dataSet.supersededByPartNumber != "" { HStack{LabelDataText(label: "Superseded By", data: dataSet.supersededByPartNumber)} }
+						}
+						}
+					}
+
+					if dataSet.approvalBasis != "" {
+						CardView {
+						VStack {
+							SectionText(label: "APPROVAL BASIS")
+							HStack{LabelDataText(label: "Basis", data: dataSet.approvalBasis)}
+							if dataSet.releaseDocumentType != "" { HStack{LabelDataText(label: "Release Document", data: dataSet.releaseDocumentType)} }
+							if dataSet.stcNumber != "" { HStack{LabelDataText(label: "STC Number", data: dataSet.stcNumber)} }
+							if dataSet.icaReference != "" { HStack{LabelDataText(label: "ICA Reference", data: dataSet.icaReference)} }
+						}
+						}
+					}
+
+					if let snapshot = partTimeSnapshot, hasLifeData {
+						CardView {
+						VStack {
+							SectionText(label: "LIFE & CONDITION")
+							HStack{LabelDataText(label: "TSN", data: "\(snapshot.tsn.formatted(.number.precision(.fractionLength(1)))) hrs")}
+							if snapshot.tso != snapshot.tsn {
+								HStack{LabelDataText(label: "TSO", data: "\(snapshot.tso.formatted(.number.precision(.fractionLength(1)))) hrs")}
+							}
+							if snapshot.tsr != 0 {
+								HStack{LabelDataText(label: "TSR", data: "\(snapshot.tsr.formatted(.number.precision(.fractionLength(1)))) hrs")}
+							}
+							if !snapshot.flags.isEmpty {
+								Text(flagsDescription(snapshot.flags))
+									.font(.caption)
+									.foregroundStyle(.orange)
+									.frame(maxWidth: .infinity, alignment: .leading)
+							}
+							if dataSet.conditionCode != "" { HStack{LabelDataText(label: "Condition", data: dataSet.conditionCode)} }
+							if dataSet.limitType != "" { HStack{LabelDataText(label: "Limit Type", data: dataSet.limitType)} }
+							if dataSet.shelfLifeExpiry != nil { HStack{LabelDataText(label: "Shelf Life Expiry", data: functions.formatDate_DDMMMyy(date: dataSet.shelfLifeExpiry!))} }
+						}
+						}
+					}
+
+					if hasCommercialData {
+						CardView {
+						VStack {
+							SectionText(label: "COMMERCIAL")
+							if dataSet.poNumber != "" { HStack{LabelDataText(label: "PO Number", data: dataSet.poNumber)} }
+							if dataSet.isExchangeUnit { HStack{LabelDataText(label: "Exchange Unit", data: "Yes")} }
+							if dataSet.coreReturnDueDate != nil { HStack{LabelDataText(label: "Core Due Back", data: functions.formatDate_DDMMMyy(date: dataSet.coreReturnDueDate!))} }
+						}
+						}
+					}
+
+					if !installations.isEmpty {
+						CardView {
+						VStack {
+							SectionText(label: "INSTALLATION HISTORY")
+							ForEach(installations) { installation in
+								VStack(alignment: .leading, spacing: 2) {
+									Text(installation.isInstalled ? "Installed" : "Removed").font(.subheadline).bold()
+									Text("\(Functions().getVehicleDisplayName(vehicleId: installation.vehicleId, context: modelContext))\(installation.position.isEmpty ? "" : " — \(installation.position)")")
+										.font(.caption).foregroundStyle(.secondary)
+								}
+								.padding(.vertical, 4)
+								Divider()
+							}
+						}
+						}
+					}
+
+					if !applicableDirectives.isEmpty {
+						CardView {
+						VStack {
+							SectionText(label: "DIRECTIVES & BULLETINS")
+							ForEach(applicableDirectives) { directive in
+								VStack(alignment: .leading, spacing: 2) {
+									HStack{LabelDataText(label: "Number", data: directive.adNumber)}
+									if !directive.title.isEmpty { HStack{LabelDataText(label: "Title", data: directive.title)} }
+									HStack{LabelDataText(label: "Next Due", data: functions.formatDate_DDMMMyy(date: directive.nextDueDate))}
+								}
+								.padding(.vertical, 2)
+								Divider()
+							}
+						}
+						}
+					}
+				}
+
 				// Hidden when no images are attached
 				if hasGraphics {
 					CardView {
@@ -515,8 +809,13 @@ struct EditParts: View {
 					}
 					}
 				}
+
+				CardView {
+					AttachmentsSection(ownerType: "MxParts1", ownerKey: dataSet.partName)
+				}
 			}
 			.listStyle(.automatic)
+			.onAppear { refreshInstallationData() }
 			.frame(maxWidth: .infinity, maxHeight: .infinity)
 
 			// title area
@@ -573,6 +872,24 @@ struct EditParts: View {
 	/// True when at least one image is attached.
 	private var hasGraphics: Bool {
 		dataSet.image1 != nil || dataSet.image2 != nil || dataSet.image3 != nil
+	}
+
+	// MARK: - Aviation compliance visibility gates (mirror hasPartCosts/hasPartSource above)
+
+	private var hasIdentity: Bool {
+		!(dataSet.serialNumber.isEmpty && dataSet.lotNumber.isEmpty && dataSet.nomenclature.isEmpty
+		  && dataSet.partClass.isEmpty && dataSet.ataChapter.isEmpty && dataSet.alternatePartNumbers.isEmpty
+		  && dataSet.supersededByPartNumber.isEmpty)
+	}
+
+	private var hasLifeData: Bool {
+		!(dataSet.conditionCode.isEmpty && dataSet.limitType.isEmpty && dataSet.shelfLifeExpiry == nil
+		  && dataSet.carryInTSN == 0 && dataSet.carryInTSO == 0)
+	}
+
+	private var hasCommercialData: Bool {
+		!(dataSet.poNumber.isEmpty && dataSet.invoiceNumber.isEmpty && !dataSet.isExchangeUnit
+		  && dataSet.coreReturnDueDate == nil)
 	}
 
 	/// Looks up the `Vendors1` record matching the part's current supplier, so Details mode
@@ -637,6 +954,29 @@ struct EditParts: View {
 
 	/// If the user typed a vehicle system name that doesn't already exist for this
 	/// vehicle, create a new `VehicleSystems1` record so it's available for future selection.
+	/// Reloads this part's installation history and derived time snapshot. Called on
+	/// appear and whenever an Installation sheet dismisses — the snapshot isn't a
+	/// `@Query` since it's computed, not fetched.
+	private func refreshInstallationData() {
+		installations = Functions().loadInstallationHistory(context: modelContext, partName: dataSet.partName)
+		partTimeSnapshot = Functions().loadPartTimeSnapshot(context: modelContext, part: dataSet)
+		applicableDirectives = Functions().loadDirectives(context: modelContext, forPartNumber: dataSet.partNumber)
+	}
+
+	private func flagsDescription(_ flags: Set<PartTimeFlag>) -> String {
+		var lines: [String] = []
+		if flags.contains(.installSnapshotAheadOfMeter) {
+			lines.append("Install meter reading is ahead of the aircraft's current meter — check for a typo.")
+		}
+		if flags.contains(.implausibleAccrual) {
+			lines.append("Accrued time on this install looks unusually high — verify the aircraft meter.")
+		}
+		if flags.contains(.timeBaseMismatch) {
+			lines.append("This limit's time base doesn't match the aircraft's declared meter — remaining life shown is an approximation.")
+		}
+		return lines.joined(separator: " ")
+	}
+
 	private func createSystemIfNeeded() {
 		let name = vehicleSystem.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard !name.isEmpty else { return }
@@ -794,6 +1134,8 @@ struct EditParts: View {
 		if exists(FetchDescriptor<ProjectList>(predicate: #Predicate {
 			$0.part1 == name || $0.part2 == name || $0.part3 == name || $0.part4 == name || $0.part5 == name
 		})) { return true }
+		if exists(FetchDescriptor<PartInstallation>(predicate: #Predicate { $0.partName == name })) { return true }
+		if exists(FetchDescriptor<RecordAttachment>(predicate: #Predicate { $0.ownerType == "MxParts1" && $0.ownerKey == name })) { return true }
 		return false
 	}
 
@@ -823,6 +1165,8 @@ struct EditParts: View {
 		rename(FetchDescriptor<ProjectList>(predicate: #Predicate { $0.part3 == oldName })) { $0.part3 = newName }
 		rename(FetchDescriptor<ProjectList>(predicate: #Predicate { $0.part4 == oldName })) { $0.part4 = newName }
 		rename(FetchDescriptor<ProjectList>(predicate: #Predicate { $0.part5 == oldName })) { $0.part5 = newName }
+		rename(FetchDescriptor<PartInstallation>(predicate: #Predicate { $0.partName == oldName })) { $0.partName = newName }
+		rename(FetchDescriptor<RecordAttachment>(predicate: #Predicate { $0.ownerType == "MxParts1" && $0.ownerKey == oldName })) { $0.ownerKey = newName }
 
 		do {
 			try modelContext.save()
@@ -868,6 +1212,8 @@ private extension EditParts {
 				VehicleSystems1.self,
 				Vendors1.self,
 				MxParts1.self,
+				PartInstallation.self,
+				RecordAttachment.self,
 				configurations: configuration
 	)
 

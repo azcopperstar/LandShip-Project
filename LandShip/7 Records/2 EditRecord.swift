@@ -484,9 +484,11 @@ struct EditRecord: View {
 					VStack {
 						SectionText(label: "SERVICE COMPLETED AT")
 						// Mileage and engine hours at the time of service
-						HStack{LabelDataTextview_Numberpad_Int(label: "\(Vertical.current.primaryMeterLabel) (\(unit(UnitIndex.distance)))", data: $Miles)}
-							.onChange(of: Miles) { _, _ in recomputeTotals() }
-						HStack{LabelDataTextview_Numberpad_Float(label: "Engine Hours", data: $engHours)}
+						if Vertical.current.visibleFieldGroups.contains(.odometer) {
+							HStack{LabelDataTextview_Numberpad_Int(label: "\(Vertical.current.distanceMeterLabel) (\(unit(UnitIndex.distance)))", data: $Miles)}
+								.onChange(of: Miles) { _, _ in recomputeTotals() }
+						}
+						HStack{LabelDataTextview_Numberpad_Float(label: Vertical.current.hoursMeterLabel, data: $engHours)}
 							.onChange(of: engHours) { _, _ in recomputeTotals() }
 						// User-defined numeric tracking field (e.g. Water Gallons). Selecting a
 						// previously used field name auto-fills the unit last used with it.
@@ -952,14 +954,14 @@ struct EditRecord: View {
 						SectionText(label: "SERVICE ITEM & \(Vertical.current.assetSingular.uppercased()) STATS")
 						// Vehicle
 						HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: vehicleId, context: modelContext))}
-						if vehicleCurrentMiles > 0 {
-							HStack{LabelDataText(label: "Current Odometer", data: "\(vehicleCurrentMiles) \(unit(UnitIndex.distance))")}
+						if vehicleCurrentMiles > 0 && Vertical.current.visibleFieldGroups.contains(.odometer) {
+							HStack{LabelDataText(label: "Current \(Vertical.current.distanceMeterLabel)", data: "\(vehicleCurrentMiles) \(unit(UnitIndex.distance))")}
 						}
 						if vehicleCurrentEngHours > 0 {
-							HStack{LabelDataNumber(label: "Current Engine Hours", data: vehicleCurrentEngHours, fractionalLength: 1)}
+							HStack{LabelDataNumber(label: "Current \(Vertical.current.hoursMeterLabel)", data: vehicleCurrentEngHours, fractionalLength: 1)}
 						}
-						if Miles > 0 && vehicleCurrentMiles >= Miles {
-							HStack{LabelDataText(label: "\(Vertical.current.primaryMeterLabel) Since Service", data: "\(milesSinceService) \(unit(UnitIndex.distance))")}
+						if Miles > 0 && vehicleCurrentMiles >= Miles && Vertical.current.visibleFieldGroups.contains(.odometer) {
+							HStack{LabelDataText(label: "\(Vertical.current.distanceMeterLabel) Since Service", data: "\(milesSinceService) \(unit(UnitIndex.distance))")}
 						}
 						if engHours > 0 && vehicleCurrentEngHours >= engHours {
 							HStack{LabelDataNumber(label: "Hours Since Service", data: hoursSinceService, fractionalLength: 1)}
@@ -1212,11 +1214,11 @@ struct EditRecord: View {
 					CardView {
 					VStack {
 						SectionText(label: "SERVICE COMPLETED AT")
-						if dataSet.Miles > 0 {
-							HStack{LabelDataText(label: Vertical.current.primaryMeterLabel, data: "\(dataSet.Miles) \(unit(UnitIndex.distance))")}
+						if dataSet.Miles > 0 && Vertical.current.visibleFieldGroups.contains(.odometer) {
+							HStack{LabelDataText(label: Vertical.current.distanceMeterLabel, data: "\(dataSet.Miles) \(unit(UnitIndex.distance))")}
 						}
 						if dataSet.engHours > 0 {
-							HStack{LabelDataNumber(label: "Engine Hours", data: Float(dataSet.engHours), fractionalLength: 1)}
+							HStack{LabelDataNumber(label: Vertical.current.hoursMeterLabel, data: Float(dataSet.engHours), fractionalLength: 1)}
 						}
 						if !dataSet.customMeasureLabel.isEmpty {
 							HStack{LabelDataText(label: dataSet.customMeasureLabel, data: "\(dataSet.customMeasureValue.formatted(.number.precision(.fractionLength(1)))) \(dataSet.customMeasureUnit)")}

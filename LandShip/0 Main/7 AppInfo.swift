@@ -28,30 +28,68 @@ enum AppInfo {
 
 // Custom title view that shows app name and version (version in smaller font)
 struct AppTitleView: View {
+	// Set by CloudKitSyncMonitor when a real sync failure is logged; cleared when
+	// Debug Tools is opened. See StorageKey.hasUnreadCloudKitFailure.
+	@AppStorage(StorageKey.hasUnreadCloudKitFailure) private var hasUnreadCloudKitFailure = false
+
 	var body: some View {
 #if os(macOS)
-		// The Liquid Glass toolbar pill only has room for a single line, so name and
-		// version sit side by side here rather than stacked like on iOS.
-		HStack(alignment: .firstTextBaseline, spacing: 6) {
+		VStack(spacing: 0) {
 			Text(AppInfo.displayName)
-				.font(.headline.bold())
+				.font(.subheadline.bold())
 				.foregroundStyle(Color.accentColor)
 			Text(VersionStrings.fullVersionString)
 				.font(.caption2)
+				.fontWeight(.medium)
 				.foregroundStyle(.secondary)
 		}
+		.padding(.horizontal, 10)
 		.padding(.vertical, 4)
+		.background(
+			Capsule(style: .continuous)
+				.fill(Color.accentColor.opacity(0.14))
+				.overlay(
+					Capsule(style: .continuous)
+						.strokeBorder(Color.accentColor.opacity(0.3), lineWidth: 1)
+				)
+		)
+		.shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+		.overlay(alignment: .topTrailing) { syncFailureBadge }
 #else
 		VStack(spacing: 0) {
-			Text(" \(AppInfo.displayName)")
-				.font(.headline.bold())
+			Text(AppInfo.displayName)
+				.font(.subheadline.bold())
 				.foregroundStyle(Color.accentColor)
 			Text(VersionStrings.fullVersionString)
 				.font(.caption2)
+				.fontWeight(.medium)
 				.foregroundStyle(.secondary)
-				.baselineOffset(6)
 		}
+		.padding(.horizontal, 10)
+		.padding(.vertical, 4)
+		.background(
+			Capsule(style: .continuous)
+				.fill(Color.accentColor.opacity(0.14))
+				.overlay(
+					Capsule(style: .continuous)
+						.strokeBorder(Color.accentColor.opacity(0.3), lineWidth: 1)
+				)
+		)
+		.shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+		.overlay(alignment: .topTrailing) { syncFailureBadge }
 #endif
+	}
+
+	@ViewBuilder
+	private var syncFailureBadge: some View {
+		if hasUnreadCloudKitFailure {
+			Circle()
+				.fill(.red)
+				.frame(width: 9, height: 9)
+				.overlay(Circle().strokeBorder(.white, lineWidth: 1))
+				.offset(x: 4, y: -4)
+				.accessibilityLabel("Unread CloudKit sync failure logged")
+		}
 	}
 }
 

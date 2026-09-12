@@ -63,7 +63,7 @@ struct SectionText: View {
 	var body: some View {
 		Text(label)
 			.font(.system(size: 15, weight: .black, design: .rounded))
-			.foregroundColor(.blue)
+			.foregroundColor(.accentColor)
 			.frame(maxWidth: .infinity, alignment: .center)
 	}
 }
@@ -79,7 +79,7 @@ struct SectionBanner: View {
 			.foregroundColor(.white)
 			.frame(maxWidth: .infinity, alignment: .center)
 			.padding(.vertical, 5)
-			.background(Color.blue.opacity(0.85), in: RoundedRectangle(cornerRadius: 6))
+			.background(Color.accentColor.opacity(0.85), in: RoundedRectangle(cornerRadius: 6))
 			.padding(.top, 6)
 			.accessibilityAddTraits(.isHeader)
 	}

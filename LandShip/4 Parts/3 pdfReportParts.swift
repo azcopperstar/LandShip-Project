@@ -140,7 +140,14 @@ struct pdfReportParts: View {
 			"System", "Part Name", "Part Number", "Manufacturer", "Description", "Notes",
 			"Cost Per Unit", "Unit", "Source", "Quantity", "Location", "Status", "Supplier",
 			"Inventory Tracked", "Qty On Hand", "Reorder Point", "Reorder Quantity",
-			"Image 1 Description", "Image 2 Description", "Image 3 Description"
+			"Image 1 Description", "Image 2 Description", "Image 3 Description",
+			"Serial Number", "Lot/Batch Number", "Nomenclature", "ATA Chapter", "Alternate P/Ns", "Superseded By", "Part Class",
+			"Approval Basis", "Release Document Type", "STC Number", "Owner-Produced Justification", "Source Traceability", "ICA Reference",
+			"Limit Type", "Limit Hours", "Limit Cycles", "Limit Calendar Months", "Limit Time Base", "Maintenance Program",
+			"Carry-In TSN", "Carry-In CSN", "Carry-In TSO", "Carry-In CSO", "Carry-In TSR",
+			"Condition Code", "Shelf Life Expiry", "Cure Date", "Quarantine Notes", "Storage Requirements",
+			"PO Number", "Invoice Number", "Warranty Expiry Date", "Warranty Expiry Hours",
+			"Exchange Unit", "Core Return Due Date", "Core Returned Date", "Core Deposit Amount"
 		]
 		let rows: [[String]] = parts.map { p in
 			let vehicleName = p.vehicleId.isEmpty ? "" : functions.getVehicleDisplayName(vehicleId: p.vehicleId, context: modelContext)
@@ -149,7 +156,14 @@ struct pdfReportParts: View {
 				p.vehicleSystem, p.partName, p.partNumber, p.partManufacture, p.partDescription, p.Notes,
 				CSVField.float(p.costPerUnit), p.partUnit, p.partSource, CSVField.int(p.partQuantity), p.partLocation, p.partStatus, p.partSupplier,
 				CSVField.bool(p.inventoryTracked), CSVField.float(p.inventoryQuantityOnHand), CSVField.float(p.inventoryReorderPoint), CSVField.float(p.inventoryReorderQuantity),
-				p.image1Description, p.image2Description, p.image3Description
+				p.image1Description, p.image2Description, p.image3Description,
+				p.serialNumber, p.lotNumber, p.nomenclature, p.ataChapter, p.alternatePartNumbers, p.supersededByPartNumber, p.partClass,
+				p.approvalBasis, p.releaseDocumentType, p.stcNumber, p.ownerProducedJustification, p.sourceTraceability, p.icaReference,
+				p.limitType, CSVField.float(p.limitHours), CSVField.int(p.limitCycles), CSVField.int(p.limitCalendarMonths), p.limitTimeBase, p.maintenanceProgram,
+				CSVField.float(p.carryInTSN), CSVField.int(p.carryInCSN), CSVField.float(p.carryInTSO), CSVField.int(p.carryInCSO), CSVField.float(p.carryInTSR),
+				p.conditionCode, p.shelfLifeExpiry.map(CSVField.date) ?? "", p.cureDate.map(CSVField.date) ?? "", p.quarantineNotes, p.storageRequirements,
+				p.poNumber, p.invoiceNumber, p.warrantyExpiryDate.map(CSVField.date) ?? "", CSVField.float(p.warrantyExpiryHours),
+				CSVField.bool(p.isExchangeUnit), p.coreReturnDueDate.map(CSVField.date) ?? "", p.coreReturnedDate.map(CSVField.date) ?? "", CSVField.float(p.coreDepositAmount)
 			]
 		}
 		return CSVBuilder.build(headers: headers, rows: rows)
@@ -208,7 +222,7 @@ struct pdfReportParts: View {
 		let subtitle = "\(scopeTitle) • \(functions.formatDate_DDMMMyy(date: Date())) • \(parts.count) \(partWord)"
 
 		let summary = partsSummary(parts)
-		return PDFReportRenderer.render(title: "Parts Inventory Report", subtitle: subtitle, columns: columns, rows: rows, summary: summary, style: .standard)
+		return PDFReportRenderer.render(title: "Parts Inventory Report", subtitle: subtitle, columns: columns, rows: rows, summary: summary, footerNote: Vertical.current.regulatoryDisclaimer, style: .standard)
 	}
 
 	private func partsSummary(_ parts: [MxParts1]) -> PDFReportSummary {

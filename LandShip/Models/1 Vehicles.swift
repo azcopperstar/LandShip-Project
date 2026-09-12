@@ -25,6 +25,10 @@ class Vehicle8	{
 	var engineSerialNumber: String = ""
 	var transmissionSerialNumber: String = ""
 	var fuelType: String = ""
+	// Land-vehicle-only (Vertical.current.id == .land): the hydraulic fluid spec the
+	// vehicle takes (e.g. "ISO 32", "Dexron VI") and the system's fill capacity.
+	var hydraulicFluidType: String = ""
+	var hydraulicFluidCapacity: Int = 0
 	var doors: Int = 0
 	var seats: Int = 0
 	var cargoSpace: Int = 0
@@ -42,6 +46,23 @@ class Vehicle8	{
 	var uvw: Int = 0
 	var ccc: Int = 0
 	var fuelCapacity: Int = 0
+	// Per-tank capacities for aircraft with multiple fuel tanks (AeroTrax). `numberOfFuelTanks`
+	// (1-6) controls how many of these are shown/required in the editor; `fuelCapacity` above
+	// is kept in sync as the sum of tank1...tankN so existing fuel-level math elsewhere
+	// (EditFuelLog, EditTripLog) keeps working unchanged for aviation vehicles.
+	var numberOfFuelTanks: Int = 1
+	var fuelTank1Capacity: Int = 0
+	var fuelTank2Capacity: Int = 0
+	var fuelTank3Capacity: Int = 0
+	var fuelTank4Capacity: Int = 0
+	var fuelTank5Capacity: Int = 0
+	var fuelTank6Capacity: Int = 0
+	var fuelTank1Name: String = ""
+	var fuelTank2Name: String = ""
+	var fuelTank3Name: String = ""
+	var fuelTank4Name: String = ""
+	var fuelTank5Name: String = ""
+	var fuelTank6Name: String = ""
 	var defCapacity: Int = 0
 	var waterCapacity: Int = 0
 	var grayCapacity: Int = 0
@@ -87,6 +108,16 @@ class Vehicle8	{
 	var scaleWeightTagAxle: Int = 0
 	var scaleWeightTrailerAxle: Int = 0
 	var sortOrder: Int = 0
+	var numberOfEngines: Int = 1
+
+	// What `engHours` means — PartTimeBase rawValue, e.g. "Hobbs Time". Declared once per
+	// aircraft so derived part-life math can disclose which meter it used. Empty string
+	// means undeclared (pre-existing rows, or land/marine which don't use this).
+	var hoursMeterType: String = ""
+	// Cycles (landings) accrued before this vehicle was entered into the app. Aircraft
+	// cycles are derived by summing this plus TripLog2.landings — never a high-water mark,
+	// since a landing count is an increment, not a meter reading. See PartTimeMath.swift.
+	var cyclesAtEntry: Int = 0
 
 	// MARK: - Linked Vehicle Records
 	// Allows multiple Vehicle8 records to represent different aspects of the same physical
@@ -156,6 +187,8 @@ class Vehicle8	{
 			 engineSerialNumber: String = "",
 			 transmissionSerialNumber: String = "",
 			 fuelType: String = "",
+			 hydraulicFluidType: String = "",
+			 hydraulicFluidCapacity: Int = 0,
 			 doors: Int = 0,
 			 seats: Int = 0,
 			 cargoSpace: Int = 0,
@@ -173,6 +206,19 @@ class Vehicle8	{
 				uvw: Int = 0,
 				ccc: Int = 0,
 			 fuelCapacity: Int = 0,
+			 numberOfFuelTanks: Int = 1,
+			 fuelTank1Capacity: Int = 0,
+			 fuelTank2Capacity: Int = 0,
+			 fuelTank3Capacity: Int = 0,
+			 fuelTank4Capacity: Int = 0,
+			 fuelTank5Capacity: Int = 0,
+			 fuelTank6Capacity: Int = 0,
+			 fuelTank1Name: String = "",
+			 fuelTank2Name: String = "",
+			 fuelTank3Name: String = "",
+			 fuelTank4Name: String = "",
+			 fuelTank5Name: String = "",
+			 fuelTank6Name: String = "",
 			 defCapacity: Int = 0,
 			waterCapacity: Int = 0,
 				grayCapacity: Int = 0,
@@ -219,6 +265,9 @@ class Vehicle8	{
 			 scaleWeightTagAxle: Int = 0,
 			 scaleWeightTrailerAxle: Int = 0,
 			 sortOrder: Int = 0,
+			 numberOfEngines: Int = 1,
+			 hoursMeterType: String = "",
+			 cyclesAtEntry: Int = 0,
 
 			 linkedMasterVehicleId: String = "",
 			 vehicleAspect: String = "",
@@ -246,6 +295,8 @@ class Vehicle8	{
 		self.engineSerialNumber = engineSerialNumber
 		self.transmissionSerialNumber = transmissionSerialNumber
 		self.fuelType = fuelType
+		self.hydraulicFluidType = hydraulicFluidType
+		self.hydraulicFluidCapacity = hydraulicFluidCapacity
 		self.doors = doors
 		self.seats = seats
 		self.cargoSpace = cargoSpace
@@ -263,6 +314,19 @@ class Vehicle8	{
 		self.uvw = uvw
 		self.ccc = ccc
 		self.fuelCapacity = fuelCapacity
+		self.numberOfFuelTanks = numberOfFuelTanks
+		self.fuelTank1Capacity = fuelTank1Capacity
+		self.fuelTank2Capacity = fuelTank2Capacity
+		self.fuelTank3Capacity = fuelTank3Capacity
+		self.fuelTank4Capacity = fuelTank4Capacity
+		self.fuelTank5Capacity = fuelTank5Capacity
+		self.fuelTank6Capacity = fuelTank6Capacity
+		self.fuelTank1Name = fuelTank1Name
+		self.fuelTank2Name = fuelTank2Name
+		self.fuelTank3Name = fuelTank3Name
+		self.fuelTank4Name = fuelTank4Name
+		self.fuelTank5Name = fuelTank5Name
+		self.fuelTank6Name = fuelTank6Name
 		self.defCapacity = defCapacity
 		self.waterCapacity = waterCapacity
 		self.grayCapacity = grayCapacity
@@ -309,6 +373,9 @@ class Vehicle8	{
 		self.scaleWeightTagAxle = scaleWeightTagAxle
 		self.scaleWeightTrailerAxle = scaleWeightTrailerAxle
 		self.sortOrder = sortOrder
+		self.numberOfEngines = numberOfEngines
+		self.hoursMeterType = hoursMeterType
+		self.cyclesAtEntry = cyclesAtEntry
 
 		self.linkedMasterVehicleId = linkedMasterVehicleId
 		self.vehicleAspect = vehicleAspect

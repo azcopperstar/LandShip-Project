@@ -876,7 +876,7 @@ struct EditItems: View {
 							HStack{LabelDataText(label: "Service Item", data: mxName.isEmpty ? dataSet.mxName : mxName)}
 							if intervalMiles > 0 {
 								HStack{LabelDataText(label: "Interval (Miles)", data: "\(intervalMiles) \(unit(UnitIndex.distance))")}
-								HStack{LabelDataText(label: "Remaining \(Vertical.current.primaryMeterLabel)", data: "\(max(0, milesRemainingToDue)) \(unit(UnitIndex.distance))")}
+								HStack{LabelDataText(label: "Remaining \(Vertical.current.distanceMeterLabel)", data: "\(max(0, milesRemainingToDue)) \(unit(UnitIndex.distance))")}
 							}
 							if intervalHours > 0 {
 								HStack{LabelDataNumber(label: "Interval (Hours)", data: intervalHours, fractionalLength: 1)}
@@ -1273,7 +1273,7 @@ struct EditItems: View {
 							HStack{LabelDataText(label: "Service Item", data: dataSet.mxName)}
 							if dataSet.intervalMiles > 0 {
 								HStack{LabelDataText(label: "Interval (Miles)", data: "\(dataSet.intervalMiles) \(unit(UnitIndex.distance))")}
-								HStack{LabelDataText(label: "Remaining \(Vertical.current.primaryMeterLabel)", data: "\(max(0, milesRemainingToDue)) \(unit(UnitIndex.distance))")}
+								HStack{LabelDataText(label: "Remaining \(Vertical.current.distanceMeterLabel)", data: "\(max(0, milesRemainingToDue)) \(unit(UnitIndex.distance))")}
 							}
 							if dataSet.intervalHours > 0 {
 								HStack{LabelDataNumber(label: "Interval (Hours)", data: dataSet.intervalHours, fractionalLength: 1)}

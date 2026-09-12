@@ -79,6 +79,7 @@ struct DisplayParts: View {
     /// Navigation to PDF report with a frozen scope to avoid feedback loops
     private struct ReportDestination: Hashable { let scope: String }
     @State private var reportDestination: ReportDestination?
+    @State private var complianceReportDestination: ReportDestination?
 
     /// Holds a newly-created record to trigger programmatic navigation into editing.
     @State private var newRecordToEdit: MxParts1?
@@ -289,6 +290,26 @@ struct DisplayParts: View {
                                     .help("Report")
                                     .accessibilityLabel("Report")
                                 }
+                                if Vertical.current.enabledFeatures.contains(.partCompliance) {
+                                ToolbarItem(placement: .automatic) {
+                                    Button {
+                                        let frozen = trackVehicleSelected
+                                        complianceReportDestination = ReportDestination(scope: frozen)
+                                    } label: {
+#if os(macOS)
+                                        Image(systemName: "checkmark.shield")
+#else
+                                        VStack(spacing: 2) {
+                                            Image(systemName: "checkmark.shield")
+                                            Text("Compliance")
+                                                .font(.caption2)
+                                        }
+#endif
+                                    }
+                                    .help("Parts Compliance Report")
+                                    .accessibilityLabel("Parts Compliance Report")
+                                }
+                                }
                                 ToolbarItem(placement: .automatic) {
                                     Menu {
                                         Picker("Sort by", selection: $selectedSort) {
@@ -365,6 +386,10 @@ struct DisplayParts: View {
                     pdfReportParts(trackVehicleSelected: dest.scope)
                         .ignoresSafeArea()
                 }
+                .navigationDestination(item: $complianceReportDestination) { dest in
+                    pdfReportPartsCompliance(trackVehicleSelected: dest.scope)
+                        .ignoresSafeArea()
+                }
                 // Programmatic navigation when a new record is created and assigned.
                 .navigationDestination(item: $newRecordToEdit) { item in
                     EditParts(mxParts: item, startEditing: true)
@@ -376,6 +401,10 @@ struct DisplayParts: View {
                 // so no .id() here — that would reset the user's picker selection on navigation.
                 .navigationDestination(item: $reportDestination) { dest in
                     pdfReportParts(trackVehicleSelected: dest.scope)
+                        .ignoresSafeArea()
+                }
+                .navigationDestination(item: $complianceReportDestination) { dest in
+                    pdfReportPartsCompliance(trackVehicleSelected: dest.scope)
                         .ignoresSafeArea()
                 }
                 // Fallback hidden NavigationLink to push EditParts when creating a new record.

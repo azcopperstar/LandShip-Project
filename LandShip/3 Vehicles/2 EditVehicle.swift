@@ -105,6 +105,8 @@ struct EditVehicle: View {
 	@State private var engineSerialNumber: String = ""
 	@State private var transmissionSerialNumber: String = ""
 	@State private var fuelType: String = ""
+	@State private var hydraulicFluidType: String = ""
+	@State private var hydraulicFluidCapacity: Int = 0
 	@State private var doors: Int = 0
 	@State private var seats: Int = 0
 	@State private var cargoSpace: Int = 0
@@ -123,6 +125,20 @@ struct EditVehicle: View {
 	@State private var ccc: Int = 0
 	
 	@State private var fuelCapacity: Int = 0
+	@State private var numberOfFuelTanks: Int = 1
+	@State private var fuelTank1Capacity: Int = 0
+	@State private var fuelTank2Capacity: Int = 0
+	@State private var fuelTank3Capacity: Int = 0
+	@State private var fuelTank4Capacity: Int = 0
+	@State private var fuelTank5Capacity: Int = 0
+	@State private var fuelTank6Capacity: Int = 0
+	@State private var fuelTank1Name: String = ""
+	@State private var fuelTank2Name: String = ""
+	@State private var fuelTank3Name: String = ""
+	@State private var fuelTank4Name: String = ""
+	@State private var fuelTank5Name: String = ""
+	@State private var fuelTank6Name: String = ""
+	@State private var fuelTankValidationError: String? = nil
 	@State private var defCapacity: Int = 0
 	@State private var waterCapacity: Int = 0
 	@State private var grayCapacity: Int = 0
@@ -162,15 +178,19 @@ struct EditVehicle: View {
 	@State private var showingAddScaleTicket: Bool = false
 	@State private var scaleTicketToEdit: VehicleScaleTicket? = nil
 
-	@State private var airworthinessDirectives: [AirworthinessDirective] = []
+	@State private var airworthinessDirectives: [ResolvedDirective] = []
 	@State private var adToEdit: AirworthinessDirective? = nil
 	@State private var showingAddAD: Bool = false
+	@State private var installedParts: [PartInstallation] = []
+	@State private var installedPartToEdit: PartInstallation? = nil
+	@State private var showingAddInstalledPart: Bool = false
 	@State private var inspectionCycles: [InspectionCycle] = []
 	@State private var inspectionToEdit: InspectionCycle? = nil
 	@State private var showingAddInspection: Bool = false
 	@State private var componentTimesList: [ComponentTimes] = []
 	@State private var componentToEdit: ComponentTimes? = nil
 	@State private var showingAddComponent: Bool = false
+	@State private var numberOfEngines: Int = 1
 	@State private var showingRegulatoryReport: Bool = false
 
 	@State private var haulOutRecords: [HaulOutRecord] = []
@@ -256,7 +276,10 @@ struct EditVehicle: View {
 		self._engine = State.init(initialValue: dataSet.engine)
 		self._engineSerialNumber = State.init(initialValue: dataSet.engineSerialNumber)
 		self._transmissionSerialNumber = State.init(initialValue: dataSet.transmissionSerialNumber)
+		self._numberOfEngines = State.init(initialValue: max(1, dataSet.numberOfEngines))
 		self._fuelType = State.init(initialValue: dataSet.fuelType)
+		self._hydraulicFluidType = State.init(initialValue: dataSet.hydraulicFluidType)
+		self._hydraulicFluidCapacity = State.init(initialValue: dataSet.hydraulicFluidCapacity)
 		self._doors = State.init(initialValue: dataSet.doors)
 		self._seats = State.init(initialValue: dataSet.seats)
 		self._cargoSpace = State.init(initialValue: dataSet.cargoSpace)
@@ -274,6 +297,19 @@ struct EditVehicle: View {
 		self._uvw = State.init(initialValue: dataSet.uvw)
 		self._ccc = State.init(initialValue: dataSet.ccc)
 		self._fuelCapacity = State.init(initialValue: dataSet.fuelCapacity)
+		self._numberOfFuelTanks = State.init(initialValue: max(1, dataSet.numberOfFuelTanks))
+		self._fuelTank1Capacity = State.init(initialValue: dataSet.fuelTank1Capacity)
+		self._fuelTank2Capacity = State.init(initialValue: dataSet.fuelTank2Capacity)
+		self._fuelTank3Capacity = State.init(initialValue: dataSet.fuelTank3Capacity)
+		self._fuelTank4Capacity = State.init(initialValue: dataSet.fuelTank4Capacity)
+		self._fuelTank5Capacity = State.init(initialValue: dataSet.fuelTank5Capacity)
+		self._fuelTank6Capacity = State.init(initialValue: dataSet.fuelTank6Capacity)
+		self._fuelTank1Name = State.init(initialValue: dataSet.fuelTank1Name)
+		self._fuelTank2Name = State.init(initialValue: dataSet.fuelTank2Name)
+		self._fuelTank3Name = State.init(initialValue: dataSet.fuelTank3Name)
+		self._fuelTank4Name = State.init(initialValue: dataSet.fuelTank4Name)
+		self._fuelTank5Name = State.init(initialValue: dataSet.fuelTank5Name)
+		self._fuelTank6Name = State.init(initialValue: dataSet.fuelTank6Name)
 		self._defCapacity = State.init(initialValue: dataSet.defCapacity)
 		self._waterCapacity = State.init(initialValue: dataSet.waterCapacity)
 		self._grayCapacity = State.init(initialValue: dataSet.grayCapacity)
@@ -340,10 +376,12 @@ struct EditVehicle: View {
 	/// True when any mechanical field has data.
 	private var hasMechanicalDetails: Bool {
 		!(dataSet.fuelType.isEmpty
+		  && dataSet.hydraulicFluidType.isEmpty
 		  && dataSet.engine.isEmpty
 		  && dataSet.transmission.isEmpty
 		  && dataSet.engineSerialNumber.isEmpty
-		  && dataSet.transmissionSerialNumber.isEmpty)
+		  && dataSet.transmissionSerialNumber.isEmpty
+		  && componentTimesList.isEmpty)
 	}
 
 	/// True when any usage/occupancy figure was entered.
@@ -399,6 +437,41 @@ struct EditVehicle: View {
 			|| dataSet.waterCapacity > 0
 			|| dataSet.grayCapacity > 0
 			|| dataSet.blackCapacity > 0
+			|| dataSet.hydraulicFluidCapacity > 0
+	}
+
+	/// Binding to the @State fuel tank capacity matching `tankNumber` (1-6).
+	private func fuelTankCapacityBinding(_ tankNumber: Int) -> Binding<Int> {
+		switch tankNumber {
+			case 1: return $fuelTank1Capacity
+			case 2: return $fuelTank2Capacity
+			case 3: return $fuelTank3Capacity
+			case 4: return $fuelTank4Capacity
+			case 5: return $fuelTank5Capacity
+			default: return $fuelTank6Capacity
+		}
+	}
+
+	/// Sum of the capacities for the currently selected number of fuel tanks.
+	private var totalFuelTankCapacity: Int {
+		(1...numberOfFuelTanks).reduce(0) { $0 + fuelTankCapacityBinding($1).wrappedValue }
+	}
+
+	/// Binding to the @State fuel tank name matching `tankNumber` (1-6).
+	private func fuelTankNameBinding(_ tankNumber: Int) -> Binding<String> {
+		switch tankNumber {
+			case 1: return $fuelTank1Name
+			case 2: return $fuelTank2Name
+			case 3: return $fuelTank3Name
+			case 4: return $fuelTank4Name
+			case 5: return $fuelTank5Name
+			default: return $fuelTank6Name
+		}
+	}
+
+	/// The tank's custom name if one was entered, otherwise a generic "Tank N" fallback.
+	private func fuelTankDisplayName(_ tankNumber: Int, _ customName: String) -> String {
+		customName.isEmpty ? "Tank \(tankNumber)" : customName
 	}
 
 	/// True when any insurance field has data.
@@ -472,7 +545,127 @@ struct EditVehicle: View {
 						HStack{LabelDataTextview(label: Vertical.current.plateLabel, data: $licensePlate)}
 					}
 				}
-			
+
+				CardView {
+					VStack {
+						SectionText(label: "\(Vertical.current.assetSingular.uppercased()) DETAILS")
+						if Vertical.current.id == .land {
+							if linkedSyncFields.contains(.odometer), let master = masterVehicle {
+								HStack{LabelDataText(label: "Odometer (synced w/ master)", data: "\(master.mileage) \(unit(UnitIndex.distance))")}
+							} else {
+								HStack{LabelDataTextview_Numberpad_Int(label: "Odometer", data: $mileage)}
+								HStack{LabelDataTextview_Numberpad_Int(label: "Odometer (Virtual)", data: $mileageVirtual)}
+							}
+						}
+						if linkedSyncFields.contains(.engineHours), let master = masterVehicle {
+							HStack{LabelDataText(label: "\(Vertical.current.hoursMeterLabel) (synced w/ master)", data: "\(master.engHours) hrs")}
+						} else {
+							HStack{LabelDataTextview_Numberpad_Float(label: Vertical.current.hoursMeterLabel, data: $engHours)}
+						}
+						HStack{LabelDataTextview_Numberpad_Int(label: "Doors", data: $doors)}
+						HStack{LabelDataTextview_Numberpad_Int(label: "Seats", data: $seats)}
+					}
+				}
+
+				
+				CardView {
+					VStack {
+						SectionText(label: "MECHANICAL DETAILS")
+						HStack{
+							Text("Fuel Type")
+								.textLabelModified()
+							Picker("", selection: $fuelType) {
+								FuelTypePickerOptions(currentValue: fuelType)
+							}
+							.pickerStyle(.automatic)
+							.frame(maxWidth: .infinity, alignment: .trailing)
+						}
+						FuelTypePickerNote()
+						if Vertical.current.id != .aviation {
+							HStack{LabelDataTextview(label: "Engine", data: $engine)}
+							HStack{LabelDataTextview(label: "Engine Serial #", data: $engineSerialNumber)}
+							HStack{LabelDataTextview(label: "Transmission", data: $transmission)}
+						}
+						HStack{
+							Text("Hydraulic Fluid Type")
+								.textLabelModified()
+							Picker("", selection: $hydraulicFluidType) {
+								HydraulicFluidTypePickerOptions(currentValue: hydraulicFluidType)
+							}
+							.pickerStyle(.automatic)
+							.frame(maxWidth: .infinity, alignment: .trailing)
+						}
+						HydraulicFluidTypePickerNote()
+						if Vertical.current.enabledFeatures.contains(.componentTimes) {
+							HStack {
+								Text("Number of Engines")
+									.textLabelModified()
+								Picker("", selection: $numberOfEngines) {
+									ForEach(1...6, id: \.self) { count in
+										Text("\(count)").tag(count)
+									}
+								}
+								.pickerStyle(.automatic)
+								.frame(maxWidth: .infinity, alignment: .trailing)
+								.onChange(of: numberOfEngines) { _, newCount in
+									syncEngineSlots(to: newCount)
+								}
+							}
+							VStack(alignment: .leading, spacing: 8) {
+								HStack {
+									SectionText(label: "COMPONENT DATA")
+									Spacer()
+									Button {
+										guard entitlements.requestCreate(ComponentTimes.self, in: modelContext) else { return }
+										showingAddComponent = true
+									} label: {
+										Image(systemName: "plus.capsule")
+									}
+								}
+								Text("Enter engine, airframe, and propeller data.")
+									.font(.caption)
+									.foregroundStyle(.secondary)
+								if componentTimesList.isEmpty {
+									Text("No component times recorded.")
+										.font(.subheadline)
+										.foregroundStyle(.secondary)
+								} else {
+									ForEach(componentTimesList) { comp in
+										HStack(alignment: .top) {
+											VStack(alignment: .leading, spacing: 2) {
+												Text(comp.componentName).font(.subheadline).bold()
+												if comp.componentType == "Engine" {
+													Text("Engine — \(comp.make.isEmpty ? "Make N/A" : comp.make) • \(comp.horsepower, specifier: "%.0f") HP • S/N \(comp.serialNumber.isEmpty ? "N/A" : comp.serialNumber) • \(effectiveTotalTime(comp), specifier: "%.1f") hrs")
+														.font(.caption).foregroundStyle(.secondary)
+													if !comp.derivesFromMeter, comp.currentTachTime > 0 {
+														Text("Tach: \(comp.currentTachTime, specifier: "%.1f") hrs")
+															.font(.caption2).foregroundStyle(.secondary)
+													}
+												} else {
+													Text("\(comp.componentType) — TT \(effectiveTotalTime(comp), specifier: "%.1f")")
+														.font(.caption).foregroundStyle(.secondary)
+												}
+											}
+											Spacer()
+											Button {
+												componentToEdit = comp
+											} label: {
+												Image(systemName: "pencil.circle").imageScale(.large)
+											}
+											.buttonStyle(.plain)
+										}
+										.padding(.vertical, 4)
+										Divider()
+									}
+								}
+							}
+						}
+						if Vertical.current.id != .aviation {
+							HStack{LabelDataTextview(label: "Trans. Serial #", data: $transmissionSerialNumber)}
+						}
+					}
+				}
+
 				CardView {
 					VStack {
 						SectionText(label: "COMPONENT SERIAL NUMBERS")
@@ -570,50 +763,6 @@ struct EditVehicle: View {
 								Divider()
 							}
 						}
-					}
-				}
-
-				
-				CardView {
-					VStack {
-						SectionText(label: "MECHANICAL DETAILS")
-						HStack{
-							Text("Fuel Type")
-								.textLabelModified()
-							Picker("", selection: $fuelType) {
-								Text("Gasoline").tag("Gasoline")
-								Text("Diesel").tag("Diesel")
-								Text("EV").tag("EV")
-								Text("Hybrid").tag("Hybrid")
-							}
-							.pickerStyle(.automatic)
-							.frame(maxWidth: .infinity, alignment: .trailing)
-						}
-						HStack{LabelDataTextview(label: "Engine", data: $engine)}
-						HStack{LabelDataTextview(label: "Engine Serial #", data: $engineSerialNumber)}
-						HStack{LabelDataTextview(label: "Transmission", data: $transmission)}
-						HStack{LabelDataTextview(label: "Trans. Serial #", data: $transmissionSerialNumber)}
-					}
-				}
-		
-				CardView {
-					VStack {
-						SectionText(label: "\(Vertical.current.assetSingular.uppercased()) DETAILS")
-						if Vertical.current.id == .land {
-							if linkedSyncFields.contains(.odometer), let master = masterVehicle {
-								HStack{LabelDataText(label: "Odometer (synced w/ master)", data: "\(master.mileage) \(unit(UnitIndex.distance))")}
-							} else {
-								HStack{LabelDataTextview_Numberpad_Int(label: "Odometer", data: $mileage)}
-								HStack{LabelDataTextview_Numberpad_Int(label: "Odometer (Virtual)", data: $mileageVirtual)}
-							}
-						}
-						if linkedSyncFields.contains(.engineHours), let master = masterVehicle {
-							HStack{LabelDataText(label: "\(Vertical.current.id == .land ? "Engine Hours" : Vertical.current.primaryMeterLabel) (synced w/ master)", data: "\(master.engHours) hrs")}
-						} else {
-							HStack{LabelDataTextview_Numberpad_Float(label: Vertical.current.id == .land ? "Engine Hours" : Vertical.current.primaryMeterLabel, data: $engHours)}
-						}
-						HStack{LabelDataTextview_Numberpad_Int(label: "Doors", data: $doors)}
-						HStack{LabelDataTextview_Numberpad_Int(label: "Seats", data: $seats)}
 					}
 				}
 
@@ -738,10 +887,14 @@ struct EditVehicle: View {
 					}
 					VStack {
 						SectionText(label: "DIMENSIONS")
-						HStack{LabelDataTextview_Numberpad_Int(label: "Wheelbase (\(unit(UnitIndex.wheelBase)))", data: $wheelbase)}
+						if Vertical.current.id != .aviation {
+							HStack{LabelDataTextview_Numberpad_Int(label: "Wheelbase (\(unit(UnitIndex.wheelBase)))", data: $wheelbase)}
+						}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Length (\(unit(UnitIndex.length)))", data: $length)}
-						HStack{LabelDataTextview_Numberpad_Int(label: "Width (\(unit(UnitIndex.width)))", data: $width)}
-						HStack{LabelDataTextview_Numberpad_Int(label: "Height (\(unit(UnitIndex.height)))", data: $height)}
+						HStack{LabelDataTextview_Numberpad_Int(label: "\(Vertical.current.id == .aviation ? "Wing Span" : "Width") (\(unit(UnitIndex.width)))", data: $width)}
+						if Vertical.current.id != .aviation {
+							HStack{LabelDataTextview_Numberpad_Int(label: "Height (\(unit(UnitIndex.height)))", data: $height)}
+						}
 						HStack{LabelDataTextview_Numberpad_Int(label: "Cargo Space (\(unit(UnitIndex.area)))", data: $cargoSpace)}
 					}
 					if Vertical.current.visibleFieldGroups.contains(.weightRatings) {
@@ -822,13 +975,57 @@ struct EditVehicle: View {
 				CardView {
 					VStack {
 						SectionText(label: "CAPACITIES")
-						HStack{LabelDataTextview_Numberpad_Int(label: "Fuel (\(unit(UnitIndex.fuel)))", data: $fuelCapacity)}
+						if Vertical.current.id == .aviation {
+							HStack {
+								Text("Number of Fuel Tanks")
+									.textLabelModified()
+								Picker("", selection: $numberOfFuelTanks) {
+									ForEach(1...6, id: \.self) { count in
+										Text("\(count)").tag(count)
+									}
+								}
+								.pickerStyle(.automatic)
+								.frame(maxWidth: .infinity, alignment: .trailing)
+								.onChange(of: numberOfFuelTanks) { _, _ in fuelTankValidationError = nil }
+							}
+							ForEach(1...numberOfFuelTanks, id: \.self) { tankNumber in
+								HStack{
+									LabelDataTextview(
+										label: "Tank \(tankNumber) Name",
+										data: fuelTankNameBinding(tankNumber),
+										prompt: "Tank \(tankNumber)"
+									)
+								}
+								HStack{
+									LabelDataTextview_Numberpad_Int(
+										label: "\(fuelTankDisplayName(tankNumber, fuelTankNameBinding(tankNumber).wrappedValue)) Capacity (\(unit(UnitIndex.fuel))) *",
+										data: fuelTankCapacityBinding(tankNumber)
+									)
+								}
+								.onChange(of: fuelTankCapacityBinding(tankNumber).wrappedValue) { _, _ in fuelTankValidationError = nil }
+								if tankNumber < numberOfFuelTanks {
+									Divider()
+								}
+							}
+							if let fuelTankValidationError {
+								HStack(alignment: .top, spacing: 6) {
+									Image(systemName: "exclamationmark.triangle.fill")
+										.foregroundStyle(.red)
+									Text(fuelTankValidationError)
+										.font(.caption)
+										.foregroundStyle(.red)
+								}
+							}
+						} else {
+							HStack{LabelDataTextview_Numberpad_Int(label: "Fuel (\(unit(UnitIndex.fuel)))", data: $fuelCapacity)}
+						}
 						if Vertical.current.visibleFieldGroups.contains(.rvTanks) {
 							HStack{LabelDataTextview_Numberpad_Int(label: "DEF (\(unit(UnitIndex.def)))", data: $defCapacity)}
 							HStack{LabelDataTextview_Numberpad_Int(label: "Fresh Water (\(unit(UnitIndex.fuel)))", data: $waterCapacity)}
 							HStack{LabelDataTextview_Numberpad_Int(label: "Gray Water (\(unit(UnitIndex.fuel)))", data: $grayCapacity)}
 							HStack{LabelDataTextview_Numberpad_Int(label: "Black Water (\(unit(UnitIndex.fuel)))", data: $blackCapacity)}
 						}
+						HStack{LabelDataTextview_Numberpad_Int(label: "Hydraulic Fluid (\(unit(UnitIndex.fuel)))", data: $hydraulicFluidCapacity)}
 					}
 				}
 				
@@ -915,7 +1112,7 @@ struct EditVehicle: View {
 				CardView {
 					VStack(alignment: .leading, spacing: 8) {
 						HStack {
-							SectionText(label: "AIRWORTHINESS DIRECTIVES")
+							SectionText(label: "DIRECTIVES & BULLETINS")
 							Spacer()
 							Button {
 								guard entitlements.requestCreate(AirworthinessDirective.self, in: modelContext) else { return }
@@ -925,16 +1122,21 @@ struct EditVehicle: View {
 							}
 						}
 						if airworthinessDirectives.isEmpty {
-							Text("No airworthiness directives recorded.")
+							Text("No directives or bulletins recorded.")
 								.font(.subheadline)
 								.foregroundStyle(.secondary)
 						} else {
-							ForEach(airworthinessDirectives) { ad in
+							ForEach(airworthinessDirectives) { resolved in
+								let ad = resolved.directive
 								HStack(alignment: .top) {
 									VStack(alignment: .leading, spacing: 2) {
 										Text(ad.adNumber).font(.subheadline).bold()
 										if !ad.title.isEmpty {
 											Text(ad.title).font(.caption).foregroundStyle(.secondary)
+										}
+										if case .installedPart(let partName, let partNumber, let position) = resolved.matchBasis {
+											Text("via \(partName) (P/N \(partNumber))\(position.isEmpty ? "" : " — \(position)")")
+												.font(.caption).foregroundStyle(.secondary)
 										}
 										Text("Next Due: \(functions.formatDate_DDMMMyy(date: ad.nextDueDate))")
 											.font(.caption).foregroundStyle(.secondary)
@@ -942,6 +1144,50 @@ struct EditVehicle: View {
 									Spacer()
 									Button {
 										adToEdit = ad
+									} label: {
+										Image(systemName: "pencil.circle").imageScale(.large)
+									}
+									.buttonStyle(.plain)
+								}
+								.padding(.vertical, 4)
+								Divider()
+							}
+						}
+					}
+				}
+				}
+
+				if Vertical.current.enabledFeatures.contains(.partCompliance) {
+				CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						HStack {
+							SectionText(label: "INSTALLED PARTS")
+							Spacer()
+							Button {
+								guard entitlements.requestCreate(PartInstallation.self, in: modelContext) else { return }
+								showingAddInstalledPart = true
+							} label: {
+								Image(systemName: "plus.capsule")
+							}
+						}
+						if installedParts.isEmpty {
+							Text("No parts recorded as installed on this \(Vertical.current.assetSingular.lowercased()).")
+								.font(.subheadline)
+								.foregroundStyle(.secondary)
+						} else {
+							ForEach(installedParts) { installation in
+								HStack(alignment: .top) {
+									VStack(alignment: .leading, spacing: 2) {
+										Text(installation.partName).font(.subheadline).bold()
+										if !installation.position.isEmpty {
+											Text(installation.position).font(.caption).foregroundStyle(.secondary)
+										}
+										Text("Installed \(functions.formatDate_DDMMMyy(date: installation.installDate))")
+											.font(.caption).foregroundStyle(.secondary)
+									}
+									Spacer()
+									Button {
+										installedPartToEdit = installation
 									} label: {
 										Image(systemName: "pencil.circle").imageScale(.large)
 									}
@@ -986,47 +1232,6 @@ struct EditVehicle: View {
 									Spacer()
 									Button {
 										inspectionToEdit = insp
-									} label: {
-										Image(systemName: "pencil.circle").imageScale(.large)
-									}
-									.buttonStyle(.plain)
-								}
-								.padding(.vertical, 4)
-								Divider()
-							}
-						}
-					}
-				}
-				}
-
-				if Vertical.current.enabledFeatures.contains(.componentTimes) {
-				CardView {
-					VStack(alignment: .leading, spacing: 8) {
-						HStack {
-							SectionText(label: "COMPONENT TIMES")
-							Spacer()
-							Button {
-								guard entitlements.requestCreate(ComponentTimes.self, in: modelContext) else { return }
-								showingAddComponent = true
-							} label: {
-								Image(systemName: "plus.capsule")
-							}
-						}
-						if componentTimesList.isEmpty {
-							Text("No component times recorded.")
-								.font(.subheadline)
-								.foregroundStyle(.secondary)
-						} else {
-							ForEach(componentTimesList) { comp in
-								HStack(alignment: .top) {
-									VStack(alignment: .leading, spacing: 2) {
-										Text(comp.componentName).font(.subheadline).bold()
-										Text("\(comp.componentType) — TT \(comp.totalTime, specifier: "%.1f")")
-											.font(.caption).foregroundStyle(.secondary)
-									}
-									Spacer()
-									Button {
-										componentToEdit = comp
 									} label: {
 										Image(systemName: "pencil.circle").imageScale(.large)
 									}
@@ -1186,6 +1391,7 @@ struct EditVehicle: View {
 				loadAirworthinessDirectives()
 				loadInspectionCycles()
 				loadComponentTimes()
+				loadInstalledParts()
 				loadHaulOutRecords()
 				loadSurveyRecords()
 			}
@@ -1209,6 +1415,12 @@ struct EditVehicle: View {
 			}
 			.sheet(item: $adToEdit, onDismiss: loadAirworthinessDirectives) { ad in
 				EditAirworthinessDirective(vehicleId: dataSet.name, directive: ad)
+			}
+			.sheet(isPresented: $showingAddInstalledPart, onDismiss: loadInstalledParts) {
+				EditPartInstallation(fixedVehicleId: dataSet.name)
+			}
+			.sheet(item: $installedPartToEdit, onDismiss: loadInstalledParts) { installation in
+				EditPartInstallation(installation: installation, fixedVehicleId: dataSet.name)
 			}
 			.sheet(isPresented: $showingAddInspection, onDismiss: loadInspectionCycles) {
 				EditInspectionCycle(vehicleId: dataSet.name)
@@ -1262,7 +1474,15 @@ struct EditVehicle: View {
 							nameValidationError = "That name is already used by another \(Vertical.current.assetSingular.lowercased())."
 							return
 						}
+						if Vertical.current.id == .aviation {
+							let emptyTanks = (1...numberOfFuelTanks).filter { fuelTankCapacityBinding($0).wrappedValue <= 0 }
+							guard emptyTanks.isEmpty else {
+								fuelTankValidationError = "Enter a capacity for each of the \(numberOfFuelTanks) fuel tank\(numberOfFuelTanks == 1 ? "" : "s")."
+								return
+							}
+						}
 						nameValidationError = nil
+						fuelTankValidationError = nil
 						name = trimmedName
 						if !isNewUnsavedRecord, name != originalName {
 							showingRenameChoice = true
@@ -1331,42 +1551,6 @@ struct EditVehicle: View {
 					}
 				}
 
-				// Hidden when no component serial numbers were recorded
-				if !serialItems.isEmpty {
-					CardView {
-					VStack {
-						SectionText(label: "COMPONENT SERIAL NUMBERS")
-						ForEach(serialItems) { item in
-							HStack{LabelDataText(label: item.itemName, data: item.serialNumber)}
-						}
-					}
-					}
-				}
-
-				// Hidden when no mechanical fields have data
-				if hasMechanicalDetails {
-					CardView {
-					VStack {
-						SectionText(label: "MECHANICAL DETAILS")
-						if dataSet.fuelType != "" {
-							HStack{LabelDataText(label: "Fuel Type", data: "\(dataSet.fuelType)")}
-						}
-						if dataSet.engine != "" {
-							HStack{LabelDataText(label: "Engine", data: "\(dataSet.engine)")}
-						}
-						if dataSet.transmission != "" {
-							HStack{LabelDataText(label: "Transmission", data: "\(dataSet.transmission)")}
-						}
-						if dataSet.engineSerialNumber != "" {
-							HStack{LabelDataText(label: "Engine Serial #", data: dataSet.engineSerialNumber)}
-						}
-						if dataSet.transmissionSerialNumber != "" {
-							HStack{LabelDataText(label: "Trans. Serial #", data: dataSet.transmissionSerialNumber)}
-						}
-					}
-					}
-				}
-				
 				// Hidden when no vehicle detail fields have data
 				if hasVehicleDetails {
 					CardView {
@@ -1379,13 +1563,252 @@ struct EditVehicle: View {
 							HStack{LabelDataText(label: "Odometer (Virtual)", data: "\(dataSet.mileageVirtual) \(unit(UnitIndex.distance))")}
 						}
 						if dataSet.engHours > 0 {
-							HStack{LabelDataText(label: Vertical.current.id == .land ? "Engine Hours" : Vertical.current.primaryMeterLabel, data: "\(dataSet.engHours) hrs")}
+							HStack{LabelDataText(label: Vertical.current.hoursMeterLabel, data: "\(dataSet.engHours) hrs")}
 						}
 						if dataSet.doors > 0 {
 							HStack{LabelDataText(label: "Doors", data: "\(dataSet.doors)")}
 						}
 						if dataSet.seats > 0 {
 							HStack{LabelDataText(label: "Seats", data: "\(dataSet.seats)")}
+						}
+					}
+					}
+				}
+
+
+				// Hidden when no mechanical fields have data
+				if hasMechanicalDetails {
+					CardView {
+					VStack {
+						SectionText(label: "MECHANICAL DETAILS")
+						if dataSet.fuelType != "" {
+							HStack{LabelDataText(label: "Fuel Type", data: "\(dataSet.fuelType)")}
+						}
+						if dataSet.hydraulicFluidType != "" {
+							HStack{LabelDataText(label: "Hydraulic Fluid Type", data: "\(dataSet.hydraulicFluidType)")}
+						}
+						if dataSet.engine != "" && Vertical.current.id != .aviation {
+							HStack{LabelDataText(label: "Engine", data: "\(dataSet.engine)")}
+						}
+						if dataSet.transmission != "" && Vertical.current.id != .aviation {
+							HStack{LabelDataText(label: "Transmission", data: "\(dataSet.transmission)")}
+						}
+						if dataSet.engineSerialNumber != "" && Vertical.current.id != .aviation {
+							HStack{LabelDataText(label: "Engine Serial #", data: dataSet.engineSerialNumber)}
+						}
+						if dataSet.transmissionSerialNumber != "" && Vertical.current.id != .aviation {
+							HStack{LabelDataText(label: "Trans. Serial #", data: dataSet.transmissionSerialNumber)}
+						}
+						if Vertical.current.enabledFeatures.contains(.componentTimes) {
+							ForEach(componentTimesList) { comp in
+								VStack(alignment: .leading, spacing: 2) {
+									HStack {
+										Spacer()
+										Text(comp.componentName)
+											.font(.subheadline).bold()
+											.padding(.horizontal, 10)
+											.padding(.vertical, 4)
+											.background(Color.secondary.opacity(0.15))
+											.clipShape(RoundedRectangle(cornerRadius: 8))
+										Spacer()
+									}
+									HStack{LabelDataText(label: "Type", data: comp.componentType)}
+									if comp.componentType == "Engine" {
+										if !comp.make.isEmpty {
+											HStack{LabelDataText(label: "Make", data: comp.make)}
+										}
+										if comp.horsepower > 0 {
+											HStack{LabelDataText(label: "Horsepower", data: "\(String(format: "%.0f", comp.horsepower)) HP")}
+										}
+										if !comp.serialNumber.isEmpty {
+											HStack{LabelDataText(label: "Serial Number", data: comp.serialNumber)}
+										}
+										if effectiveTotalTime(comp) > 0 {
+											HStack{LabelDataText(label: "Engine Hours", data: "\(String(format: "%.1f", effectiveTotalTime(comp))) hrs")}
+										}
+										if !comp.derivesFromMeter, comp.currentTachTime > 0 {
+											HStack{LabelDataText(label: "Tach Time", data: "\(String(format: "%.1f", comp.currentTachTime)) hrs")}
+										}
+									} else {
+										if effectiveTotalTime(comp) > 0 {
+											HStack{LabelDataText(label: "Total Time", data: "\(String(format: "%.1f", effectiveTotalTime(comp))) hrs")}
+										}
+										if comp.timeSinceOverhaul > 0 {
+											HStack{LabelDataText(label: "Time Since Overhaul", data: "\(String(format: "%.1f", comp.timeSinceOverhaul)) hrs")}
+										}
+									}
+								}
+								.padding(.vertical, 2)
+							}
+						}
+					}
+					}
+				}
+
+				// Hidden when no component serial numbers were recorded
+				if !serialItems.isEmpty {
+					CardView {
+					VStack {
+						SectionText(label: "COMPONENT SERIAL NUMBERS")
+						ForEach(serialItems) { item in
+							HStack{LabelDataText(label: item.itemName, data: item.serialNumber)}
+						}
+					}
+					}
+				}
+
+				// Hidden when no directives or bulletins were recorded
+				if !airworthinessDirectives.isEmpty {
+					CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						SectionText(label: "DIRECTIVES & BULLETINS")
+						ForEach(airworthinessDirectives) { resolved in
+							let ad = resolved.directive
+							VStack(alignment: .leading, spacing: 2) {
+								HStack {
+									Spacer()
+									Text(ad.adNumber)
+										.font(.subheadline).bold()
+										.padding(.horizontal, 10)
+										.padding(.vertical, 4)
+										.background(Color.secondary.opacity(0.15))
+										.clipShape(RoundedRectangle(cornerRadius: 8))
+									Spacer()
+								}
+								if !ad.title.isEmpty {
+									HStack{LabelDataText(label: "Title", data: ad.title)}
+								}
+								if case .installedPart(let partName, let partNumber, let position) = resolved.matchBasis {
+									HStack{LabelDataText(label: "Via Part", data: "\(partName) (P/N \(partNumber))\(position.isEmpty ? "" : " — \(position)")")}
+								}
+								HStack{LabelDataText(label: "Next Due Date", data: functions.formatDate_DDMMMyy(date: ad.nextDueDate))}
+								if ad.nextDueHours > 0 {
+									HStack{LabelDataText(label: "Next Due Hours", data: "\(String(format: "%.1f", ad.nextDueHours)) hrs")}
+								}
+								if !ad.signedOffBy.isEmpty {
+									HStack{LabelDataText(label: "Signed Off By", data: ad.signedOffBy)}
+								}
+							}
+							.padding(.vertical, 2)
+							Divider()
+						}
+					}
+					}
+				}
+
+				// Hidden when no parts are recorded as installed on this vehicle
+				if !installedParts.isEmpty {
+					CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						SectionText(label: "INSTALLED PARTS")
+						ForEach(installedParts) { installation in
+							VStack(alignment: .leading, spacing: 2) {
+								HStack{LabelDataText(label: "Part", data: installation.partName)}
+								if !installation.position.isEmpty {
+									HStack{LabelDataText(label: "Position", data: installation.position)}
+								}
+								HStack{LabelDataText(label: "Installed", data: functions.formatDate_DDMMMyy(date: installation.installDate))}
+							}
+							.padding(.vertical, 2)
+							Divider()
+						}
+					}
+					}
+				}
+
+				// Hidden when no inspection cycles were recorded
+				if !inspectionCycles.isEmpty {
+					CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						SectionText(label: "INSPECTION CYCLES")
+						ForEach(inspectionCycles) { insp in
+							VStack(alignment: .leading, spacing: 2) {
+								HStack {
+									Spacer()
+									Text(insp.inspectionType)
+										.font(.subheadline).bold()
+										.padding(.horizontal, 10)
+										.padding(.vertical, 4)
+										.background(Color.secondary.opacity(0.15))
+										.clipShape(RoundedRectangle(cornerRadius: 8))
+									Spacer()
+								}
+								if !insp.performingShop.isEmpty {
+									HStack{LabelDataText(label: "Performing Shop", data: insp.performingShop)}
+								}
+								HStack{LabelDataText(label: "Next Due Date", data: functions.formatDate_DDMMMyy(date: insp.nextDueDate))}
+								if insp.nextDueHours > 0 {
+									HStack{LabelDataText(label: "Next Due Hours", data: "\(String(format: "%.1f", insp.nextDueHours)) hrs")}
+								}
+							}
+							.padding(.vertical, 2)
+							Divider()
+						}
+					}
+					}
+				}
+
+				// Hidden when no haul-out records were recorded
+				if !haulOutRecords.isEmpty {
+					CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						SectionText(label: "HAUL-OUT RECORDS")
+						ForEach(haulOutRecords) { ho in
+							VStack(alignment: .leading, spacing: 2) {
+								HStack {
+									Spacer()
+									Text(ho.yardName.isEmpty ? "Haul-Out" : ho.yardName)
+										.font(.subheadline).bold()
+										.padding(.horizontal, 10)
+										.padding(.vertical, 4)
+										.background(Color.secondary.opacity(0.15))
+										.clipShape(RoundedRectangle(cornerRadius: 8))
+									Spacer()
+								}
+								HStack{LabelDataText(label: "Haul-Out Date", data: functions.formatDate_DDMMMyy(date: ho.haulOutDate))}
+								if !ho.bottomPaintType.isEmpty {
+									HStack{LabelDataText(label: "Bottom Paint Type", data: ho.bottomPaintType)}
+								}
+								if ho.cost > 0 {
+									HStack{LabelDataText(label: "Cost", data: "\(String(format: "%.2f", ho.cost))")}
+								}
+								HStack{LabelDataText(label: "Next Due Date", data: functions.formatDate_DDMMMyy(date: ho.nextDueDate))}
+							}
+							.padding(.vertical, 2)
+							Divider()
+						}
+					}
+					}
+				}
+
+				// Hidden when no survey records were recorded
+				if !surveyRecords.isEmpty {
+					CardView {
+					VStack(alignment: .leading, spacing: 8) {
+						SectionText(label: "SURVEY RECORDS")
+						ForEach(surveyRecords) { sv in
+							VStack(alignment: .leading, spacing: 2) {
+								HStack {
+									Spacer()
+									Text(sv.surveyType.isEmpty ? "Survey" : sv.surveyType)
+										.font(.subheadline).bold()
+										.padding(.horizontal, 10)
+										.padding(.vertical, 4)
+										.background(Color.secondary.opacity(0.15))
+										.clipShape(RoundedRectangle(cornerRadius: 8))
+									Spacer()
+								}
+								if !sv.surveyorName.isEmpty {
+									HStack{LabelDataText(label: "Surveyor", data: sv.surveyorName)}
+								}
+								HStack{LabelDataText(label: "Survey Date", data: functions.formatDate_DDMMMyy(date: sv.surveyDate))}
+								if sv.cost > 0 {
+									HStack{LabelDataText(label: "Cost", data: "\(String(format: "%.2f", sv.cost))")}
+								}
+								HStack{LabelDataText(label: "Next Due Date", data: functions.formatDate_DDMMMyy(date: sv.nextDueDate))}
+							}
+							.padding(.vertical, 2)
+							Divider()
 						}
 					}
 					}
@@ -1489,16 +1912,16 @@ struct EditVehicle: View {
 					CardView {
 					VStack {
 						SectionText(label: "DIMENSIONS")
-						if dataSet.wheelbase > 0 {
+						if dataSet.wheelbase > 0 && Vertical.current.id != .aviation {
 							HStack{LabelDataText(label: "Wheelbase", data: "\(dataSet.wheelbase) \(unit(UnitIndex.wheelBase))")}
 						}
 						if dataSet.length > 0 {
 							HStack{LabelDataText(label: "Length", data: "\(dataSet.length) \(unit(UnitIndex.length))")}
 						}
 						if dataSet.width > 0 {
-							HStack{LabelDataText(label: "Width", data: "\(dataSet.width) \(unit(UnitIndex.width))")}
+							HStack{LabelDataText(label: Vertical.current.id == .aviation ? "Wing Span" : "Width", data: "\(dataSet.width) \(unit(UnitIndex.width))")}
 						}
-						if dataSet.height > 0 {
+						if dataSet.height > 0 && Vertical.current.id != .aviation {
 							HStack{LabelDataText(label: "Height", data: "\(dataSet.height) \(unit(UnitIndex.height))")}
 						}
 						if dataSet.cargoSpace > 0 {
@@ -1598,7 +2021,17 @@ struct EditVehicle: View {
 					CardView {
 					VStack {
 						SectionText(label: "CAPACITIES")
-						if dataSet.fuelCapacity > 0 {
+						if Vertical.current.id == .aviation {
+							ForEach(1...max(1, dataSet.numberOfFuelTanks), id: \.self) { tankNumber in
+								let capacity = fuelTankCapacityBinding(tankNumber).wrappedValue
+								if capacity > 0 {
+									HStack{LabelDataText(label: fuelTankDisplayName(tankNumber, fuelTankNameBinding(tankNumber).wrappedValue), data: "\(capacity) \(unit(UnitIndex.fuel))")}
+								}
+							}
+							if dataSet.fuelCapacity > 0 {
+								HStack{LabelDataText(label: "Total Fuel", data: "\(dataSet.fuelCapacity) \(unit(UnitIndex.fuel))")}
+							}
+						} else if dataSet.fuelCapacity > 0 {
 							HStack{LabelDataText(label: "Fuel", data: "\(dataSet.fuelCapacity) \(unit(UnitIndex.fuel))")}
 						}
 						if Vertical.current.visibleFieldGroups.contains(.rvTanks) {
@@ -1615,10 +2048,13 @@ struct EditVehicle: View {
 								HStack{LabelDataText(label: "Black Water", data: "\(dataSet.blackCapacity) \(unit(UnitIndex.fuel))")}
 							}
 						}
+						if dataSet.hydraulicFluidCapacity > 0 {
+							HStack{LabelDataText(label: "Hydraulic Fluid", data: "\(dataSet.hydraulicFluidCapacity) \(unit(UnitIndex.fuel))")}
+						}
 					}
 					}
 				}
-				
+
 				CardView {
 					VStack {
 						SectionText(label: "MISCELLANEOUS")
@@ -1768,6 +2204,7 @@ struct EditVehicle: View {
 				loadAirworthinessDirectives()
 				loadInspectionCycles()
 				loadComponentTimes()
+				loadInstalledParts()
 				loadHaulOutRecords()
 				loadSurveyRecords()
 			}
@@ -1881,12 +2318,11 @@ struct EditVehicle: View {
 	}
 
 	private func loadAirworthinessDirectives() {
-		let vehicleId = dataSet.name
-		let fd = FetchDescriptor<AirworthinessDirective>(
-			predicate: #Predicate { $0.vehicleId == vehicleId },
-			sortBy: [SortDescriptor(\AirworthinessDirective.nextDueDate)]
-		)
-		airworthinessDirectives = (try? modelContext.fetch(fd)) ?? []
+		airworthinessDirectives = Functions().loadApplicableDirectives(context: modelContext, vehicleId: dataSet.name)
+	}
+
+	private func loadInstalledParts() {
+		installedParts = Functions().loadInstalledParts(context: modelContext, vehicleId: dataSet.name)
 	}
 
 	private func loadInspectionCycles() {
@@ -1905,6 +2341,44 @@ struct EditVehicle: View {
 			sortBy: [SortDescriptor(\ComponentTimes.componentName)]
 		)
 		componentTimesList = (try? modelContext.fetch(fd)) ?? []
+	}
+
+	/// `comp.totalTime` when hand-entered (derivesFromMeter == false, every row for every
+	/// existing user); otherwise derived from this aircraft's meter — see
+	/// ComponentTimes.derivesFromMeter and PartTimeMath.swift.
+	private func effectiveTotalTime(_ comp: ComponentTimes) -> Float {
+		guard comp.derivesFromMeter else { return comp.totalTime }
+		let meter = functions.loadVehicleMeter(context: modelContext, vehicleId: comp.vehicleId)
+		let (accrued, _) = PartTimeMath.accruedHours(installMeter: comp.snapshotMeterHours, installMeterKnown: true, currentMeter: meter)
+		return comp.totalTimeAtSnapshot + accrued
+	}
+
+	// Adds or removes "Engine" component-time slots to match the selected engine count.
+	// Only removes slots that are still blank (no make/serial/horsepower/hours/notes entered),
+	// so renamed or filled-in engine records are never deleted automatically.
+	private func syncEngineSlots(to newCount: Int) {
+		let engines = componentTimesList.filter { $0.componentType == "Engine" }
+		if engines.count < newCount {
+			for index in (engines.count + 1)...newCount {
+				let newEngine = ComponentTimes(
+					vehicleId: dataSet.name,
+					componentName: "Engine \(index)",
+					componentType: "Engine"
+				)
+				modelContext.insert(newEngine)
+			}
+		} else if engines.count > newCount {
+			let removableCount = engines.count - newCount
+			let blanks = engines.filter {
+				$0.make.isEmpty && $0.serialNumber.isEmpty && $0.horsepower == 0
+				&& $0.totalTime == 0 && $0.timeSinceOverhaul == 0 && $0.notes.isEmpty
+			}.sorted { $0.componentName > $1.componentName }
+			for engine in blanks.prefix(removableCount) {
+				modelContext.delete(engine)
+			}
+		}
+		try? modelContext.save()
+		loadComponentTimes()
 	}
 
 	private func loadHaulOutRecords() {
@@ -2065,7 +2539,10 @@ struct EditVehicle: View {
 		dataSet.engine = engine
 		dataSet.engineSerialNumber = engineSerialNumber
 		dataSet.transmissionSerialNumber = transmissionSerialNumber
+		dataSet.numberOfEngines = numberOfEngines
 		dataSet.fuelType = fuelType
+		dataSet.hydraulicFluidType = hydraulicFluidType
+		dataSet.hydraulicFluidCapacity = hydraulicFluidCapacity
 		dataSet.doors = doors
 		dataSet.seats = seats
 		dataSet.cargoSpace = cargoSpace
@@ -2082,7 +2559,20 @@ struct EditVehicle: View {
 		dataSet.towingCapcity = towingCapcity
 		dataSet.uvw = uvw
 		dataSet.ccc = ccc
-		dataSet.fuelCapacity = fuelCapacity
+		dataSet.numberOfFuelTanks = numberOfFuelTanks
+		dataSet.fuelTank1Capacity = numberOfFuelTanks >= 1 ? fuelTank1Capacity : 0
+		dataSet.fuelTank2Capacity = numberOfFuelTanks >= 2 ? fuelTank2Capacity : 0
+		dataSet.fuelTank3Capacity = numberOfFuelTanks >= 3 ? fuelTank3Capacity : 0
+		dataSet.fuelTank4Capacity = numberOfFuelTanks >= 4 ? fuelTank4Capacity : 0
+		dataSet.fuelTank5Capacity = numberOfFuelTanks >= 5 ? fuelTank5Capacity : 0
+		dataSet.fuelTank6Capacity = numberOfFuelTanks >= 6 ? fuelTank6Capacity : 0
+		dataSet.fuelTank1Name = numberOfFuelTanks >= 1 ? fuelTank1Name : ""
+		dataSet.fuelTank2Name = numberOfFuelTanks >= 2 ? fuelTank2Name : ""
+		dataSet.fuelTank3Name = numberOfFuelTanks >= 3 ? fuelTank3Name : ""
+		dataSet.fuelTank4Name = numberOfFuelTanks >= 4 ? fuelTank4Name : ""
+		dataSet.fuelTank5Name = numberOfFuelTanks >= 5 ? fuelTank5Name : ""
+		dataSet.fuelTank6Name = numberOfFuelTanks >= 6 ? fuelTank6Name : ""
+		dataSet.fuelCapacity = Vertical.current.id == .aviation ? totalFuelTankCapacity : fuelCapacity
 		dataSet.defCapacity = defCapacity
 		dataSet.waterCapacity = waterCapacity
 		dataSet.grayCapacity = grayCapacity
@@ -2177,6 +2667,7 @@ struct EditVehicle: View {
 		rename(FetchDescriptor<VehicleScaleTicket>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
 		rename(FetchDescriptor<VehicleSystems1>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
 		rename(FetchDescriptor<MxParts1>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<PartInstallation>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
 		rename(FetchDescriptor<MxItems3>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
 		rename(FetchDescriptor<ServiceRecords1>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
 		rename(FetchDescriptor<FuelLog1>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }

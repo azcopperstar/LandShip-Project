@@ -253,7 +253,7 @@ struct DisplayTripLog: View {
 												.font(.subheadline)
 												.foregroundStyle(.secondary)
 											if !movingTimeDescription(for: record).isEmpty {
-												Text("Time Underway: \(movingTimeDescription(for: record))")
+												Text("\(Vertical.current.id == .aviation ? "Flight Time" : "Time Underway"): \(movingTimeDescription(for: record))")
 													.font(.subheadline)
 													.foregroundStyle(.secondary)
 											}
@@ -411,7 +411,16 @@ struct DisplayTripLog: View {
 		let legs = [record.locationStart] + stops + [record.locationEnd]
 		let nonEmptyLegs = legs.filter { !$0.isEmpty }
 		guard nonEmptyLegs.count > 1 else { return "" }
-		return nonEmptyLegs.joined(separator: " → ")
+		return nonEmptyLegs.map(icaoOnly).joined(separator: " → ")
+	}
+
+	/// A resolved airport location is stored as "CODE- Full Airport Name" (see
+	/// `LabelLocationTextview`'s auto-format in `Custom Views/9 TextView_Field Mods.swift`).
+	/// This row only has room for the route at a glance, so it shows just the code — a plain
+	/// typed location with no "- " in it (a city name, a non-aviation address) is left as-is.
+	private func icaoOnly(_ location: String) -> String {
+		guard let dashRange = location.range(of: "- ") else { return location }
+		return String(location[..<dashRange.lowerBound])
 	}
 
 
@@ -490,7 +499,7 @@ struct DisplayTripLog: View {
 		guard !trackVehicleSelected.isEmpty, trackVehicleSelected != "All Vehicles" else { return }
 		guard entitlements.requestCreate(TripLog2.self, in: modelContext) else { return }
 
-		let logName = "Travel Log: " + functions.formatDate_DDMMMyy_HHmm(date: Date())
+		let logName = functions.formatDate_DDMMMyy_HHmm(date: Date())
 		var odometerStart: Int = 0
 		var engHoursStart: Float = 0.0
 		var fuelStart: Float = 0.0

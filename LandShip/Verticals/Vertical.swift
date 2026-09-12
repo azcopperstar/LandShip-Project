@@ -25,6 +25,8 @@ enum AssetFieldGroup: Hashable {
 	case wheelFasteners
 	case rvTanks         // waterCapacity, grayCapacity, blackCapacity, defCapacity
 	case towing          // vehicleTowed, towingCapcity
+	case odometer        // the Int distance meter (mileage/odometerStart/odometerEnd/Miles)
+	                     // in log editors — no aircraft logs an odometer reading
 }
 
 /// Feature areas gated per vertical — used for sidebar rows, dashboard cards, and
@@ -38,6 +40,8 @@ enum VerticalFeature: Hashable {
 	case surveyRecords
 	case pilotLogbook
 	case marinerSeaService
+	case partCompliance     // identity/approval-basis/life/installation cards on MxParts1
+	case fuelOperations     // cost stack/contract fuel/quality/performance cards on FuelLog1
 }
 
 /// Optional grandfathering policy for users who owned the app before it converted
@@ -62,6 +66,14 @@ struct Vertical: Sendable {
 	let garageSectionTitle: String
 	let primaryMeterLabel: String
 	let secondaryMeterLabel: String
+	// The Float hours meter (Vehicle8.engHours) — what every log editor's "Engine Hours"
+	// field actually feeds, and what derived part-life math reads. Distinct from
+	// `primaryMeterLabel`, which historically got attached to the wrong (Int/odometer)
+	// field in aviation's log editors — see multi-vertical-expansion memory, Phase 0.
+	let hoursMeterLabel: String
+	// The Int distance meter (mileage/odometerStart/odometerEnd/Miles). Only rendered
+	// when `visibleFieldGroups.contains(.odometer)`.
+	let distanceMeterLabel: String
 	let registrationLabel: String
 	let plateLabel: String
 	let travelLogLabel: String
@@ -93,18 +105,20 @@ extension Vertical {
 		garageSectionTitle: "Garage",
 		primaryMeterLabel: "Odometer",
 		secondaryMeterLabel: "Engine Hours",
+		hoursMeterLabel: "Engine Hours",
+		distanceMeterLabel: "Odometer",
 		registrationLabel: "VIN",
 		plateLabel: "License Plate",
 		travelLogLabel: "Travel Log",
 		assetIcon: "car.fill",
 		assetGroupIcon: "car.2.fill",
-		visibleFieldGroups: [.weightRatings, .axleWeights, .tires, .wheelFasteners, .rvTanks, .towing],
+		visibleFieldGroups: [.weightRatings, .axleWeights, .tires, .wheelFasteners, .rvTanks, .towing, .odometer],
 		enabledFeatures: [],
 		storeProductID: "com.aeronauticaltrax.LandShip.fullversion",
 		grandfathering: GrandfatheringPolicy(
-			originalAppVersionThresholdIOS: "92",
-			originalAppVersionThresholdMacOS: "2026.09.02",
-			firstFreeBuildNumber: 92
+			originalAppVersionThresholdIOS: "112",
+			originalAppVersionThresholdMacOS: "2026.09.12",
+			firstFreeBuildNumber: 112
 		),
 		regulatoryDisclaimer: nil
 	)
@@ -116,13 +130,15 @@ extension Vertical {
 		garageSectionTitle: "Hangar",
 		primaryMeterLabel: "Hobbs Time",
 		secondaryMeterLabel: "Tach Time",
+		hoursMeterLabel: "Hobbs Time",
+		distanceMeterLabel: "Distance Flown",
 		registrationLabel: "Tail Number",
-		plateLabel: "Registration",
+		plateLabel: "Serial Number",
 		travelLogLabel: "Flight Log",
 		assetIcon: "airplane",
 		assetGroupIcon: "airplane",
 		visibleFieldGroups: [],
-		enabledFeatures: [.airworthinessDirectives, .inspectionCycles, .componentTimes, .pilotLogbook],
+		enabledFeatures: [.airworthinessDirectives, .inspectionCycles, .componentTimes, .pilotLogbook, .partCompliance, .fuelOperations],
 		storeProductID: "com.aeronauticaltrax.aerotraxapp.fullversion",
 		grandfathering: nil,
 		regulatoryDisclaimer: "AeroTrax is a personal recordkeeping tool. It does not replace your official aircraft maintenance logbook, an A&P/IA's signoff, or your own research into applicable Airworthiness Directives. Always verify compliance through official FAA sources before flight."
@@ -135,12 +151,14 @@ extension Vertical {
 		garageSectionTitle: "Marina",
 		primaryMeterLabel: "Engine Hours",
 		secondaryMeterLabel: "",
+		hoursMeterLabel: "Engine Hours",
+		distanceMeterLabel: "Distance",
 		registrationLabel: "HIN",
 		plateLabel: "Registration",
 		travelLogLabel: "Voyage Log",
 		assetIcon: "sailboat.fill",
 		assetGroupIcon: "sailboat.fill",
-		visibleFieldGroups: [.rvTanks],
+		visibleFieldGroups: [.rvTanks, .odometer],
 		enabledFeatures: [.haulOutRecords, .surveyRecords, .marinerSeaService],
 		storeProductID: "com.aeronauticaltrax.nauticaltrax.fullversion",
 		grandfathering: nil,

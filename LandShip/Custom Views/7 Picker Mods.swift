@@ -49,28 +49,154 @@ struct FuelTypePickerOptions: View {
 		settingsFetched.first?.enabledFuelTypes ?? AviationFuelType.defaultEnabled
 	}
 
+	private var enabledMarineFuels: [MarineFuelType] {
+		settingsFetched.first?.enabledMarineFuelTypes ?? MarineFuelType.defaultEnabled
+	}
+
+	private var enabledLandFuels: [LandFuelType] {
+		settingsFetched.first?.enabledLandFuelTypes ?? LandFuelType.defaultEnabled
+	}
+
 	var body: some View {
-		if Vertical.current.id == .aviation {
-			let enabled = enabledAviationFuels
-			ForEach(AviationFuelType.Category.allCases, id: \.self) { category in
-				let fuelsInCategory = enabled.filter { $0.category == category }
-				if !fuelsInCategory.isEmpty {
-					Section(category.rawValue) {
-						ForEach(fuelsInCategory) { fuel in
-							Text(fuel.rawValue).tag(fuel.rawValue)
+		switch Vertical.current.id {
+			case .aviation:
+				let enabled = enabledAviationFuels
+				ForEach(AviationFuelType.Category.allCases, id: \.self) { category in
+					let fuelsInCategory = enabled.filter { $0.category == category }
+					if !fuelsInCategory.isEmpty {
+						Section(category.rawValue) {
+							ForEach(fuelsInCategory) { fuel in
+								Text(fuel.rawValue).tag(fuel.rawValue)
+							}
 						}
 					}
 				}
-			}
-			if !currentValue.isEmpty && !enabled.contains(where: { $0.rawValue == currentValue }) {
-				Text(currentValue).tag(currentValue)
-			}
-		} else {
-			Text("Gasoline").tag("Gasoline")
-			Text("Diesel").tag("Diesel")
-			Text("EV").tag("EV")
-			Text("Hybrid").tag("Hybrid")
+				if !currentValue.isEmpty && !enabled.contains(where: { $0.rawValue == currentValue }) {
+					Text(currentValue).tag(currentValue)
+				}
+			case .marine:
+				let enabled = enabledMarineFuels
+				ForEach(MarineFuelType.Category.allCases, id: \.self) { category in
+					let fuelsInCategory = enabled.filter { $0.category == category }
+					if !fuelsInCategory.isEmpty {
+						Section(category.rawValue) {
+							ForEach(fuelsInCategory) { fuel in
+								Text(fuel.rawValue).tag(fuel.rawValue)
+							}
+						}
+					}
+				}
+				if !currentValue.isEmpty && !enabled.contains(where: { $0.rawValue == currentValue }) {
+					Text(currentValue).tag(currentValue)
+				}
+			case .land:
+				let enabled = enabledLandFuels
+				ForEach(LandFuelType.Category.allCases, id: \.self) { category in
+					let fuelsInCategory = enabled.filter { $0.category == category }
+					if !fuelsInCategory.isEmpty {
+						Section(category.rawValue) {
+							ForEach(fuelsInCategory) { fuel in
+								Text(fuel.rawValue).tag(fuel.rawValue)
+							}
+						}
+					}
+				}
+				if !currentValue.isEmpty && !enabled.contains(where: { $0.rawValue == currentValue }) {
+					Text(currentValue).tag(currentValue)
+				}
 		}
+	}
+}
+
+// MARK: caption shown under a Fuel Type picker, pointing to where the option list is configured
+struct FuelTypePickerNote: View {
+	var body: some View {
+		Text("Fuel Type now shows a grouped, \(Vertical.current.assetSingular.lowercased())-specific list. Choose which options appear under Settings ▸ Fuel Types.")
+			.font(.caption2)
+			.foregroundStyle(.secondary)
+	}
+}
+
+// MARK: Hydraulic Fluid Type picker content — grouped catalog the user has enabled in
+// Settings > Hydraulic Fluid Types (Settings1.enabled(Aviation/Marine/Land)HydraulicFluidTypes).
+// Shared between EditVehicle so the field stays in sync with the same settings across verticals.
+struct HydraulicFluidTypePickerOptions: View {
+	/// The field's current value, so an existing entry that's no longer in the enabled
+	/// list (e.g. after the user unchecks it in Settings) still shows up as a selectable
+	/// tag instead of silently going blank.
+	let currentValue: String
+
+	@Query(filter: #Predicate<Settings1> { $0.userName == "primary1" }) private var settingsFetched: [Settings1]
+
+	private var enabledAviationFluids: [AviationHydraulicFluidType] {
+		settingsFetched.first?.enabledHydraulicFluidTypes ?? AviationHydraulicFluidType.defaultEnabled
+	}
+
+	private var enabledMarineFluids: [MarineHydraulicFluidType] {
+		settingsFetched.first?.enabledMarineHydraulicFluidTypes ?? MarineHydraulicFluidType.defaultEnabled
+	}
+
+	private var enabledLandFluids: [LandHydraulicFluidType] {
+		settingsFetched.first?.enabledLandHydraulicFluidTypes ?? LandHydraulicFluidType.defaultEnabled
+	}
+
+	var body: some View {
+		switch Vertical.current.id {
+			case .aviation:
+				let enabled = enabledAviationFluids
+				ForEach(AviationHydraulicFluidType.Category.allCases, id: \.self) { category in
+					let fluidsInCategory = enabled.filter { $0.category == category }
+					if !fluidsInCategory.isEmpty {
+						Section(category.rawValue) {
+							ForEach(fluidsInCategory) { fluid in
+								Text(fluid.rawValue).tag(fluid.rawValue)
+							}
+						}
+					}
+				}
+				if !currentValue.isEmpty && !enabled.contains(where: { $0.rawValue == currentValue }) {
+					Text(currentValue).tag(currentValue)
+				}
+			case .marine:
+				let enabled = enabledMarineFluids
+				ForEach(MarineHydraulicFluidType.Category.allCases, id: \.self) { category in
+					let fluidsInCategory = enabled.filter { $0.category == category }
+					if !fluidsInCategory.isEmpty {
+						Section(category.rawValue) {
+							ForEach(fluidsInCategory) { fluid in
+								Text(fluid.rawValue).tag(fluid.rawValue)
+							}
+						}
+					}
+				}
+				if !currentValue.isEmpty && !enabled.contains(where: { $0.rawValue == currentValue }) {
+					Text(currentValue).tag(currentValue)
+				}
+			case .land:
+				let enabled = enabledLandFluids
+				ForEach(LandHydraulicFluidType.Category.allCases, id: \.self) { category in
+					let fluidsInCategory = enabled.filter { $0.category == category }
+					if !fluidsInCategory.isEmpty {
+						Section(category.rawValue) {
+							ForEach(fluidsInCategory) { fluid in
+								Text(fluid.rawValue).tag(fluid.rawValue)
+							}
+						}
+					}
+				}
+				if !currentValue.isEmpty && !enabled.contains(where: { $0.rawValue == currentValue }) {
+					Text(currentValue).tag(currentValue)
+				}
+		}
+	}
+}
+
+// MARK: caption shown under a Hydraulic Fluid Type picker, pointing to where the option list is configured
+struct HydraulicFluidTypePickerNote: View {
+	var body: some View {
+		Text("Hydraulic Fluid Type shows a grouped, \(Vertical.current.assetSingular.lowercased())-specific list. Choose which options appear under Settings ▸ Hydraulic Fluid Types.")
+			.font(.caption2)
+			.foregroundStyle(.secondary)
 	}
 }
 
@@ -348,7 +474,7 @@ struct Picker_FuelLevel1: View {
 			.pickerModifier_Short()
 			if let quantity {
 				TextField("", value: quantity, formatter: functions.DoubleFormatter)
-					.textViewModified_Short()
+					.textViewModified_Medium()
 #if !os(macOS)
 					.selectAllTextOnBeginEditing()
 					.keyboardType(.decimalPad)
@@ -358,7 +484,7 @@ struct Picker_FuelLevel1: View {
 			} else {
 				let currentFuel: Float = data * data1
 				No_LabelDataNumber(data: currentFuel, fractionalLength: 1)
-					.textViewModified_Short()
+					.textViewModified_Medium()
 			}
 		}
 	}

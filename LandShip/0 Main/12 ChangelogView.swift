@@ -2,10 +2,11 @@
 //  ChangelogView.swift
 //  LandShip
 //
-//  Shared parser and renderer for the bundled changelog.md file. Used by both
-//  the startup "What's New" sheet (LandShipApp.swift) and the in-app Help
-//  document, so there is a single source of truth for how the changelog is
-//  read and displayed.
+//  Shared parser and renderer for the bundled per-vertical changelog file
+//  (changelog.md / changelog-aero.md / changelog-marine.md — see
+//  ChangelogParser.bundledResourceName). Used by both the startup "What's New"
+//  sheet (LandShipApp.swift) and the in-app Help document, so there is a single
+//  source of truth for how the changelog is read and displayed.
 //
 
 import SwiftUI
@@ -29,10 +30,21 @@ struct ChangelogVersionBlock: Identifiable {
 	let notes: [ChangelogItemGroup]
 }
 
-/// Parses the bundled `changelog.md` file into structured version blocks.
+/// Parses the bundled changelog file into structured version blocks. Each vertical
+/// ships its own history — VehicleTrax kept its original "changelog" filename, and
+/// AeroTrax/NauticalTrax get their own files — so a shared codebase change doesn't
+/// show up as release notes in a product that never shipped it.
 enum ChangelogParser {
+	private static var bundledResourceName: String {
+		switch Vertical.current.id {
+			case .land: return "changelog"
+			case .aviation: return "changelog-aero"
+			case .marine: return "changelog-marine"
+		}
+	}
+
 	static func parseBundledChangelog() -> [ChangelogVersionBlock] {
-		guard let url = Bundle.main.url(forResource: "changelog", withExtension: "md"),
+		guard let url = Bundle.main.url(forResource: bundledResourceName, withExtension: "md"),
 			  let raw = try? String(contentsOf: url, encoding: .utf8) else { return [] }
 
 		let normalized = raw

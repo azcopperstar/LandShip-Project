@@ -20,6 +20,20 @@ class ServiceRecords1 {
 		var vehicleId: String = ""
 		var Miles: Int = 0
 		var engHours: Float = 0
+		// Cycle snapshot at this maintenance event (AeroTrax) — the analogue of engHours,
+		// not a feeder into Vehicle8's cycle count (see Vehicle8.cyclesAtEntry).
+		var cycles: Int = 0
+		// 14 CFR 43.9 maintenance record entry: who performed the work and who returned
+		// it to service. 43.9(a)(4)'s "kind of certificate" maps to CertificateKind
+		// (11 Enums.swift). retentionClass distinguishes the 91.417(a)(2) permanent
+		// record set (life-limited status, TSO, inspection/AD status) from records
+		// discardable after a year.
+		var performedByName: String = ""
+		var certificateNumber: String = ""
+		var certificateKind: String = ""
+		var returnedToServiceBy: String = ""
+		var rtsDate: Date?
+		var retentionClass: String = ""
 		var mxName: String = ""
 		var mxItemId: String = ""
 		var mxDescription: String = ""
@@ -104,6 +118,13 @@ class ServiceRecords1 {
 		vehicleId: String = "",
 		Miles: Int = 0,
 		engHours: Float = 0,
+		cycles: Int = 0,
+		performedByName: String = "",
+		certificateNumber: String = "",
+		certificateKind: String = "",
+		returnedToServiceBy: String = "",
+		rtsDate: Date? = nil,
+		retentionClass: String = "",
 		mxName: String = "",
 		mxItemId: String = "",
 		mxDescription: String = "",
@@ -154,6 +175,13 @@ class ServiceRecords1 {
 		self.vehicleId = vehicleId
 		self.Miles = Miles
 		self.engHours = engHours
+		self.cycles = cycles
+		self.performedByName = performedByName
+		self.certificateNumber = certificateNumber
+		self.certificateKind = certificateKind
+		self.returnedToServiceBy = returnedToServiceBy
+		self.rtsDate = rtsDate
+		self.retentionClass = retentionClass
 		self.mxName = mxName
 		self.mxItemId = mxItemId
 		self.mxDescription = mxDescription

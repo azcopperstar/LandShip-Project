@@ -50,6 +50,8 @@ extension HaulOutRecord:      TrialCapped { static let trialLimit = 10; static l
 extension SurveyRecord:       TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Survey Records" }
 extension PilotLogbookEntry:  TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Logbook Entries" }
 extension SeaServiceEntry:    TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Sea Service Entries" }
+extension PartInstallation:   TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Installations" }
+extension RecordAttachment:   TrialCapped { static let trialLimit = 5;  static let trialDisplayName = "Attachments" }
 // Settings1, PilotCertification, MarinerCredential deliberately do NOT conform — singleton
 // profile records, exempt from trial caps by construction.
 
@@ -64,6 +66,7 @@ enum TrialCaps {
 		VehicleWarranty.self, VehicleScaleTicket.self, VehicleSerialItem.self,
 		AirworthinessDirective.self, InspectionCycle.self, ComponentTimes.self,
 		HaulOutRecord.self, SurveyRecord.self,
-		PilotLogbookEntry.self, SeaServiceEntry.self
+		PilotLogbookEntry.self, SeaServiceEntry.self,
+		PartInstallation.self, RecordAttachment.self
 	]
 }

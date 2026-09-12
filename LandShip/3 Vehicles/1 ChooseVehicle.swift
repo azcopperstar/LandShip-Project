@@ -188,7 +188,7 @@ struct ChooseVehicle: View {
 												.foregroundStyle(.secondary)
 										}
 										if vehicle.engHours > 0 {
-											Text("\(Vertical.current.id == .land ? "Engine Hours" : Vertical.current.primaryMeterLabel): \(vehicle.engHours, specifier: "%.1f")")
+											Text("\(Vertical.current.hoursMeterLabel): \(vehicle.engHours, specifier: "%.1f")")
 												.font(.subheadline)
 												.foregroundStyle(.secondary)
 										}

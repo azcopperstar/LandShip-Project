@@ -6,6 +6,13 @@
 //  vehicleId. Each aircraft may have many ADs, one-time or recurring. AeroTrax only
 //  (see Vertical.enabledFeatures) — additive model, not used by land or marine.
 //
+//  Also covers Service Bulletins/Letters via directiveType — reused rather than a
+//  separate model since the two share ~95% of their fields (see multi-vertical-expansion
+//  memory). appliesToPartNumber keys an entry to MxParts1.partNumber (not partName) so it
+//  follows a part across aircraft, per DirectiveResolution.swift's resolution query —
+//  deliberately NOT part of the name-based-linking rename-cascade system, since part
+//  numbers aren't renamed through the part-rename dialog.
+//
 
 import Foundation
 import SwiftData
@@ -27,6 +34,12 @@ class AirworthinessDirective {
 	var nextDueDate: Date = Date()
 	var nextDueHours: Float = 0
 	var notes: String = ""
+	var directiveType: String = "Airworthiness Directive"   // AD / Service Bulletin / Mandatory SB / Service Letter / Service Instruction
+	var isMandatory: Bool = true
+	var appliesToScope: String = "Aircraft"                 // "Aircraft" | "Part Number" | "Both"
+	var appliesToPartNumber: String = ""                    // MxParts1.partNumber
+	var appliesToManufacturer: String = ""
+	var appliesToSerialNumbers: String = ""                 // free text, e.g. "1001-1450, 2003" — never parsed
 	@Attribute(.externalStorage)
 	var image1: Data?
 	var image1Description: String = ""
@@ -48,6 +61,12 @@ class AirworthinessDirective {
 		nextDueDate: Date = Date(),
 		nextDueHours: Float = 0,
 		notes: String = "",
+		directiveType: String = "Airworthiness Directive",
+		isMandatory: Bool = true,
+		appliesToScope: String = "Aircraft",
+		appliesToPartNumber: String = "",
+		appliesToManufacturer: String = "",
+		appliesToSerialNumbers: String = "",
 		image1: Data? = nil,
 		image1Description: String = "",
 		createdAt: Date = Date(),
@@ -67,6 +86,12 @@ class AirworthinessDirective {
 		self.nextDueDate = nextDueDate
 		self.nextDueHours = nextDueHours
 		self.notes = notes
+		self.directiveType = directiveType
+		self.isMandatory = isMandatory
+		self.appliesToScope = appliesToScope
+		self.appliesToPartNumber = appliesToPartNumber
+		self.appliesToManufacturer = appliesToManufacturer
+		self.appliesToSerialNumbers = appliesToSerialNumbers
 		self.image1 = image1
 		self.image1Description = image1Description
 		self.createdAt = createdAt

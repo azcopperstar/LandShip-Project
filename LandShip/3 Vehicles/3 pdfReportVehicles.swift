@@ -146,7 +146,7 @@ struct pdfReportVehicles: View {
 
 		let headers = [
 			"Name", "Display Name", "Inactive", "Manufacturer", "Model", "Year", "Trim",
-			Vertical.current.primaryMeterLabel, "Virtual \(Vertical.current.primaryMeterLabel)", "Engine Hours",
+			Vertical.current.distanceMeterLabel, "Virtual \(Vertical.current.distanceMeterLabel)", Vertical.current.hoursMeterLabel,
 			"Transmission", "Engine", "Engine Serial #", "Transmission Serial #", "Fuel Type",
 			"Doors", "Seats", "Cargo Space", "Length", "Width", "Height", "Weight", "Date Weighed",
 			"Wheelbase", "GVWR", "GCWR", "GAWR Front", "GAWR Rear", "Towing Capacity", "UVW", "CCC",
@@ -310,22 +310,22 @@ struct pdfReportVehicles: View {
 		let distanceUnit = units[safe: UnitIndex.distance] ?? ""
 		var groups: [PDFFieldGroup] = []
 
+		let isAviation = Vertical.current.id == .aviation
 		if let mechanical = fieldGroup(nil, [
 			("Fuel Type", text(vehicle.fuelType)),
-			("Engine", text(vehicle.engine)),
-			("Engine S/N", text(vehicle.engineSerialNumber)),
-			("Transmission", text(vehicle.transmission)),
-			("Trans S/N", text(vehicle.transmissionSerialNumber))
+			("Engine", isAviation ? nil : text(vehicle.engine)),
+			("Engine S/N", isAviation ? nil : text(vehicle.engineSerialNumber)),
+			("Transmission", isAviation ? nil : text(vehicle.transmission)),
+			("Trans S/N", isAviation ? nil : text(vehicle.transmissionSerialNumber))
 		]) {
 			groups.append(mechanical)
 		}
 
-		let isLand = Vertical.current.id == .land
-		let engineHoursLabel = isLand ? "Engine Hours" : Vertical.current.primaryMeterLabel
+		let showsDistance = Vertical.current.visibleFieldGroups.contains(.odometer)
 		if let usage = fieldGroup("Usage", [
-			(isLand ? "Odometer" : "", isLand ? num(vehicle.mileage, unit: distanceUnit) : nil),
-			(isLand ? "Odometer (Virtual)" : "", isLand ? num(vehicle.mileageVirtual, unit: distanceUnit) : nil),
-			(engineHoursLabel, vehicle.engHours != 0 ? String(format: "%.1f hrs", vehicle.engHours) : nil),
+			(showsDistance ? Vertical.current.distanceMeterLabel : "", showsDistance ? num(vehicle.mileage, unit: distanceUnit) : nil),
+			(showsDistance ? "\(Vertical.current.distanceMeterLabel) (Virtual)" : "", showsDistance ? num(vehicle.mileageVirtual, unit: distanceUnit) : nil),
+			(Vertical.current.hoursMeterLabel, vehicle.engHours != 0 ? String(format: "%.1f hrs", vehicle.engHours) : nil),
 			("Doors", vehicle.doors > 0 ? "\(vehicle.doors)" : nil),
 			("Seats", vehicle.seats > 0 ? "\(vehicle.seats)" : nil)
 		]) {
@@ -345,11 +345,12 @@ struct pdfReportVehicles: View {
 
 		var groups: [PDFFieldGroup] = []
 
+		let isAviation = Vertical.current.id == .aviation
 		if let dimensions = fieldGroup("Dimensions", [
-			("Wheelbase", num(vehicle.wheelbase, unit: wheelBaseUnit)),
+			("Wheelbase", isAviation ? nil : num(vehicle.wheelbase, unit: wheelBaseUnit)),
 			("Length", num(vehicle.length, unit: lengthUnit)),
-			("Width", num(vehicle.width, unit: widthUnit)),
-			("Height", num(vehicle.height, unit: heightUnit)),
+			(isAviation ? "Wing Span" : "Width", num(vehicle.width, unit: widthUnit)),
+			("Height", isAviation ? nil : num(vehicle.height, unit: heightUnit)),
 			("Cargo", num(vehicle.cargoSpace, unit: areaUnit))
 		]) {
 			groups.append(dimensions)

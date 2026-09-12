@@ -9,7 +9,8 @@
 //
 
 import Testing
-@testable import LandShip
+import Foundation
+@testable import AeroTrax
 
 struct PartTimeMathTests {
 

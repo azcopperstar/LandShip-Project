@@ -45,7 +45,9 @@ enum AppSchema {
 		PilotLogbookEntry.self,
 		PilotCertification.self,
 		SeaServiceEntry.self,
-		MarinerCredential.self
+		MarinerCredential.self,
+		PartInstallation.self,
+		RecordAttachment.self
 	]
 }
 

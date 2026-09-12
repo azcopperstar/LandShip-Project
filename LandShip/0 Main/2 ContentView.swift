@@ -165,6 +165,32 @@ struct ContentView: View {
         )
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 150, ideal: sidebarWidth, max: 300)
+#if os(macOS)
+        // macOS: rendered as static content (not a toolbar item) so it can't be pushed
+        // around by toolbar reflow elsewhere in the split view. Matches the iPad layout,
+        // where the app name sits at the top of the left/sidebar column.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    AppTitleView()
+                        .simultaneousGesture(
+                            LongPressGesture(minimumDuration: 2.0)
+                                .onEnded { _ in
+                                    showingDebugTools = true
+                                    InAppLogger.shared.log("DebugTools opened via long-press")
+                                }
+                        )
+                        .accessibilityHint("Long-press for debug tools")
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+                Divider()
+            }
+            .background(.ultraThinMaterial)
+        }
+#else
         .toolbar {
             ToolbarItem(placement: .principal) {
                 // Hidden long-press to open Debug Tools (available in all builds)
@@ -179,6 +205,7 @@ struct ContentView: View {
                     .accessibilityHint("Long-press for debug tools")
             }
         }
+#endif
     }
 
     // On iPad, the Dashboard has no middle "content" column to show, so the standard 3-column
@@ -431,7 +458,7 @@ struct ContentView: View {
 		}
 #endif
 
-		.tint(.blue)
+		.tint(Color.accentColor)
 
 		// Progress dialog while a manual backup is being prepared or a restore is
 		// running — restores can take 30+ seconds, so make it clear work is happening.
@@ -956,7 +983,7 @@ private extension View {
 	func sidebarRowStyle(selected: Bool) -> some View {
 		self
 			.symbolRenderingMode(.hierarchical)
-			.foregroundStyle(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+			.foregroundStyle(.primary)
 			.fontWeight(selected ? .semibold : .regular)
 	}
 }
@@ -988,6 +1015,7 @@ private struct SidebarView: View {
 	@Environment(\.openWindow) private var openWindow
 #endif
 	@Environment(\.entitlements) private var entitlements
+	@Environment(\.openURL) private var openURL
 	var isBackupInProgress: Bool
 	var onBackupTapped: () -> Void
 	var onRestoreTapped: () -> Void
@@ -1265,7 +1293,71 @@ private struct SidebarView: View {
 						.sidebarRowStyle(selected: false)
 				}
 				.buttonStyle(.plain)
+
+				Button {
+					if let url = URL(string: "https://aeronauticaltrax.com") {
+						openURL(url)
+						InAppLogger.shared.log("Opened website")
+					}
+				} label: {
+					Label("Website", systemImage: "globe")
+						.sidebarRowStyle(selected: false)
+				}
+				.buttonStyle(.plain)
 			}
+		}
+		.safeAreaInset(edge: .bottom, spacing: 0) {
+			VStack(alignment: .center, spacing: 2) {
+				Button {
+					if let url = URL(string: "https://aeronauticaltrax.com") {
+						openURL(url)
+						InAppLogger.shared.log("Opened website via logo")
+					}
+				} label: {
+					Image("AeroNauticalTraxLogo")
+						.resizable()
+						.scaledToFit()
+#if os(macOS)
+						.frame(maxWidth: 110, maxHeight: 34)
+#else
+						.frame(maxWidth: 160, maxHeight: 48)
+#endif
+						.clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+						.mask(
+							LinearGradient(
+								stops: [
+									.init(color: .clear, location: 0.0),
+									.init(color: .black, location: 0.12),
+									.init(color: .black, location: 0.88),
+									.init(color: .clear, location: 1.0)
+								],
+								startPoint: .leading, endPoint: .trailing
+							)
+						)
+						.mask(
+							LinearGradient(
+								stops: [
+									.init(color: .clear, location: 0.0),
+									.init(color: .black, location: 0.12),
+									.init(color: .black, location: 0.88),
+									.init(color: .clear, location: 1.0)
+								],
+								startPoint: .top, endPoint: .bottom
+							)
+						)
+				}
+				.buttonStyle(.plain)
+				.accessibilityLabel("Visit aeronauticaltrax.com")
+
+				Text("\u{00A9} AERONAUTICALTRAX \(String(Calendar.current.component(.year, from: Date())))")
+					.font(.system(size: 5.5))
+					.foregroundStyle(.secondary)
+					.frame(maxWidth: .infinity, alignment: .center)
+			}
+			.frame(maxWidth: .infinity, alignment: .center)
+			.padding(.horizontal)
+			.padding(.vertical, 8)
+			.background(.ultraThinMaterial)
 		}
 #if !os(macOS)
 		.sheet(isPresented: Binding(
@@ -1454,11 +1546,6 @@ private struct DetailPlaceholderView: View {
 		}
 #else
 		ContentUnavailableView("Details", systemImage: "sidebar.right")
-			.toolbar {
-				ToolbarItem(placement: .principal) {
-					AppTitleView()
-				}
-			}
 #endif
 	}
 }
@@ -1528,8 +1615,13 @@ private struct DebugToolsView: View {
 #endif
 
 	@State private var logsText: String = InAppLogger.shared.joined()
-	@State private var isSharing: Bool = false
-	@State private var shareURL: URL?
+#if !os(macOS)
+	@State private var shareItem: LogShareItem?
+#endif
+
+	// Cleared on appear so the AppTitleView badge only signals "there's something
+	// you haven't looked at yet" — see StorageKey.hasUnreadCloudKitFailure.
+	@AppStorage(StorageKey.hasUnreadCloudKitFailure) private var hasUnreadCloudKitFailure = false
 
 #if DEBUG
 	@Environment(\.entitlements) private var entitlements
@@ -1579,31 +1671,40 @@ private struct DebugToolsView: View {
 				}
 
 				Section("Launch Log + Recent App Logs") {
-					TextEditor(text: $logsText)
-						.font(.system(.footnote, design: .monospaced))
-						.frame(minHeight: 200)
-						.accessibilityLabel("In-app logs")
+					ScrollView {
+						Text(logsText.isEmpty ? "(no log entries)" : logsText)
+							.font(.system(.footnote, design: .monospaced))
+							.frame(maxWidth: .infinity, alignment: .leading)
+							.textSelection(.enabled)
+					}
+					.frame(minHeight: 200)
+					.accessibilityLabel("In-app logs")
 					HStack {
 						Button {
 							logsText = InAppLogger.shared.joined()
 						} label: { Label("Refresh", systemImage: "arrow.clockwise") }
+						.buttonStyle(.borderless)
 						Spacer()
 						#if os(macOS)
 						Button {
 							copyToPasteboard(logsText)
 						} label: { Label("Copy", systemImage: "doc.on.doc") }
+						.buttonStyle(.borderless)
 						#else
 						Button {
 							copyToPasteboard(logsText)
 						} label: { Label("Copy", systemImage: "doc.on.doc") }
+						.buttonStyle(.borderless)
 						Button {
 							exportLogs(logsText)
 						} label: { Label("Share…", systemImage: "square.and.arrow.up") }
+						.buttonStyle(.borderless)
 						#endif
 						Button(role: .destructive) {
 							InAppLogger.shared.clear()
 							logsText = ""
 						} label: { Label("Clear", systemImage: "trash") }
+						.buttonStyle(.borderless)
 					}
 				}
 
@@ -1623,21 +1724,18 @@ private struct DebugToolsView: View {
 				}
 			}
 			.navigationTitle("Debug Tools")
+			.onAppear {
+				logsText = InAppLogger.shared.joined()
+				hasUnreadCloudKitFailure = false
+			}
 			.toolbar {
 				ToolbarItem(placement: .cancellationAction) {
 					Button("Close") { dismiss() }
 				}
 			}
 			#if !os(macOS)
-			.sheet(isPresented: $isSharing, onDismiss: {
-				if let url = shareURL { try? FileManager.default.removeItem(at: url) }
-				shareURL = nil
-			}) {
-				if let url = shareURL {
-					ActivityView(activityItems: [url])
-				} else {
-					Text("No log to share.")
-				}
+			.sheet(item: $shareItem) { item in
+				ActivityView(activityItems: [item.url], onDismiss: { shareItem = nil })
 			}
 			#endif
 		}
@@ -1659,8 +1757,7 @@ private struct DebugToolsView: View {
 		let url = FileManager.default.temporaryDirectory.appendingPathComponent("LandShip-Logs.txt")
 		do {
 			try text.data(using: .utf8)?.write(to: url, options: .atomic)
-			self.shareURL = url
-			self.isSharing = true
+			self.shareItem = LogShareItem(url: url)
 		} catch {
 			print("Failed to write logs: \(error)")
 		}
@@ -1702,7 +1799,7 @@ private struct DebugToolsView: View {
 // MARK: - In-app logger
 
 @MainActor
-fileprivate final class InAppLogger {
+final class InAppLogger {
 	static let shared = InAppLogger()
 	private let key = "InAppLogs"
 	private let maxEntries = 1000
@@ -1737,13 +1834,29 @@ fileprivate final class InAppLogger {
 	}
 }
 
+#if !os(macOS)
+private struct LogShareItem: Identifiable {
+	let id = UUID()
+	let url: URL
+}
+#endif
+
 #if canImport(UIKit) && !os(macOS)
 private struct ActivityView: UIViewControllerRepresentable {
 	let activityItems: [Any]
 	var applicationActivities: [UIActivity]? = nil
+	// UIActivityViewController dismisses itself (its own "X" / completing an activity)
+	// without going through SwiftUI's presentation-dismissal machinery, so the
+	// `.sheet(item:)` binding never resets to nil on its own — leaving the sheet
+	// "stuck presented" and causing it to reappear on the next unrelated state change.
+	var onDismiss: () -> Void = {}
 
 	func makeUIViewController(context: Context) -> UIActivityViewController {
-		UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
+		let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
+		controller.completionWithItemsHandler = { _, _, _, _ in
+			onDismiss()
+		}
+		return controller
 	}
 
 	func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}

@@ -27,6 +27,11 @@ BUMP_FLAG="${2:-}"
 
 cd "$PROJECT_ROOT"
 
+# Dropbox sync can reattach com.apple.quarantine to files (e.g. logo-A.png)
+# copied in from elsewhere. App Store Connect rejects packages containing it
+# (error 91109), so strip it from the whole project before every archive.
+xattr -dr com.apple.quarantine . 2>/dev/null || true
+
 if [ "$BUMP_FLAG" = "--bump" ]; then
   echo "Bumping build number..."
   agvtool next-version -all
