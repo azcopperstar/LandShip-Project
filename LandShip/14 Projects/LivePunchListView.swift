@@ -548,6 +548,7 @@ struct LivePunchListView: View {
                                     get: { item.completedAt },
                                     set: { v in item.completedAt = v; persistChange(for: item) }
                                 ), displayedComponents: [.date, .hourAndMinute])
+                                    .timeDisplayLocale()
                                     .labelsHidden()
                             }
                         }

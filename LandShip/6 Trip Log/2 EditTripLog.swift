@@ -832,13 +832,15 @@ struct EditTripLog: View {
 				
 				CardView {
 					VStack {
-						SectionText(label: Vertical.current.id == .aviation ? "DEPARTURE" : "TRAVEL START")
-						HStack{LabelDataPicker_DateTime(label: Vertical.current.id == .aviation ? "Depart                       " : "Date/Time                    ", data: $tripDateTimeStart)}
-						if Vertical.current.visibleFieldGroups.contains(.odometer) {
-							HStack{LabelDataTextview_Numberpad_Int(label: Vertical.current.distanceMeterLabel, data: $odometerStart)}
-						}
+						SectionBanner(label: Vertical.current.id == .aviation ? "DEPARTURE" : "TRAVEL START", color: .tripPhaseStart)
+						HStack{LabelDataPicker_DateTime(label: "Depart                       ", data: $tripDateTimeStart)}
 						HStack{LabelLocationTextview(label: "Location", data: $locationStart, latitude: $locationStartLat, longitude: $locationStartLon, coordinateLabel: "Departure Coordinates")}
-						HStack{LabelDataTextview_Numberpad_Float(label: "\(Vertical.current.hoursMeterLabel):", data: $engHoursStart, fixedWidth: Vertical.current.id == .aviation)}
+						HStack{
+							if Vertical.current.visibleFieldGroups.contains(.odometer) {
+								LabelDataTextview_Numberpad_Int(label: Vertical.current.distanceMeterLabel, data: $odometerStart, fixedWidth: true)
+							}
+							LabelDataTextview_Numberpad_Float(label: Vertical.current.hoursMeterLabel, data: $engHoursStart, fixedWidth: true)
+						}
 						if Vertical.current.id == .aviation {
 							ForEach(1...stopEngineCount, id: \.self) { engineNumber in
 								HStack{LabelDataTextview_Numberpad_Float(label: "\(stopEngineNameShort(engineNumber)) Tach", data: tachBinding($engineTachStart, engineNumber), fixedWidth: true)}
@@ -877,7 +879,7 @@ struct EditTripLog: View {
 								}
 						}
 						}
-						if Vertical.current.id != .aviation {
+						if Vertical.current.id != .aviation && isDieselFamilyFuelType(vehicleDetails?.fuelType ?? "") {
 						HStack{
 							Picker_FuelLevel1(label: "DEF Level", data: $defLevel1, data1: Float(vehicleDetails?.defCapacity ?? 0), quantity: $defQuantityStart)
 								.onChange(of: defLevel1) { _, newFraction in
@@ -919,7 +921,7 @@ struct EditTripLog: View {
 				CardView {
 					VStack {
 						SectionText(label: "ENROUTE STOPS")
-						SectionBanner(label: "STOP 1")
+						SectionBanner(label: "STOP 1", color: stopReason1.isEmpty ? .tripPhaseStopEmpty : .tripPhaseStop)
 						HStack{
 							LabelDataTextview_Numberpad_Fuel(
 								label: "(\(unit(UnitIndex.fuel)))",
@@ -978,6 +980,7 @@ struct EditTripLog: View {
 							brakeFluidAdded: $stopBrakeFluidAdded1,
 							fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
 							defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
+							isVehicleDiesel: isDieselFamilyFuelType(vehicleDetails?.fuelType ?? ""),
 							linkedLogId: $fuelAdded1Log,
 							fuelLogChoices: fuelLogChoices(currentlyLinked: fuelAdded1Log),
 							onLinkFuelLog: { newId in linkStop(1, to: newId) }
@@ -985,7 +988,7 @@ struct EditTripLog: View {
 						}
 						if fuelAdded1 > 0 || !stopReason1.isEmpty {
 							Divider()
-						SectionBanner(label: "STOP 2")
+						SectionBanner(label: "STOP 2", color: stopReason2.isEmpty ? .tripPhaseStopEmpty : .tripPhaseStop)
 							HStack{
 								LabelDataTextview_Numberpad_Fuel(
 									label: "(\(unit(UnitIndex.fuel)))",
@@ -1044,6 +1047,7 @@ struct EditTripLog: View {
 								brakeFluidAdded: $stopBrakeFluidAdded2,
 								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
 								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
+								isVehicleDiesel: isDieselFamilyFuelType(vehicleDetails?.fuelType ?? ""),
 								linkedLogId: $fuelAdded2Log,
 								fuelLogChoices: fuelLogChoices(currentlyLinked: fuelAdded2Log),
 								onLinkFuelLog: { newId in linkStop(2, to: newId) }
@@ -1052,7 +1056,7 @@ struct EditTripLog: View {
 						}
 						if fuelAdded2 > 0 || !stopReason2.isEmpty {
 							Divider()
-						SectionBanner(label: "STOP 3")
+						SectionBanner(label: "STOP 3", color: stopReason3.isEmpty ? .tripPhaseStopEmpty : .tripPhaseStop)
 							HStack{
 								LabelDataTextview_Numberpad_Fuel(
 									label: "(\(unit(UnitIndex.fuel)))",
@@ -1111,6 +1115,7 @@ struct EditTripLog: View {
 								brakeFluidAdded: $stopBrakeFluidAdded3,
 								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
 								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
+								isVehicleDiesel: isDieselFamilyFuelType(vehicleDetails?.fuelType ?? ""),
 								linkedLogId: $fuelAdded3Log,
 								fuelLogChoices: fuelLogChoices(currentlyLinked: fuelAdded3Log),
 								onLinkFuelLog: { newId in linkStop(3, to: newId) }
@@ -1119,7 +1124,7 @@ struct EditTripLog: View {
 						}
 						if fuelAdded3 > 0 || !stopReason3.isEmpty {
 							Divider()
-						SectionBanner(label: "STOP 4")
+						SectionBanner(label: "STOP 4", color: stopReason4.isEmpty ? .tripPhaseStopEmpty : .tripPhaseStop)
 							HStack{
 								LabelDataTextview_Numberpad_Fuel(
 									label: "(\(unit(UnitIndex.fuel)))",
@@ -1178,6 +1183,7 @@ struct EditTripLog: View {
 								brakeFluidAdded: $stopBrakeFluidAdded4,
 								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
 								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
+								isVehicleDiesel: isDieselFamilyFuelType(vehicleDetails?.fuelType ?? ""),
 								linkedLogId: $fuelAdded4Log,
 								fuelLogChoices: fuelLogChoices(currentlyLinked: fuelAdded4Log),
 								onLinkFuelLog: { newId in linkStop(4, to: newId) }
@@ -1186,7 +1192,7 @@ struct EditTripLog: View {
 						}
 						if fuelAdded4 > 0 || !stopReason4.isEmpty {
 							Divider()
-						SectionBanner(label: "STOP 5")
+						SectionBanner(label: "STOP 5", color: stopReason5.isEmpty ? .tripPhaseStopEmpty : .tripPhaseStop)
 							HStack{
 								LabelDataTextview_Numberpad_Fuel(
 									label: "(\(unit(UnitIndex.fuel)))",
@@ -1245,6 +1251,7 @@ struct EditTripLog: View {
 								brakeFluidAdded: $stopBrakeFluidAdded5,
 								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
 								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
+								isVehicleDiesel: isDieselFamilyFuelType(vehicleDetails?.fuelType ?? ""),
 								linkedLogId: $fuelAdded5Log,
 								fuelLogChoices: fuelLogChoices(currentlyLinked: fuelAdded5Log),
 								onLinkFuelLog: { newId in linkStop(5, to: newId) }
@@ -1253,7 +1260,7 @@ struct EditTripLog: View {
 						}
 						if fuelAdded5 > 0 || !stopReason5.isEmpty {
 							Divider()
-						SectionBanner(label: "STOP 6")
+						SectionBanner(label: "STOP 6", color: stopReason6.isEmpty ? .tripPhaseStopEmpty : .tripPhaseStop)
 							HStack{
 								LabelDataTextview_Numberpad_Fuel(
 									label: "(\(unit(UnitIndex.fuel)))",
@@ -1312,6 +1319,7 @@ struct EditTripLog: View {
 								brakeFluidAdded: $stopBrakeFluidAdded6,
 								fuelCapacity: Float(vehicleDetails?.fuelCapacity ?? 0),
 								defCapacity: Float(vehicleDetails?.defCapacity ?? 0),
+								isVehicleDiesel: isDieselFamilyFuelType(vehicleDetails?.fuelType ?? ""),
 								linkedLogId: $fuelAdded6Log,
 								fuelLogChoices: fuelLogChoices(currentlyLinked: fuelAdded6Log),
 								onLinkFuelLog: { newId in linkStop(6, to: newId) }
@@ -1323,12 +1331,15 @@ struct EditTripLog: View {
 				
 				CardView {
 					VStack {
-						SectionText(label: Vertical.current.id == .aviation ? "ARRIVAL" : "TRAVEL END")
-						HStack{LabelDataPicker_DateTime(label: Vertical.current.id == .aviation ? "Arrive                       " : "Date/Time                    ", data: $tripDateTimeEnd)}
-						if Vertical.current.visibleFieldGroups.contains(.odometer) {
-							HStack{LabelDataTextview_Numberpad_Int(label: Vertical.current.distanceMeterLabel, data: $odometerEnd)}
-						}
+						SectionBanner(label: Vertical.current.id == .aviation ? "ARRIVAL" : "TRAVEL END", color: .tripPhaseEnd)
+						HStack{LabelDataPicker_DateTime(label: "Arrive                       ", data: $tripDateTimeEnd)}
 						HStack{LabelLocationTextview(label: "Location", data: $locationEnd, latitude: $locationEndLat, longitude: $locationEndLon, coordinateLabel: "Arrival Coordinates")}
+						HStack{
+							if Vertical.current.visibleFieldGroups.contains(.odometer) {
+								LabelDataTextview_Numberpad_Int(label: Vertical.current.distanceMeterLabel, data: $odometerEnd, fixedWidth: true)
+							}
+							LabelDataTextview_Numberpad_Float(label: Vertical.current.hoursMeterLabel, data: $engHoursEnd, fixedWidth: true)
+						}
 						if let distanceNM = departureArrivalDistanceNM {
 							Text("Direct Distance: \(String(format: "%.1f nm", distanceNM))")
 								.font(.caption2)
@@ -1341,7 +1352,6 @@ struct EditTripLog: View {
 									.frame(maxWidth: .infinity, alignment: .trailing)
 							}
 						}
-						HStack{LabelDataTextview_Numberpad_Float(label: "\(Vertical.current.hoursMeterLabel):", data: $engHoursEnd, fixedWidth: Vertical.current.id == .aviation)}
 						if Vertical.current.id == .aviation {
 							ForEach(1...stopEngineCount, id: \.self) { engineNumber in
 								HStack{LabelDataTextview_Numberpad_Float(label: "\(stopEngineNameShort(engineNumber)) Tach", data: tachBinding($engineTachEnd, engineNumber), fixedWidth: true)}
@@ -1378,7 +1388,7 @@ struct EditTripLog: View {
 								}
 						}
 						}
-						if Vertical.current.id != .aviation {
+						if Vertical.current.id != .aviation && isDieselFamilyFuelType(vehicleDetails?.fuelType ?? "") {
 						HStack{
 							Picker_FuelLevel1(label: "DEF Level", data: $defLevelEnd1, data1: Float(vehicleDetails?.defCapacity ?? 0), quantity: $defQuantityEnd)
 								.onChange(of: defLevelEnd1) { _, newFraction in
@@ -1814,27 +1824,13 @@ struct EditTripLog: View {
 				
 				CardView {
 					VStack {
-						SectionText(label: Vertical.current.id == .aviation ? "DEPARTURE" : "TRAVEL START")
-						HStack{LabelDataText(label: Vertical.current.id == .aviation ? "Depart" : "Departure", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.tripDateTimeStart))")}
-						if Vertical.current.visibleFieldGroups.contains(.odometer) {
-							HStack{LabelDataText(label: Vertical.current.distanceMeterLabel, data: "\(dataSet.odometerStart) \(unit(UnitIndex.distance))")}
-						}
-						if vehicleFuelTankCount > 1 {
-							ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
-								HStack{LabelDataText(label: fuelTankName(tankNumber), data: tankReading(fraction: tankLevelStartBinding(tankNumber).wrappedValue, quantity: tankQuantityStartBinding(tankNumber).wrappedValue, unitLabel: unit(UnitIndex.fuel)))}
-							}
-						} else if dataSet.fuelLevelStart != "" {
-							HStack{LabelDataText(label: "Fuel Level", data: "\(dataSet.fuelLevelStart) \(dataSet.fuelQuantityStart)\(unit(UnitIndex.fuel))")}
-						}
-						if dataSet.defLevelFraction != "" && Vertical.current.id != .aviation {
-							let defQtyStart = dataSet.defQuantityStart > 0
-							? dataSet.defQuantityStart
-							: dataSet.defLevel1 * Float(vehicleDetails?.defCapacity ?? 0)
-							let defQtyStartText = defQtyStart > 0 ? " \(defQtyStart.formatted(.number.precision(.fractionLength(1))))\(unit(UnitIndex.def))" : ""
-							HStack{LabelDataText(label: "DEF Level", data: "\(dataSet.defLevelFraction)\(defQtyStartText)")}
-						}
+						SectionBanner(label: Vertical.current.id == .aviation ? "DEPARTURE" : "TRAVEL START", color: .tripPhaseStart)
+						HStack{LabelDataText(label: "Depart", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.tripDateTimeStart))")}
 						if dataSet.locationStart != "" {
 							HStack{LabelDataText(label: "Location", data: "\(dataSet.locationStart)")}
+						}
+						if Vertical.current.visibleFieldGroups.contains(.odometer) {
+							HStack{LabelDataText(label: Vertical.current.distanceMeterLabel, data: "\(dataSet.odometerStart) \(unit(UnitIndex.distance))")}
 						}
 						if dataSet.engHoursStart > 0 {
 							HStack{LabelDataNumber(label: "\(Vertical.current.hoursMeterLabel):", data: dataSet.engHoursStart, fractionalLength: 1)}
@@ -1845,6 +1841,21 @@ struct EditTripLog: View {
 								if tach > 0 {
 									HStack{LabelDataNumber(label: "\(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
 								}
+							}
+						}
+						if vehicleFuelTankCount > 1 {
+							ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
+								HStack{LabelDataText(label: fuelTankName(tankNumber), data: quantityText(tankQuantityStartBinding(tankNumber).wrappedValue, unitLabel: unit(UnitIndex.fuel)))}
+							}
+						} else if dataSet.fuelLevelStart != "" {
+							HStack{LabelDataText(label: "Fuel Level", data: quantityText(dataSet.fuelQuantityStart, unitLabel: unit(UnitIndex.fuel)))}
+						}
+						if Vertical.current.id != .aviation {
+							let defQtyStart = dataSet.defQuantityStart > 0
+							? dataSet.defQuantityStart
+							: dataSet.defLevel1 * Float(vehicleDetails?.defCapacity ?? 0)
+							if defQtyStart > 0 {
+								HStack{LabelDataText(label: "DEF Level", data: quantityText(defQtyStart, unitLabel: unit(UnitIndex.def)))}
 							}
 						}
 						let startChecks = Vertical.current.id == .land
@@ -1871,17 +1882,26 @@ struct EditTripLog: View {
 				if hasStopsEnroute {
 					CardView {
 					VStack {
-						SectionText(label: "ENROUTE STOPS")
+						SectionBanner(label: "ENROUTE STOPS", color: .tripPhaseStop)
 						if dataSet.fuelAdded1 > 0 || !stopReason1.isEmpty {
 						VStack(alignment: .leading, spacing: 4) {
-							HStack{LabelDataText(label: "\(fuelLocation1)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime1))")}
-							if !stopReason1.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason1)} }
-							if !stopComment1.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment1)} }
-							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded1, fractionalLength: 1)}
+							if !stopReason1.isEmpty { HStack{LabelDataText(label: "Reason", data: stopReason1)} }
+							if !fuelLocation1.isEmpty { HStack{LabelDataText(label: "Location", data: fuelLocation1)} }
+							HStack{LabelDataText(label: "Arrive", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime1))")}
+							if fuelExitTime1 > fuelDateTime1 {
+								HStack{LabelDataText(label: "Depart", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime1))")}
+								HStack{LabelDataText(label: "Stopped Time", data: stoppedTimeText(from: fuelDateTime1, to: fuelExitTime1))}
+							}
+							if !stopComment1.isEmpty { HStack{LabelDataText(label: "Notes", data: stopComment1)} }
+							if !fuelAdded1Log.isEmpty, Vertical.current.visibleFieldGroups.contains(.odometer), fuelOdometer1 > 0 { HStack{LabelDataText(label: "Odometer", data: "\(Int(fuelOdometer1)) \(unit(UnitIndex.distance))")} }
+							if stopReason1 == "Fuel" && dataSet.fuelAdded1 > 0 {
+								HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded1, fractionalLength: 1)}
+							}
 							if !fuelAdded1Log.isEmpty {
 								if !stopFuelType1.isEmpty { HStack{LabelDataText(label: "  Fuel Type", data: stopFuelType1)} }
-								let fuelStartText1 = tankReading(fraction: stopFuelLevelStart1, quantity: stopFuelQtyStart1, unitLabel: unit(UnitIndex.fuel))
-								let fuelEndText1 = tankReading(fraction: stopFuelLevelEnd1, quantity: stopFuelQtyEnd1, unitLabel: unit(UnitIndex.fuel))
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in let tach = engineNumber <= stopEngineTach1.count ? stopEngineTach1[engineNumber - 1] : 0; if tach > 0 { HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)} } }
+								let fuelStartText1 = quantityText(stopFuelQtyStart1, unitLabel: unit(UnitIndex.fuel))
+								let fuelEndText1 = quantityText(stopFuelQtyEnd1, unitLabel: unit(UnitIndex.fuel))
 								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText1) to \(fuelEndText1)")}
 								if vehicleFuelTankCount > 1 {
 									ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
@@ -1906,23 +1926,21 @@ struct EditTripLog: View {
 								if stopBrakeFluidAdded1 > 0 {
 									HStack{LabelDataNumber(label: "  Brake Fluid Added", data: stopBrakeFluidAdded1, fractionalLength: 1)}
 								}
-								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
-									let tach = engineNumber <= stopEngineTach1.count ? stopEngineTach1[engineNumber - 1] : 0
-									if tach > 0 {
-										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
-									}
-								}
-								if stopDefLevelStart1 > 0 || stopDefQtyStart1 > 0 {
-									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart1, quantity: stopDefQtyStart1, unitLabel: unit(UnitIndex.def)))}
-								}
-								if stopDefPrice1 > 0 {
-									HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice1, unit: "/ \(unit(UnitIndex.def))")}
+								if isDieselFamilyFuelType(vehicleDetails?.fuelType ?? "") {
 									if defAdded1 > 0 {
-										HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice1 * defAdded1, unit: "")}
+										if stopDefLevelStart1 > 0 || stopDefQtyStart1 > 0 {
+											HStack{LabelDataText(label: "  DEF Level Start", data: quantityText(stopDefQtyStart1, unitLabel: unit(UnitIndex.def)))}
+										}
+										if stopDefPrice1 > 0 {
+											HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice1, unit: "/ \(unit(UnitIndex.def))")}
+											HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice1 * defAdded1, unit: "")}
+										}
+										if stopDefLevel1 > 0 || stopDefQty1 > 0 {
+											HStack{LabelDataText(label: "  DEF Level End", data: quantityText(stopDefQty1, unitLabel: unit(UnitIndex.def)))}
+										}
+									} else if stopDefLevel1 > 0 || stopDefQty1 > 0 {
+										HStack{LabelDataText(label: "  DEF Level", data: quantityText(stopDefQty1, unitLabel: unit(UnitIndex.def)))}
 									}
-								}
-								if stopDefLevel1 > 0 || stopDefQty1 > 0 {
-									HStack{LabelDataText(label: "  DEF Level End", data: tankReading(fraction: stopDefLevel1, quantity: stopDefQty1, unitLabel: unit(UnitIndex.def)))}
 								}
 							}
 							if fuelStop1Image1 != nil || fuelStop1Image2 != nil || fuelStop1Image3 != nil {
@@ -1931,9 +1949,6 @@ struct EditTripLog: View {
 									FuelStop_ImageThumb(imageData: fuelStop1Image2)
 									FuelStop_ImageThumb(imageData: fuelStop1Image3)
 								}
-							}
-							if fuelExitTime1 > fuelDateTime1 {
-								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime1))")}
 							}
 						}
 						.cardStyle(backgroundColor: Color.accentColor.opacity(0.5))
@@ -1948,14 +1963,23 @@ struct EditTripLog: View {
 						}
 						if dataSet.fuelAdded2 > 0 || !stopReason2.isEmpty {
 						VStack(alignment: .leading, spacing: 4) {
-							HStack{LabelDataText(label: "\(fuelLocation2)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime2))")}
-							if !stopReason2.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason2)} }
-							if !stopComment2.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment2)} }
-							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded2, fractionalLength: 1)}
+							if !stopReason2.isEmpty { HStack{LabelDataText(label: "Reason", data: stopReason2)} }
+							if !fuelLocation2.isEmpty { HStack{LabelDataText(label: "Location", data: fuelLocation2)} }
+							HStack{LabelDataText(label: "Arrive", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime2))")}
+							if fuelExitTime2 > fuelDateTime2 {
+								HStack{LabelDataText(label: "Depart", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime2))")}
+								HStack{LabelDataText(label: "Stopped Time", data: stoppedTimeText(from: fuelDateTime2, to: fuelExitTime2))}
+							}
+							if !stopComment2.isEmpty { HStack{LabelDataText(label: "Notes", data: stopComment2)} }
+							if !fuelAdded2Log.isEmpty, Vertical.current.visibleFieldGroups.contains(.odometer), fuelOdometer2 > 0 { HStack{LabelDataText(label: "Odometer", data: "\(Int(fuelOdometer2)) \(unit(UnitIndex.distance))")} }
+							if stopReason2 == "Fuel" && dataSet.fuelAdded2 > 0 {
+								HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded2, fractionalLength: 1)}
+							}
 							if !fuelAdded2Log.isEmpty {
 								if !stopFuelType2.isEmpty { HStack{LabelDataText(label: "  Fuel Type", data: stopFuelType2)} }
-								let fuelStartText2 = tankReading(fraction: stopFuelLevelStart2, quantity: stopFuelQtyStart2, unitLabel: unit(UnitIndex.fuel))
-								let fuelEndText2 = tankReading(fraction: stopFuelLevelEnd2, quantity: stopFuelQtyEnd2, unitLabel: unit(UnitIndex.fuel))
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in let tach = engineNumber <= stopEngineTach2.count ? stopEngineTach2[engineNumber - 1] : 0; if tach > 0 { HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)} } }
+								let fuelStartText2 = quantityText(stopFuelQtyStart2, unitLabel: unit(UnitIndex.fuel))
+								let fuelEndText2 = quantityText(stopFuelQtyEnd2, unitLabel: unit(UnitIndex.fuel))
 								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText2) to \(fuelEndText2)")}
 								if vehicleFuelTankCount > 1 {
 									ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
@@ -1980,23 +2004,21 @@ struct EditTripLog: View {
 								if stopBrakeFluidAdded2 > 0 {
 									HStack{LabelDataNumber(label: "  Brake Fluid Added", data: stopBrakeFluidAdded2, fractionalLength: 1)}
 								}
-								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
-									let tach = engineNumber <= stopEngineTach2.count ? stopEngineTach2[engineNumber - 1] : 0
-									if tach > 0 {
-										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
-									}
-								}
-								if stopDefLevelStart2 > 0 || stopDefQtyStart2 > 0 {
-									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart2, quantity: stopDefQtyStart2, unitLabel: unit(UnitIndex.def)))}
-								}
-								if stopDefPrice2 > 0 {
-									HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice2, unit: "/ \(unit(UnitIndex.def))")}
+								if isDieselFamilyFuelType(vehicleDetails?.fuelType ?? "") {
 									if defAdded2 > 0 {
-										HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice2 * defAdded2, unit: "")}
+										if stopDefLevelStart2 > 0 || stopDefQtyStart2 > 0 {
+											HStack{LabelDataText(label: "  DEF Level Start", data: quantityText(stopDefQtyStart2, unitLabel: unit(UnitIndex.def)))}
+										}
+										if stopDefPrice2 > 0 {
+											HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice2, unit: "/ \(unit(UnitIndex.def))")}
+											HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice2 * defAdded2, unit: "")}
+										}
+										if stopDefLevel2 > 0 || stopDefQty2 > 0 {
+											HStack{LabelDataText(label: "  DEF Level End", data: quantityText(stopDefQty2, unitLabel: unit(UnitIndex.def)))}
+										}
+									} else if stopDefLevel2 > 0 || stopDefQty2 > 0 {
+										HStack{LabelDataText(label: "  DEF Level", data: quantityText(stopDefQty2, unitLabel: unit(UnitIndex.def)))}
 									}
-								}
-								if stopDefLevel2 > 0 || stopDefQty2 > 0 {
-									HStack{LabelDataText(label: "  DEF Level End", data: tankReading(fraction: stopDefLevel2, quantity: stopDefQty2, unitLabel: unit(UnitIndex.def)))}
 								}
 							}
 							if fuelStop2Image1 != nil || fuelStop2Image2 != nil || fuelStop2Image3 != nil {
@@ -2005,9 +2027,6 @@ struct EditTripLog: View {
 									FuelStop_ImageThumb(imageData: fuelStop2Image2)
 									FuelStop_ImageThumb(imageData: fuelStop2Image3)
 								}
-							}
-							if fuelExitTime2 > fuelDateTime2 {
-								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime2))")}
 							}
 						}
 						.cardStyle(backgroundColor: Color.accentColor.opacity(0.5))
@@ -2022,14 +2041,23 @@ struct EditTripLog: View {
 						}
 						if dataSet.fuelAdded3 > 0 || !stopReason3.isEmpty {
 						VStack(alignment: .leading, spacing: 4) {
-							HStack{LabelDataText(label: "\(fuelLocation3)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime3))")}
-							if !stopReason3.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason3)} }
-							if !stopComment3.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment3)} }
-							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded3, fractionalLength: 1)}
+							if !stopReason3.isEmpty { HStack{LabelDataText(label: "Reason", data: stopReason3)} }
+							if !fuelLocation3.isEmpty { HStack{LabelDataText(label: "Location", data: fuelLocation3)} }
+							HStack{LabelDataText(label: "Arrive", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime3))")}
+							if fuelExitTime3 > fuelDateTime3 {
+								HStack{LabelDataText(label: "Depart", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime3))")}
+								HStack{LabelDataText(label: "Stopped Time", data: stoppedTimeText(from: fuelDateTime3, to: fuelExitTime3))}
+							}
+							if !stopComment3.isEmpty { HStack{LabelDataText(label: "Notes", data: stopComment3)} }
+							if !fuelAdded3Log.isEmpty, Vertical.current.visibleFieldGroups.contains(.odometer), fuelOdometer3 > 0 { HStack{LabelDataText(label: "Odometer", data: "\(Int(fuelOdometer3)) \(unit(UnitIndex.distance))")} }
+							if stopReason3 == "Fuel" && dataSet.fuelAdded3 > 0 {
+								HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded3, fractionalLength: 1)}
+							}
 							if !fuelAdded3Log.isEmpty {
 								if !stopFuelType3.isEmpty { HStack{LabelDataText(label: "  Fuel Type", data: stopFuelType3)} }
-								let fuelStartText3 = tankReading(fraction: stopFuelLevelStart3, quantity: stopFuelQtyStart3, unitLabel: unit(UnitIndex.fuel))
-								let fuelEndText3 = tankReading(fraction: stopFuelLevelEnd3, quantity: stopFuelQtyEnd3, unitLabel: unit(UnitIndex.fuel))
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in let tach = engineNumber <= stopEngineTach3.count ? stopEngineTach3[engineNumber - 1] : 0; if tach > 0 { HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)} } }
+								let fuelStartText3 = quantityText(stopFuelQtyStart3, unitLabel: unit(UnitIndex.fuel))
+								let fuelEndText3 = quantityText(stopFuelQtyEnd3, unitLabel: unit(UnitIndex.fuel))
 								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText3) to \(fuelEndText3)")}
 								if vehicleFuelTankCount > 1 {
 									ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
@@ -2054,23 +2082,21 @@ struct EditTripLog: View {
 								if stopBrakeFluidAdded3 > 0 {
 									HStack{LabelDataNumber(label: "  Brake Fluid Added", data: stopBrakeFluidAdded3, fractionalLength: 1)}
 								}
-								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
-									let tach = engineNumber <= stopEngineTach3.count ? stopEngineTach3[engineNumber - 1] : 0
-									if tach > 0 {
-										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
-									}
-								}
-								if stopDefLevelStart3 > 0 || stopDefQtyStart3 > 0 {
-									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart3, quantity: stopDefQtyStart3, unitLabel: unit(UnitIndex.def)))}
-								}
-								if stopDefPrice3 > 0 {
-									HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice3, unit: "/ \(unit(UnitIndex.def))")}
+								if isDieselFamilyFuelType(vehicleDetails?.fuelType ?? "") {
 									if defAdded3 > 0 {
-										HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice3 * defAdded3, unit: "")}
+										if stopDefLevelStart3 > 0 || stopDefQtyStart3 > 0 {
+											HStack{LabelDataText(label: "  DEF Level Start", data: quantityText(stopDefQtyStart3, unitLabel: unit(UnitIndex.def)))}
+										}
+										if stopDefPrice3 > 0 {
+											HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice3, unit: "/ \(unit(UnitIndex.def))")}
+											HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice3 * defAdded3, unit: "")}
+										}
+										if stopDefLevel3 > 0 || stopDefQty3 > 0 {
+											HStack{LabelDataText(label: "  DEF Level End", data: quantityText(stopDefQty3, unitLabel: unit(UnitIndex.def)))}
+										}
+									} else if stopDefLevel3 > 0 || stopDefQty3 > 0 {
+										HStack{LabelDataText(label: "  DEF Level", data: quantityText(stopDefQty3, unitLabel: unit(UnitIndex.def)))}
 									}
-								}
-								if stopDefLevel3 > 0 || stopDefQty3 > 0 {
-									HStack{LabelDataText(label: "  DEF Level End", data: tankReading(fraction: stopDefLevel3, quantity: stopDefQty3, unitLabel: unit(UnitIndex.def)))}
 								}
 							}
 							if fuelStop3Image1 != nil || fuelStop3Image2 != nil || fuelStop3Image3 != nil {
@@ -2079,9 +2105,6 @@ struct EditTripLog: View {
 									FuelStop_ImageThumb(imageData: fuelStop3Image2)
 									FuelStop_ImageThumb(imageData: fuelStop3Image3)
 								}
-							}
-							if fuelExitTime3 > fuelDateTime3 {
-								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime3))")}
 							}
 						}
 						.cardStyle(backgroundColor: Color.accentColor.opacity(0.5))
@@ -2096,14 +2119,23 @@ struct EditTripLog: View {
 						}
 						if dataSet.fuelAdded4 > 0 || !stopReason4.isEmpty {
 						VStack(alignment: .leading, spacing: 4) {
-							HStack{LabelDataText(label: "\(fuelLocation4)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime4))")}
-							if !stopReason4.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason4)} }
-							if !stopComment4.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment4)} }
-							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded4, fractionalLength: 1)}
+							if !stopReason4.isEmpty { HStack{LabelDataText(label: "Reason", data: stopReason4)} }
+							if !fuelLocation4.isEmpty { HStack{LabelDataText(label: "Location", data: fuelLocation4)} }
+							HStack{LabelDataText(label: "Arrive", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime4))")}
+							if fuelExitTime4 > fuelDateTime4 {
+								HStack{LabelDataText(label: "Depart", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime4))")}
+								HStack{LabelDataText(label: "Stopped Time", data: stoppedTimeText(from: fuelDateTime4, to: fuelExitTime4))}
+							}
+							if !stopComment4.isEmpty { HStack{LabelDataText(label: "Notes", data: stopComment4)} }
+							if !fuelAdded4Log.isEmpty, Vertical.current.visibleFieldGroups.contains(.odometer), fuelOdometer4 > 0 { HStack{LabelDataText(label: "Odometer", data: "\(Int(fuelOdometer4)) \(unit(UnitIndex.distance))")} }
+							if stopReason4 == "Fuel" && dataSet.fuelAdded4 > 0 {
+								HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded4, fractionalLength: 1)}
+							}
 							if !fuelAdded4Log.isEmpty {
 								if !stopFuelType4.isEmpty { HStack{LabelDataText(label: "  Fuel Type", data: stopFuelType4)} }
-								let fuelStartText4 = tankReading(fraction: stopFuelLevelStart4, quantity: stopFuelQtyStart4, unitLabel: unit(UnitIndex.fuel))
-								let fuelEndText4 = tankReading(fraction: stopFuelLevelEnd4, quantity: stopFuelQtyEnd4, unitLabel: unit(UnitIndex.fuel))
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in let tach = engineNumber <= stopEngineTach4.count ? stopEngineTach4[engineNumber - 1] : 0; if tach > 0 { HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)} } }
+								let fuelStartText4 = quantityText(stopFuelQtyStart4, unitLabel: unit(UnitIndex.fuel))
+								let fuelEndText4 = quantityText(stopFuelQtyEnd4, unitLabel: unit(UnitIndex.fuel))
 								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText4) to \(fuelEndText4)")}
 								if vehicleFuelTankCount > 1 {
 									ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
@@ -2128,23 +2160,21 @@ struct EditTripLog: View {
 								if stopBrakeFluidAdded4 > 0 {
 									HStack{LabelDataNumber(label: "  Brake Fluid Added", data: stopBrakeFluidAdded4, fractionalLength: 1)}
 								}
-								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
-									let tach = engineNumber <= stopEngineTach4.count ? stopEngineTach4[engineNumber - 1] : 0
-									if tach > 0 {
-										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
-									}
-								}
-								if stopDefLevelStart4 > 0 || stopDefQtyStart4 > 0 {
-									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart4, quantity: stopDefQtyStart4, unitLabel: unit(UnitIndex.def)))}
-								}
-								if stopDefPrice4 > 0 {
-									HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice4, unit: "/ \(unit(UnitIndex.def))")}
+								if isDieselFamilyFuelType(vehicleDetails?.fuelType ?? "") {
 									if defAdded4 > 0 {
-										HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice4 * defAdded4, unit: "")}
+										if stopDefLevelStart4 > 0 || stopDefQtyStart4 > 0 {
+											HStack{LabelDataText(label: "  DEF Level Start", data: quantityText(stopDefQtyStart4, unitLabel: unit(UnitIndex.def)))}
+										}
+										if stopDefPrice4 > 0 {
+											HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice4, unit: "/ \(unit(UnitIndex.def))")}
+											HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice4 * defAdded4, unit: "")}
+										}
+										if stopDefLevel4 > 0 || stopDefQty4 > 0 {
+											HStack{LabelDataText(label: "  DEF Level End", data: quantityText(stopDefQty4, unitLabel: unit(UnitIndex.def)))}
+										}
+									} else if stopDefLevel4 > 0 || stopDefQty4 > 0 {
+										HStack{LabelDataText(label: "  DEF Level", data: quantityText(stopDefQty4, unitLabel: unit(UnitIndex.def)))}
 									}
-								}
-								if stopDefLevel4 > 0 || stopDefQty4 > 0 {
-									HStack{LabelDataText(label: "  DEF Level End", data: tankReading(fraction: stopDefLevel4, quantity: stopDefQty4, unitLabel: unit(UnitIndex.def)))}
 								}
 							}
 							if fuelStop4Image1 != nil || fuelStop4Image2 != nil || fuelStop4Image3 != nil {
@@ -2153,9 +2183,6 @@ struct EditTripLog: View {
 									FuelStop_ImageThumb(imageData: fuelStop4Image2)
 									FuelStop_ImageThumb(imageData: fuelStop4Image3)
 								}
-							}
-							if fuelExitTime4 > fuelDateTime4 {
-								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime4))")}
 							}
 						}
 						.cardStyle(backgroundColor: Color.accentColor.opacity(0.5))
@@ -2170,14 +2197,23 @@ struct EditTripLog: View {
 						}
 						if dataSet.fuelAdded5 > 0 || !stopReason5.isEmpty {
 						VStack(alignment: .leading, spacing: 4) {
-							HStack{LabelDataText(label: "\(fuelLocation5)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime5))")}
-							if !stopReason5.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason5)} }
-							if !stopComment5.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment5)} }
-							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded5, fractionalLength: 1)}
+							if !stopReason5.isEmpty { HStack{LabelDataText(label: "Reason", data: stopReason5)} }
+							if !fuelLocation5.isEmpty { HStack{LabelDataText(label: "Location", data: fuelLocation5)} }
+							HStack{LabelDataText(label: "Arrive", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime5))")}
+							if fuelExitTime5 > fuelDateTime5 {
+								HStack{LabelDataText(label: "Depart", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime5))")}
+								HStack{LabelDataText(label: "Stopped Time", data: stoppedTimeText(from: fuelDateTime5, to: fuelExitTime5))}
+							}
+							if !stopComment5.isEmpty { HStack{LabelDataText(label: "Notes", data: stopComment5)} }
+							if !fuelAdded5Log.isEmpty, Vertical.current.visibleFieldGroups.contains(.odometer), fuelOdometer5 > 0 { HStack{LabelDataText(label: "Odometer", data: "\(Int(fuelOdometer5)) \(unit(UnitIndex.distance))")} }
+							if stopReason5 == "Fuel" && dataSet.fuelAdded5 > 0 {
+								HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded5, fractionalLength: 1)}
+							}
 							if !fuelAdded5Log.isEmpty {
 								if !stopFuelType5.isEmpty { HStack{LabelDataText(label: "  Fuel Type", data: stopFuelType5)} }
-								let fuelStartText5 = tankReading(fraction: stopFuelLevelStart5, quantity: stopFuelQtyStart5, unitLabel: unit(UnitIndex.fuel))
-								let fuelEndText5 = tankReading(fraction: stopFuelLevelEnd5, quantity: stopFuelQtyEnd5, unitLabel: unit(UnitIndex.fuel))
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in let tach = engineNumber <= stopEngineTach5.count ? stopEngineTach5[engineNumber - 1] : 0; if tach > 0 { HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)} } }
+								let fuelStartText5 = quantityText(stopFuelQtyStart5, unitLabel: unit(UnitIndex.fuel))
+								let fuelEndText5 = quantityText(stopFuelQtyEnd5, unitLabel: unit(UnitIndex.fuel))
 								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText5) to \(fuelEndText5)")}
 								if vehicleFuelTankCount > 1 {
 									ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
@@ -2202,23 +2238,21 @@ struct EditTripLog: View {
 								if stopBrakeFluidAdded5 > 0 {
 									HStack{LabelDataNumber(label: "  Brake Fluid Added", data: stopBrakeFluidAdded5, fractionalLength: 1)}
 								}
-								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
-									let tach = engineNumber <= stopEngineTach5.count ? stopEngineTach5[engineNumber - 1] : 0
-									if tach > 0 {
-										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
-									}
-								}
-								if stopDefLevelStart5 > 0 || stopDefQtyStart5 > 0 {
-									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart5, quantity: stopDefQtyStart5, unitLabel: unit(UnitIndex.def)))}
-								}
-								if stopDefPrice5 > 0 {
-									HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice5, unit: "/ \(unit(UnitIndex.def))")}
+								if isDieselFamilyFuelType(vehicleDetails?.fuelType ?? "") {
 									if defAdded5 > 0 {
-										HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice5 * defAdded5, unit: "")}
+										if stopDefLevelStart5 > 0 || stopDefQtyStart5 > 0 {
+											HStack{LabelDataText(label: "  DEF Level Start", data: quantityText(stopDefQtyStart5, unitLabel: unit(UnitIndex.def)))}
+										}
+										if stopDefPrice5 > 0 {
+											HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice5, unit: "/ \(unit(UnitIndex.def))")}
+											HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice5 * defAdded5, unit: "")}
+										}
+										if stopDefLevel5 > 0 || stopDefQty5 > 0 {
+											HStack{LabelDataText(label: "  DEF Level End", data: quantityText(stopDefQty5, unitLabel: unit(UnitIndex.def)))}
+										}
+									} else if stopDefLevel5 > 0 || stopDefQty5 > 0 {
+										HStack{LabelDataText(label: "  DEF Level", data: quantityText(stopDefQty5, unitLabel: unit(UnitIndex.def)))}
 									}
-								}
-								if stopDefLevel5 > 0 || stopDefQty5 > 0 {
-									HStack{LabelDataText(label: "  DEF Level End", data: tankReading(fraction: stopDefLevel5, quantity: stopDefQty5, unitLabel: unit(UnitIndex.def)))}
 								}
 							}
 							if fuelStop5Image1 != nil || fuelStop5Image2 != nil || fuelStop5Image3 != nil {
@@ -2227,9 +2261,6 @@ struct EditTripLog: View {
 									FuelStop_ImageThumb(imageData: fuelStop5Image2)
 									FuelStop_ImageThumb(imageData: fuelStop5Image3)
 								}
-							}
-							if fuelExitTime5 > fuelDateTime5 {
-								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime5))")}
 							}
 						}
 						.cardStyle(backgroundColor: Color.accentColor.opacity(0.5))
@@ -2244,14 +2275,23 @@ struct EditTripLog: View {
 						}
 						if dataSet.fuelAdded6 > 0 || !stopReason6.isEmpty {
 						VStack(alignment: .leading, spacing: 4) {
-							HStack{LabelDataText(label: "\(fuelLocation6)", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime6))")}
-							if !stopReason6.isEmpty { HStack{LabelDataText(label: "  Reason", data: stopReason6)} }
-							if !stopComment6.isEmpty { HStack{LabelDataText(label: "  Notes", data: stopComment6)} }
-							HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded6, fractionalLength: 1)}
+							if !stopReason6.isEmpty { HStack{LabelDataText(label: "Reason", data: stopReason6)} }
+							if !fuelLocation6.isEmpty { HStack{LabelDataText(label: "Location", data: fuelLocation6)} }
+							HStack{LabelDataText(label: "Arrive", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelDateTime6))")}
+							if fuelExitTime6 > fuelDateTime6 {
+								HStack{LabelDataText(label: "Depart", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime6))")}
+								HStack{LabelDataText(label: "Stopped Time", data: stoppedTimeText(from: fuelDateTime6, to: fuelExitTime6))}
+							}
+							if !stopComment6.isEmpty { HStack{LabelDataText(label: "Notes", data: stopComment6)} }
+							if !fuelAdded6Log.isEmpty, Vertical.current.visibleFieldGroups.contains(.odometer), fuelOdometer6 > 0 { HStack{LabelDataText(label: "Odometer", data: "\(Int(fuelOdometer6)) \(unit(UnitIndex.distance))")} }
+							if stopReason6 == "Fuel" && dataSet.fuelAdded6 > 0 {
+								HStack{LabelDataNumber(label: "Fuel (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded6, fractionalLength: 1)}
+							}
 							if !fuelAdded6Log.isEmpty {
 								if !stopFuelType6.isEmpty { HStack{LabelDataText(label: "  Fuel Type", data: stopFuelType6)} }
-								let fuelStartText6 = tankReading(fraction: stopFuelLevelStart6, quantity: stopFuelQtyStart6, unitLabel: unit(UnitIndex.fuel))
-								let fuelEndText6 = tankReading(fraction: stopFuelLevelEnd6, quantity: stopFuelQtyEnd6, unitLabel: unit(UnitIndex.fuel))
+								ForEach(1...stopEngineCount, id: \.self) { engineNumber in let tach = engineNumber <= stopEngineTach6.count ? stopEngineTach6[engineNumber - 1] : 0; if tach > 0 { HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)} } }
+								let fuelStartText6 = quantityText(stopFuelQtyStart6, unitLabel: unit(UnitIndex.fuel))
+								let fuelEndText6 = quantityText(stopFuelQtyEnd6, unitLabel: unit(UnitIndex.fuel))
 								HStack{LabelDataText(label: "  Fuel Level", data: "\(fuelStartText6) to \(fuelEndText6)")}
 								if vehicleFuelTankCount > 1 {
 									ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
@@ -2276,23 +2316,21 @@ struct EditTripLog: View {
 								if stopBrakeFluidAdded6 > 0 {
 									HStack{LabelDataNumber(label: "  Brake Fluid Added", data: stopBrakeFluidAdded6, fractionalLength: 1)}
 								}
-								ForEach(1...stopEngineCount, id: \.self) { engineNumber in
-									let tach = engineNumber <= stopEngineTach6.count ? stopEngineTach6[engineNumber - 1] : 0
-									if tach > 0 {
-										HStack{LabelDataNumber(label: "  \(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
-									}
-								}
-								if stopDefLevelStart6 > 0 || stopDefQtyStart6 > 0 {
-									HStack{LabelDataText(label: "  DEF Level Start", data: tankReading(fraction: stopDefLevelStart6, quantity: stopDefQtyStart6, unitLabel: unit(UnitIndex.def)))}
-								}
-								if stopDefPrice6 > 0 {
-									HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice6, unit: "/ \(unit(UnitIndex.def))")}
+								if isDieselFamilyFuelType(vehicleDetails?.fuelType ?? "") {
 									if defAdded6 > 0 {
-										HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice6 * defAdded6, unit: "")}
+										if stopDefLevelStart6 > 0 || stopDefQtyStart6 > 0 {
+											HStack{LabelDataText(label: "  DEF Level Start", data: quantityText(stopDefQtyStart6, unitLabel: unit(UnitIndex.def)))}
+										}
+										if stopDefPrice6 > 0 {
+											HStack{LabelDataCurrency(label: "  DEF Price", data: stopDefPrice6, unit: "/ \(unit(UnitIndex.def))")}
+											HStack{LabelDataCurrency(label: "  DEF Cost", data: stopDefPrice6 * defAdded6, unit: "")}
+										}
+										if stopDefLevel6 > 0 || stopDefQty6 > 0 {
+											HStack{LabelDataText(label: "  DEF Level End", data: quantityText(stopDefQty6, unitLabel: unit(UnitIndex.def)))}
+										}
+									} else if stopDefLevel6 > 0 || stopDefQty6 > 0 {
+										HStack{LabelDataText(label: "  DEF Level", data: quantityText(stopDefQty6, unitLabel: unit(UnitIndex.def)))}
 									}
-								}
-								if stopDefLevel6 > 0 || stopDefQty6 > 0 {
-									HStack{LabelDataText(label: "  DEF Level End", data: tankReading(fraction: stopDefLevel6, quantity: stopDefQty6, unitLabel: unit(UnitIndex.def)))}
 								}
 							}
 							if fuelStop6Image1 != nil || fuelStop6Image2 != nil || fuelStop6Image3 != nil {
@@ -2301,9 +2339,6 @@ struct EditTripLog: View {
 									FuelStop_ImageThumb(imageData: fuelStop6Image2)
 									FuelStop_ImageThumb(imageData: fuelStop6Image3)
 								}
-							}
-							if fuelExitTime6 > fuelDateTime6 {
-								HStack{LabelDataText(label: "  Departed", data: "\(functions.formatDate_DDMMMyy_HHmm(date: fuelExitTime6))")}
 							}
 						}
 						.cardStyle(backgroundColor: Color.accentColor.opacity(0.5))
@@ -2358,27 +2393,16 @@ struct EditTripLog: View {
 				
 				CardView {
 					VStack {
-						SectionText(label: Vertical.current.id == .aviation ? "ARRIVAL" : "TRAVEL END")
-						HStack{LabelDataText(label: Vertical.current.id == .aviation ? "Arrive" : "Arrival", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.tripDateTimeEnd))")}
+						SectionBanner(label: Vertical.current.id == .aviation ? "ARRIVAL" : "TRAVEL END", color: .tripPhaseEnd)
+						HStack{LabelDataText(label: "Arrive", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.tripDateTimeEnd))")}
+						if dataSet.locationEnd != "" {
+							HStack{LabelDataText(label: "Location", data: "\(dataSet.locationEnd)")}
+						}
 						if Vertical.current.visibleFieldGroups.contains(.odometer) {
 							HStack{LabelDataText(label: Vertical.current.distanceMeterLabel, data: "\(dataSet.odometerEnd) \(unit(UnitIndex.distance))")}
 						}
-						if vehicleFuelTankCount > 1 {
-							ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
-								HStack{LabelDataText(label: fuelTankName(tankNumber), data: tankReading(fraction: tankLevelEndBinding(tankNumber).wrappedValue, quantity: tankQuantityEndBinding(tankNumber).wrappedValue, unitLabel: unit(UnitIndex.fuel)))}
-							}
-						} else if dataSet.fuelLevelEnd != "" {
-							HStack{LabelDataText(label: "Fuel Level", data: "\(dataSet.fuelLevelEnd) \(dataSet.fuelQuantityEnd)\(unit(UnitIndex.fuel))")}
-						}
-						if dataSet.defLevelEndFraction != "" && Vertical.current.id != .aviation {
-							let defQtyEnd = dataSet.defQuantityEnd > 0
-							? dataSet.defQuantityEnd
-							: dataSet.defLevelEnd1 * Float(vehicleDetails?.defCapacity ?? 0)
-							let defQtyEndText = defQtyEnd > 0 ? " \(defQtyEnd.formatted(.number.precision(.fractionLength(1))))\(unit(UnitIndex.def))" : ""
-							HStack{LabelDataText(label: "DEF Level", data: "\(dataSet.defLevelEndFraction)\(defQtyEndText)")}
-						}
-						if dataSet.locationEnd != "" {
-							HStack{LabelDataText(label: "Location", data: "\(dataSet.locationEnd)")}
+						if dataSet.engHoursEnd > 0 {
+							HStack{LabelDataNumber(label: "\(Vertical.current.hoursMeterLabel):", data: dataSet.engHoursEnd, fractionalLength: 1)}
 						}
 						if let distanceNM = departureArrivalDistanceNM {
 							Text("Direct Distance: \(String(format: "%.1f nm", distanceNM))")
@@ -2392,15 +2416,27 @@ struct EditTripLog: View {
 									.frame(maxWidth: .infinity, alignment: .trailing)
 							}
 						}
-						if dataSet.engHoursEnd > 0 {
-							HStack{LabelDataNumber(label: "\(Vertical.current.hoursMeterLabel):", data: dataSet.engHoursEnd, fractionalLength: 1)}
-						}
 						if Vertical.current.id == .aviation {
 							ForEach(1...stopEngineCount, id: \.self) { engineNumber in
 								let tach = engineNumber <= dataSet.engineTachEnd.count ? dataSet.engineTachEnd[engineNumber - 1] : 0
 								if tach > 0 {
 									HStack{LabelDataNumber(label: "\(stopEngineNameShort(engineNumber)) Tach", data: tach, fractionalLength: 1)}
 								}
+							}
+						}
+						if vehicleFuelTankCount > 1 {
+							ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
+								HStack{LabelDataText(label: fuelTankName(tankNumber), data: quantityText(tankQuantityEndBinding(tankNumber).wrappedValue, unitLabel: unit(UnitIndex.fuel)))}
+							}
+						} else if dataSet.fuelLevelEnd != "" {
+							HStack{LabelDataText(label: "Fuel Level", data: quantityText(dataSet.fuelQuantityEnd, unitLabel: unit(UnitIndex.fuel)))}
+						}
+						if Vertical.current.id != .aviation {
+							let defQtyEnd = dataSet.defQuantityEnd > 0
+							? dataSet.defQuantityEnd
+							: dataSet.defLevelEnd1 * Float(vehicleDetails?.defCapacity ?? 0)
+							if defQtyEnd > 0 {
+								HStack{LabelDataText(label: "DEF Level", data: quantityText(defQtyEnd, unitLabel: unit(UnitIndex.def)))}
 							}
 						}
 						let endChecks = Vertical.current.id == .land
@@ -3892,13 +3928,26 @@ struct EditTripLog: View {
 		if defQuantityEnd == 0, defLevelEnd1 > 0 { defQuantityEnd = capacity * defLevelEnd1 }
 	}
 	
-	/// A tank reading as "1/4 Tank (25.0gal)", pairing the eighths label with the exact
-	/// quantity so a typed figure shows rather than just the eighth it snapped to.
-	/// - Returns: The quantity alone when the fraction has no label (a non-eighth value).
-	private func tankReading(fraction: Float, quantity: Float, unitLabel: String) -> String {
-		let label = functions.getFuelLevel(unit: fraction)
-		let amount = quantity.formatted(.number.precision(.fractionLength(1)))
-		return label.isEmpty ? "\(amount)\(unitLabel)" : "\(label) (\(amount)\(unitLabel))"
+	/// How long a stop lasted, from arrival to departure — mirrors the days/hours/minutes
+	/// breakdown used for the trip's own total elapsed time.
+	private func stoppedTimeText(from start: Date, to end: Date) -> String {
+		let secs = Int(max(0, end.timeIntervalSince(start)))
+		let days = secs / 86400
+		let hours = (secs % 86400) / 3600
+		let mins = (secs % 3600) / 60
+		if days != 0 {
+			return "\(days) days, \(hours) hours, \(mins) minutes"
+		} else if hours != 0 {
+			return "\(hours) hours, \(mins) minutes"
+		} else {
+			return "\(mins) minutes"
+		}
+	}
+
+	/// A quantity alone, with no eighths fraction label. The details view shows fuel/DEF
+	/// levels as a plain amount.
+	private func quantityText(_ quantity: Float, unitLabel: String) -> String {
+		"\(quantity.formatted(.number.precision(.fractionLength(1))))\(unitLabel)"
 	}
 
 	/// Small numbered badge overlaid on a stop card's top-left corner, replacing the

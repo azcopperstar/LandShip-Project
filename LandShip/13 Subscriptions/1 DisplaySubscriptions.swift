@@ -308,6 +308,8 @@ struct DisplaySubscriptions: View {
 													}
 													.padding(.vertical, 1)
 												}
+												// macOS: double-click opens the editor directly in edit mode.
+												.onDoubleClick { newRecordToEdit = record }
 											}
 										}
 									}
@@ -432,6 +434,8 @@ struct DisplaySubscriptions: View {
 												}
 												.padding(.vertical, 1)
 											}
+											// macOS: double-click opens the editor directly in edit mode.
+											.onDoubleClick { newRecordToEdit = record }
 										}
 									}
 								}
@@ -527,7 +531,7 @@ struct DisplaySubscriptions: View {
 			vehicleId: trackVehicleSelected == "All Vehicles" ? "" : trackVehicleSelected,
 			miles: 0,
 			engHours: 0,
-			itemName: "(New Subscriptions or Recurring Charge)",
+			itemName: DefaultTitle.make(section: "Expenditure", vehicleId: trackVehicleSelected, fallback: "(New Subscriptions or Recurring Charge)", context: modelContext),
 			itemDescription: "",
 			itemNotes: "",
 			itemVendor: "",

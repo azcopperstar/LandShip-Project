@@ -359,14 +359,20 @@ struct DashboardView: View {
 					.frame(maxWidth: .infinity, alignment: .leading)
 			}
 			if isVehicleScopeLimited {
-				let count = (settings?.dashVehicleScopeRaw ?? []).count
-				HStack(alignment: .top, spacing: 8) {
-					Image(systemName: "line.3.horizontal.decrease.circle")
-						.font(.caption)
-						.foregroundStyle(.blue)
-					Text("Totals limited to \(count) of \(vehicles.count) \(Vertical.current.assetPlural.lowercased()).")
+				let count = scopedVehicles.count
+				VStack(alignment: .leading, spacing: 2) {
+					HStack(alignment: .top, spacing: 8) {
+						Image(systemName: "line.3.horizontal.decrease.circle")
+							.font(.caption)
+							.foregroundStyle(.blue)
+						Text("Totals limited to \(count) of \(vehicles.count) \(Vertical.current.assetPlural.lowercased()).")
+							.font(.caption2)
+							.foregroundStyle(.blue)
+					}
+					Text("Tap \(Image(systemName: "slider.horizontal.3")) above to change which \(Vertical.current.assetPlural.lowercased()) are included.")
 						.font(.caption2)
-						.foregroundStyle(.blue)
+						.foregroundStyle(.blue.opacity(0.8))
+						.padding(.leading, 20)
 				}
 			}
 		}

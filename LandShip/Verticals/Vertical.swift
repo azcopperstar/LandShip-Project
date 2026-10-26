@@ -116,9 +116,9 @@ extension Vertical {
 		enabledFeatures: [],
 		storeProductID: "com.aeronauticaltrax.LandShip.fullversion",
 		grandfathering: GrandfatheringPolicy(
-			originalAppVersionThresholdIOS: "112",
+			originalAppVersionThresholdIOS: "120",
 			originalAppVersionThresholdMacOS: "2026.09.12",
-			firstFreeBuildNumber: 112
+			firstFreeBuildNumber: 120
 		),
 		regulatoryDisclaimer: nil
 	)

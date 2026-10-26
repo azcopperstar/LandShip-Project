@@ -80,47 +80,32 @@ private enum Formatters {
     }()
 
     // Date formatters
-    static let HHmm_ddMMMyyyy: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm\nddMMMyyyy"
-        return f
-    }()
-
-    static let ddMMM_yyyy_HHmm: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "ddMMM\nyyyy\nHH:mm"
-        return f
-    }()
-
-    static let ddMMM_yyyy: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "ddMMM\nyyyy"
-        return f
-    }()
-
-    static let ddMMMyyyy: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "ddMMMyyyy"
-        return f
-    }()
-
-    static let ddMMMyyyy_HHmm: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "ddMMMyyyy HH:mm"
-        return f
-    }()
-
+    // Compact stamp, deliberately not user-configurable (no separators).
     static let ddMMMyyyy_HHmmss: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "ddMMMyyyyHHmmss"
         return f
     }()
 
-    static let ddMMM: DateFormatter = {
+    // User-configurable formats (Settings > Date & Time Format) are cached per pattern.
+    // Only touched while holding patternLock.
+    nonisolated(unsafe) private static var patternCache: [String: DateFormatter] = [:]
+    private static let patternLock = NSLock()
+
+    /// - Parameter fixedLocale: Pins the formatter to en_US_POSIX. Needed for time patterns:
+    ///   otherwise the system's 12/24-hour clock setting silently rewrites "h:mm a" to 24-hour
+    ///   (or "HH:mm" to 12-hour), overriding the user's choice in Settings.
+    static func formatter(pattern: String, fixedLocale: Bool = false) -> DateFormatter {
+        patternLock.lock()
+        defer { patternLock.unlock() }
+        let key = (fixedLocale ? "posix|" : "") + pattern
+        if let cached = patternCache[key] { return cached }
         let f = DateFormatter()
-        f.dateFormat = "ddMMM"
+        if fixedLocale { f.locale = Locale(identifier: "en_US_POSIX") }
+        f.dateFormat = pattern
+        patternCache[key] = f
         return f
-    }()
+    }
 }
 
 
@@ -266,21 +251,30 @@ class Functions {
 		return Formatters.currencyUS.string(from: NSNumber(value: dollars)) ?? "$0.00"
 	}
 	
+	/// Date/time formatting honours the user's choice in Settings (DateDisplayPrefs).
+	private func styled(_ date: Date, pattern: String, fixedLocale: Bool = false) -> String {
+		let text = Formatters.formatter(pattern: pattern, fixedLocale: fixedLocale).string(from: date)
+		return DateDisplayPrefs.date.uppercased ? text.uppercased() : text
+	}
+	/// Time of day only, e.g. "14:30" or "2:30 PM".
+	func formatTime(date: Date) -> String {
+		return styled(date, pattern: DateDisplayPrefs.time.pattern, fixedLocale: DateDisplayPrefs.time != .system)
+	}
 	func formatDate_HHmm_DDMMMyyyy(date: Date) -> String {
-		return Formatters.HHmm_ddMMMyyyy.string(from: date).uppercased()
+		return formatTime(date: date) + "\n" + formatDate_DDMMMyy(date: date)
 	}
 	
 	func formatDate_DDMMM_yyyy_HHmm(date: Date) -> String {
-		return Formatters.ddMMM_yyyy_HHmm.string(from: date).uppercased()
+		return styled(date, pattern: DateDisplayPrefs.date.shortPattern) + "\n" + styled(date, pattern: "yyyy") + "\n" + formatTime(date: date)
 	}
 	func formatDate_DDMMM_yyyy(date: Date) -> String {
-		return Formatters.ddMMM_yyyy.string(from: date).uppercased()
+		return styled(date, pattern: DateDisplayPrefs.date.shortPattern) + "\n" + styled(date, pattern: "yyyy")
 	}
 	func formatDate_DDMMMyy(date: Date) -> String {
-		return Formatters.ddMMMyyyy.string(from: date).uppercased()
+		return styled(date, pattern: DateDisplayPrefs.date.pattern)
 	}
 	func formatDate_DDMMMyy_HHmm(date: Date) -> String {
-		return Formatters.ddMMMyyyy_HHmm.string(from: date).uppercased()
+		return formatDate_DDMMMyy(date: date) + " " + formatTime(date: date)
 	}
 	func formatDate_DDMMMyy_HHmmss(date: Date) -> String {
 		return Formatters.ddMMMyyyy_HHmmss.string(from: date).uppercased()
@@ -288,7 +282,7 @@ class Functions {
 	/// Day and month only (e.g. "26AUG"), for compact pickers and menus where the surrounding
 	/// list is already ordered by full date.
 	func formatDate_DDMMM(date: Date) -> String {
-		return Formatters.ddMMM.string(from: date).uppercased()
+		return styled(date, pattern: DateDisplayPrefs.date.shortPattern)
 	}
 
     /// Localized date-time formatting using a template, respecting the provided locale.

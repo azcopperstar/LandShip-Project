@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 enum DateDisplayStyle: String, CaseIterable, Identifiable {
 	case ddMMMyyyy        // 28OCT2026 (original app style)
@@ -15,6 +16,7 @@ enum DateDisplayStyle: String, CaseIterable, Identifiable {
 	case monthDayYear     // 10/28/2026
 	case dayMonthYear     // 28/10/2026
 	case iso              // 2026-10-28
+	case system           // follows the device's regional settings
 
 	var id: String { rawValue }
 
@@ -26,6 +28,7 @@ enum DateDisplayStyle: String, CaseIterable, Identifiable {
 			case .monthDayYear: return "MM/dd/yyyy"
 			case .dayMonthYear: return "dd/MM/yyyy"
 			case .iso: return "yyyy-MM-dd"
+			case .system: return DateFormatter.dateFormat(fromTemplate: "ddMMMyyyy", options: 0, locale: .current) ?? "dd MMM yyyy"
 		}
 	}
 
@@ -37,6 +40,7 @@ enum DateDisplayStyle: String, CaseIterable, Identifiable {
 			case .monthDayYear: return "MM/dd"
 			case .dayMonthYear: return "dd/MM"
 			case .iso: return "MM-dd"
+			case .system: return DateFormatter.dateFormat(fromTemplate: "ddMMM", options: 0, locale: .current) ?? "dd MMM"
 		}
 	}
 
@@ -49,6 +53,7 @@ enum DateDisplayStyle: String, CaseIterable, Identifiable {
 		let f = DateFormatter()
 		f.dateFormat = pattern
 		let text = f.string(from: sample)
+		if self == .system { return "System (\(text))" }
 		return uppercased ? text.uppercased() : text
 	}
 }
@@ -56,12 +61,26 @@ enum DateDisplayStyle: String, CaseIterable, Identifiable {
 enum TimeDisplayStyle: String, CaseIterable, Identifiable {
 	case h24    // 14:30
 	case h12    // 2:30 PM
+	case system // follows the device's 12/24-hour clock setting
 
 	var id: String { rawValue }
 
-	var pattern: String { self == .h24 ? "HH:mm" : "h:mm a" }
+	var pattern: String {
+		switch self {
+			case .h24: return "HH:mm"
+			case .h12: return "h:mm a"
+			// "j" resolves to the device's preferred hour cycle.
+			case .system: return DateFormatter.dateFormat(fromTemplate: "jmm", options: 0, locale: .current) ?? "HH:mm"
+		}
+	}
 
-	var label: String { self == .h24 ? "24-hour (14:30)" : "12-hour (2:30 PM)" }
+	var label: String {
+		switch self {
+			case .h24: return "24-hour (14:30)"
+			case .h12: return "12-hour (2:30 PM)"
+			case .system: return "System setting"
+		}
+	}
 }
 
 enum DateDisplayPrefs {
@@ -80,5 +99,25 @@ enum DateDisplayPrefs {
 	static func mirror(dateRaw: String, timeRaw: String) {
 		UserDefaults.standard.set(dateRaw, forKey: dateKey)
 		UserDefaults.standard.set(timeRaw, forKey: timeKey)
+	}
+}
+
+extension View {
+	/// Makes date/time pickers and system date text follow the 12/24-hour choice in Settings,
+	/// keeping the user's regional date order. (The system pickers otherwise use the device's
+	/// own clock setting.)
+	@ViewBuilder
+	func timeDisplayLocale() -> some View {
+		if DateDisplayPrefs.time == .system {
+			self
+		} else {
+			timeDisplayLocaleOverride()
+		}
+	}
+
+	private func timeDisplayLocaleOverride() -> some View {
+		var components = Locale.Components(locale: .current)
+		components.hourCycle = DateDisplayPrefs.time == .h24 ? .zeroToTwentyThree : .oneToTwelve
+		return self.environment(\.locale, Locale(components: components))
 	}
 }

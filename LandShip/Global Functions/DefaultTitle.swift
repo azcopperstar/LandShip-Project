@@ -55,14 +55,12 @@ enum DefaultTitle {
 		if let vehicleId, !vehicleId.isEmpty, vehicleId != "All Vehicles" {
 			vehicleName = functions.getVehicleDisplayName(vehicleId: vehicleId, context: context)
 		}
-		let timeFormatter = DateFormatter()
-		timeFormatter.dateFormat = "HH:mm"
 
 		var result = template
 		result = result.replacingOccurrences(of: Token.section.rawValue, with: section)
 		result = result.replacingOccurrences(of: Token.dateTime.rawValue, with: functions.formatDate_DDMMMyy_HHmm(date: now))
 		result = result.replacingOccurrences(of: Token.date.rawValue, with: functions.formatDate_DDMMMyy(date: now))
-		result = result.replacingOccurrences(of: Token.time.rawValue, with: timeFormatter.string(from: now))
+		result = result.replacingOccurrences(of: Token.time.rawValue, with: functions.formatTime(date: now))
 		result = result.replacingOccurrences(of: Token.vehicle.rawValue, with: vehicleName)
 
 		// An empty token (e.g. no vehicle chosen) can leave doubled spaces or a dangling separator.

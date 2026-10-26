@@ -80,64 +80,149 @@ final class SyncActivityLog {
 	}
 }
 
-// MARK: - Settings section
+// MARK: - Activity popup
 
-/// Scrollable list of recent sync activity for the Settings form.
-struct SyncActivityLogSection: View {
+/// Sheet opened from the sidebar status line: current sync state plus a scrollable
+/// history of recent uploads, downloads and problems.
+struct SyncActivitySheet: View {
+	@Environment(\.dismiss) private var dismiss
+	@Environment(\.openURL) private var openURL
+	@State private var showingClearConfirmation = false
+
 	private var log: SyncActivityLog { .shared }
+	private var state: CloudKitSyncState { .shared }
 
 	var body: some View {
-		Section {
-			if log.entries.isEmpty {
-				Text("No sync activity recorded yet.")
-					.font(.callout)
-					.foregroundStyle(.secondary)
-			} else {
-				ScrollView {
-					LazyVStack(alignment: .leading, spacing: 6) {
+		NavigationStack {
+			List {
+				Section("Status") {
+					LabeledContent("State", value: state.headline)
+					if state.isThrottled, let until = state.throttledUntil {
+						LabeledContent("Resumes") { Text(until, style: .relative) }
+					}
+					if let summary = state.lastErrorSummary {
+						Text(summary)
+							.font(.footnote)
+							.foregroundStyle(.secondary)
+					}
+				}
+
+				Section("Local Time") {
+					TimelineView(.periodic(from: .now, by: 1)) { context in
+						Text(context.date, format: .dateTime.hour().minute().second())
+							.font(.title3.monospacedDigit())
+					}
+				}
+
+				Section {
+					if log.entries.isEmpty {
+						Text("No sync activity recorded yet.")
+							.foregroundStyle(.secondary)
+					} else {
 						ForEach(log.entries) { entry in
 							row(entry)
 						}
 					}
-					.frame(maxWidth: .infinity, alignment: .leading)
+				} header: {
+					Text("Recent Activity")
+				} footer: {
+					Text("Newest first. Paused or deferred syncs retry automatically.")
 				}
-				.frame(height: 220)
-
-				HStack {
-					Button {
-						copyToPasteboard(log.exportText)
-					} label: {
-						Label("Copy", systemImage: "doc.on.doc")
-					}
-					Spacer()
-					Button(role: .destructive) {
-						log.clear()
-					} label: {
-						Label("Clear", systemImage: "trash")
-					}
-				}
-				.buttonStyle(.borderless)
 			}
-		} header: {
-			Text("iCloud Sync Activity")
-		} footer: {
-			Text("The most recent \(200) uploads, downloads and problems, newest first. Retries after a pause happen automatically.")
+			.navigationTitle("iCloud Sync")
+			#if os(macOS)
+			.frame(width: 520, height: 560)
+			#endif
+			.toolbar {
+				ToolbarItem(placement: .cancellationAction) {
+					Button("Done") { dismiss() }
+				}
+#if !os(macOS)
+				ToolbarItemGroup(placement: .primaryAction) {
+					actionButtons
+				}
+#endif
+			}
+#if os(macOS)
+			// Sheet toolbars on macOS drop trailing items, so the actions live in a
+			// visible bar along the bottom of the popup instead.
+			.safeAreaInset(edge: .bottom, spacing: 0) {
+				VStack(spacing: 0) {
+					Divider()
+					HStack(spacing: 16) {
+						actionButtons
+						Spacer()
+					}
+					.labelStyle(.titleAndIcon)
+					.padding(.horizontal)
+					.padding(.vertical, 8)
+				}
+				.background(.bar)
+			}
+#endif
+			.confirmationDialog("Clear sync log?", isPresented: $showingClearConfirmation, titleVisibility: .visible) {
+				Button("Clear Log", role: .destructive) { log.clear() }
+				Button("Cancel", role: .cancel) {}
+			}
 		}
+		#if !os(macOS)
+		.presentationDetents([.medium, .large])
+		#endif
 	}
 
 	private func row(_ entry: SyncActivityEntry) -> some View {
-		HStack(alignment: .firstTextBaseline, spacing: 6) {
+		HStack(alignment: .firstTextBaseline, spacing: 8) {
 			Image(systemName: symbol(for: entry.kind))
 				.foregroundStyle(tint(for: entry.kind))
-				.frame(width: 16)
-			VStack(alignment: .leading, spacing: 1) {
+				.frame(width: 18)
+			VStack(alignment: .leading, spacing: 2) {
 				Text("\(entry.operation) — \(entry.message)")
-					.font(.caption)
-					.fixedSize(horizontal: false, vertical: true)
-				Text(entry.date, format: .dateTime.month().day().hour().minute().second())
-					.font(.caption2)
-					.foregroundStyle(.secondary)
+					.font(.callout)
+				HStack(spacing: 6) {
+					Text(entry.date, format: .dateTime.month().day().hour().minute().second())
+					Text("·")
+					// Ticks each second so the age stays current while the popup is open.
+					TimelineView(.periodic(from: .now, by: 1)) { context in
+						Text(Self.ageText(since: entry.date, now: context.date))
+							.monospacedDigit()
+					}
+				}
+				.font(.caption)
+				.foregroundStyle(.secondary)
 			}
+		}
+	}
+
+	/// Copy / Email / Clear — in the toolbar on iOS, in a bottom bar on macOS.
+	@ViewBuilder
+	private var actionButtons: some View {
+		Button {
+			copyToPasteboard(log.exportText)
+		} label: {
+			Label("Copy Log", systemImage: "doc.on.doc")
+		}
+		.disabled(log.entries.isEmpty)
+		Button {
+			emailLog()
+		} label: {
+			Label("Email Developer", systemImage: "envelope")
+		}
+		Button(role: .destructive) {
+			showingClearConfirmation = true
+		} label: {
+			Label("Clear Log", systemImage: "trash")
+		}
+		.disabled(log.entries.isEmpty)
+	}
+
+	/// "12s ago", "4m 05s ago", "2h 14m ago", "3d 4h ago".
+	private static func ageText(since date: Date, now: Date) -> String {
+		let seconds = max(0, Int(now.timeIntervalSince(date)))
+		switch seconds {
+			case ..<60: return "\(seconds)s ago"
+			case ..<3600: return "\(seconds / 60)m \(String(format: "%02d", seconds % 60))s ago"
+			case ..<86400: return "\(seconds / 3600)h \((seconds % 3600) / 60)m ago"
+			default: return "\(seconds / 86400)d \((seconds % 86400) / 3600)h ago"
 		}
 	}
 
@@ -156,6 +241,37 @@ struct SyncActivityLogSection: View {
 			case .failure: return .red
 			case .throttled, .deferred: return .orange
 		}
+	}
+
+	/// Same flow as Debug Tools: the full log goes on the clipboard (too long for a mailto
+	/// URL) and the most recent entries are included inline for context.
+	private func emailLog() {
+		copyToPasteboard(log.exportText)
+		let recent = log.exportText
+			.split(separator: "\n", omittingEmptySubsequences: true)
+			.suffix(8)
+			.map { String($0.prefix(160)) }
+			.joined(separator: "\n")
+		let body = """
+		The full iCloud sync log has been copied to the clipboard - please paste it below.
+
+
+		--
+		Version: \(AppInfo.version)
+		Bundle ID: \(Bundle.main.bundleIdentifier ?? "(unknown)")
+		Sync state: \(state.headline)
+		Last error: \(state.lastErrorSummary ?? "none")
+
+		Most recent entries:
+		\(recent)
+		"""
+		var allowed = CharacterSet.alphanumerics
+		allowed.insert(charactersIn: "-._~")
+		let subject = "iCloud sync log - \(AppInfo.displayName) \(AppInfo.version)"
+		guard let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: allowed),
+			  let encodedBody = body.addingPercentEncoding(withAllowedCharacters: allowed),
+			  let url = URL(string: "mailto:\(FeedbackView.supportAddress)?subject=\(encodedSubject)&body=\(encodedBody)") else { return }
+		openURL(url)
 	}
 
 	private func copyToPasteboard(_ text: String) {

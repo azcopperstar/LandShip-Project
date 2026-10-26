@@ -184,6 +184,18 @@ class Settings1 {
 
 	var hasHomeLocation: Bool { homeLatitude != nil && homeLongitude != nil }
 
+	// Default title for newly created records (Add button, every section). When off, each
+	// section keeps its own built-in default. The template mixes free text with DefaultTitle
+	// tokens such as {section} and {date}. Synced via CloudKit like every other setting.
+	var defaultTitleEnabled: Bool = false
+	var defaultTitleTemplate: String = DefaultTitle.defaultTemplate
+
+	// How dates and times are displayed throughout the app (raw values of DateDisplayStyle /
+	// TimeDisplayStyle). Defaults match the app's original look. Synced via CloudKit; a copy is
+	// mirrored into UserDefaults (DateDisplayPrefs) so non-SwiftUI formatting code can read it.
+	var dateDisplayStyleRaw: String = DateDisplayStyle.ddMMMyyyy.rawValue
+	var timeDisplayStyleRaw: String = TimeDisplayStyle.h24.rawValue
+
 	@Attribute(.externalStorage)
 	var image1: Data?
 	var image1Description: String = ""

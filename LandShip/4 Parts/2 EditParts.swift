@@ -71,6 +71,8 @@ struct EditParts: View {
 	@State private var updatedAt = Date()
 	@State private var vehicleId = ""
 	@State private var vehicleSystem = ""
+	@State private var partCategory = ""
+	@State private var allPartCategories: [String] = []
 	@State private var partName = ""
 	@State private var partNumber = ""
 	@State private var partManufacture = ""
@@ -137,6 +139,7 @@ struct EditParts: View {
 		self._updatedAt = State(initialValue: mxParts.updatedAt)
 		self._vehicleId = State(initialValue: mxParts.vehicleId)
 		self._vehicleSystem = State(initialValue: mxParts.vehicleSystem)
+		self._partCategory = State(initialValue: mxParts.partCategory)
 		self._partName = State(initialValue: mxParts.partName)
 		self._partNumber = State(initialValue: mxParts.partNumber)
 		self._partManufacture = State(initialValue: mxParts.partManufacture)
@@ -193,6 +196,26 @@ struct EditParts: View {
 						}
 
 						Picker_VehicleSystem(label: "\(Vertical.current.assetSingular) System", data: $vehicleSystem)
+
+						// Category entry with suggestions: a Menu of previously-entered category
+						// names plus a free-text field, matching Picker_VehicleSystem's row above.
+						HStack(spacing: 6) {
+							Text("Display Category")
+								.textLabelModified()
+							Menu {
+								Button("—") { partCategory = "" }
+								ForEach(allPartCategories, id: \.self) { cat in
+									Button(cat) { partCategory = cat }
+								}
+							} label: {
+								Text(partCategory.isEmpty ? "—" : partCategory)
+									.lineLimit(1)
+									.truncationMode(.tail)
+							}
+							.pickerModifier_Short()
+							TextField("", text: $partCategory)
+								.textViewModified_Medium()
+						}
 					}
 				}
 				
@@ -475,6 +498,7 @@ struct EditParts: View {
 				}
 				newSupplierName = ""
 				refreshInstallationData()
+				loadAllPartCategories()
 			}
 			.sheet(isPresented: $showingIdentitySheet, onDismiss: refreshInstallationData) {
 				EditPartIdentity(part: dataSet)
@@ -561,6 +585,9 @@ struct EditParts: View {
 						SectionText(label: "GENERAL")
 						HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						HStack{LabelDataText(label: "\(Vertical.current.assetSingular) System", data: functions.cleanOptional(inputString: dataSet.vehicleSystem))}
+						if dataSet.partCategory != "" {
+							HStack{LabelDataText(label: "Display Category", data: functions.cleanOptional(inputString: dataSet.partCategory))}
+						}
 						HStack{LabelDataText(label: "Status", data: dataSet.inactive ? "Inactive" : "Active")}
 					}
 				}
@@ -915,6 +942,7 @@ struct EditParts: View {
 		dataSet.updatedAt = Date()
 		dataSet.vehicleId = vehicleId
 		dataSet.vehicleSystem = vehicleSystem
+		dataSet.partCategory = partCategory
 		dataSet.partName = trimmed(partName)
 		dataSet.partNumber = partNumber
 		dataSet.partManufacture = partManufacture
@@ -961,6 +989,19 @@ struct EditParts: View {
 		installations = Functions().loadInstallationHistory(context: modelContext, partName: dataSet.partName)
 		partTimeSnapshot = Functions().loadPartTimeSnapshot(context: modelContext, part: dataSet)
 		applicableDirectives = Functions().loadDirectives(context: modelContext, forPartNumber: dataSet.partNumber)
+	}
+
+	// Loads distinct, non-empty category names from all saved MxParts1 records so the
+	// edit form can offer a dropdown of previously-used categories.
+	private func loadAllPartCategories() {
+		let fd = FetchDescriptor<MxParts1>()
+		do {
+			let records = try modelContext.fetch(fd)
+			let set = Set(records.map { $0.partCategory }.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+			self.allPartCategories = set.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+		} catch {
+			self.allPartCategories = []
+		}
 	}
 
 	private func flagsDescription(_ flags: Set<PartTimeFlag>) -> String {

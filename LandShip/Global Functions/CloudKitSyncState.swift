@@ -37,13 +37,15 @@ final class CloudKitSyncState {
 	private enum Key {
 		static let lastExport = "cloudKitLastExportSuccess"
 		static let lastImport = "cloudKitLastImportSuccess"
+		static let throttledUntil = "cloudKitThrottledUntil"
 	}
 
 	private(set) var lastExportSuccess: Date? = UserDefaults.standard.object(forKey: Key.lastExport) as? Date
 	private(set) var lastImportSuccess: Date? = UserDefaults.standard.object(forKey: Key.lastImport) as? Date
 	private(set) var inFlight: Set<Operation> = []
 	/// Set while CloudKit has told us to slow down; nil once the wait has elapsed.
-	private(set) var throttledUntil: Date?
+	/// Persisted so the window survives a relaunch (launch-time writes check it).
+	private(set) var throttledUntil: Date? = UserDefaults.standard.object(forKey: Key.throttledUntil) as? Date
 	private(set) var lastErrorSummary: String?
 
 	/// True while a CloudKit rate-limit window is still open.
@@ -87,7 +89,9 @@ final class CloudKitSyncState {
 		inFlight.remove(operation)
 		lastErrorSummary = (error as NSError).localizedDescription
 		if let wait = Self.retryAfter(for: error) {
-			throttledUntil = Date().addingTimeInterval(wait)
+			let until = Date().addingTimeInterval(wait)
+			throttledUntil = until
+			UserDefaults.standard.set(until, forKey: Key.throttledUntil)
 		}
 	}
 
@@ -140,5 +144,56 @@ struct CloudKitSyncStatusSection: View {
 		} else {
 			Text("Never").foregroundStyle(.secondary)
 		}
+	}
+}
+
+// MARK: - Sidebar status bar
+
+/// One-line sync readout, sized to sit under the sidebar's logo and copyright line. Tapping it opens the
+/// sync activity popup.
+struct CloudKitSyncStatusBar: View {
+	@State private var showingActivity = false
+
+	private var state: CloudKitSyncState { .shared }
+
+	private var lastSync: Date? {
+		[state.lastExportSuccess, state.lastImportSuccess].compactMap { $0 }.max()
+	}
+
+	private var symbol: String {
+		if state.isThrottled { return "icloud.slash" }
+		if state.lastErrorSummary != nil && state.inFlight.isEmpty { return "exclamationmark.icloud" }
+		if !state.inFlight.isEmpty { return "arrow.triangle.2.circlepath.icloud" }
+		return "checkmark.icloud"
+	}
+
+	private var tint: Color {
+		if state.isThrottled || (state.lastErrorSummary != nil && state.inFlight.isEmpty) { return .orange }
+		if !state.inFlight.isEmpty { return .accentColor }
+		return .secondary
+	}
+
+	var body: some View {
+		Button { showingActivity = true } label: {
+			HStack(spacing: 6) {
+				Image(systemName: symbol)
+					.foregroundStyle(tint)
+				Text(state.headline)
+					.lineLimit(1)
+				Spacer(minLength: 4)
+				if let lastSync {
+					Text(lastSync, format: .dateTime.hour().minute())
+						.monospacedDigit()
+				}
+			}
+			.font(.caption2)
+			.foregroundStyle(.secondary)
+			.frame(maxWidth: .infinity, alignment: .center)
+			.contentShape(Rectangle())
+		}
+		.buttonStyle(.plain)
+		.sheet(isPresented: $showingActivity) { SyncActivitySheet() }
+		.accessibilityLabel("iCloud sync: \(state.headline)")
+		.accessibilityHint("Opens sync activity")
 	}
 }

@@ -200,6 +200,8 @@ struct DisplayVendors: View {
 									.accessibilityElement(children: .combine)
 									.accessibilityLabel("\(record.vendorName), \(record.vendorType), contact \(record.vendorContact1)")
 								}
+								// macOS: double-click opens the editor directly in edit mode.
+								.onDoubleClick { newRecordToEdit = record }
 							}
 							// Enable swipe-to-delete on rows.
 							.onDelete(perform: delete)
@@ -347,7 +349,7 @@ struct DisplayVendors: View {
 		Vendors1(
 			inactive: false, createdAt: Date(),
 			updatedAt: Date(),
-			vendorName: "New vendor name...",
+			vendorName: DefaultTitle.make(section: "Vendor", vehicleId: nil, fallback: "New vendor name...", context: modelContext),
 			vendorType: "",
 			vendorContact1: "",
 			vendorContact2: "",

@@ -361,6 +361,8 @@ struct DisplayProjectList: View {
 			}
 			.padding(.vertical, 4)
 		}
+		// macOS: double-click opens the editor directly in edit mode.
+		.onDoubleClick { newRecordToEdit = record }
 		.swipeActions(edge: .leading) {
 			Button {
 				editProject(record)

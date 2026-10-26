@@ -106,6 +106,9 @@ struct ContentView: View {
 	@State private var isExportingBackup: Bool = false
 	@State private var isBackupInProgress: Bool = false
 	@State private var backupDocument: BackupDocument = .empty
+	// Files that couldn't be read and were left out of the backup currently staged for export
+	// (e.g. an iCloud placeholder that hadn't finished downloading) — surfaced in the success message.
+	@State private var backupSkippedFiles: [String] = []
 	@State private var backupErrorMessage: String?
     @State private var backupSuccessMessage: String?
     @State private var isBackupSuccessPresented: Bool = false
@@ -134,6 +137,11 @@ struct ContentView: View {
 
 	@Environment(\.modelContext) private var modelContext
 	@Environment(\.scenePhase) private var scenePhase
+
+	/// Watched only so a date/time format change (made here or synced from another device)
+	/// is mirrored into DateDisplayPrefs for the formatters.
+	@Query(filter: #Predicate<Settings1> { $0.userName == "primary1" })
+	private var settingsRecords: [Settings1]
 	@Environment(\.entitlements) private var entitlements
 
 #if os(iOS)
@@ -325,7 +333,10 @@ struct ContentView: View {
 		) { result in
             switch result {
                 case .success(let url):
-                    let summary = BackupService.summarizeBackupFolder(at: url)
+                    var summary = BackupService.summarizeBackupFolder(at: url)
+                    if !backupSkippedFiles.isEmpty {
+                        summary += "\n\n⚠️ \(backupSkippedFiles.count) file(s) couldn't be read and were left out of this backup (see Backup_Warnings.txt inside it):\n" + backupSkippedFiles.joined(separator: "\n")
+                    }
                     backupSuccessMessage = summary
                     isBackupSuccessPresented = true
                     lastBackupDateInterval = Date().timeIntervalSince1970
@@ -487,6 +498,13 @@ struct ContentView: View {
 				let version = AppInfo.version
 				let storeMode = UserDefaults.standard.string(forKey: "StartupStoreMode") ?? "(unknown)"
 				InAppLogger.shared.log("Launch @ \(ts) — Bundle: \(bundleID), Version: \(version), StoreMode: \(storeMode)")
+				// Backup trace from the previous run — its last line shows how far a backup got
+				// before the process died (a hard kill leaves no crash report).
+				let previousTrace = BackupTrace.drainPreviousRun()
+				if !previousTrace.isEmpty {
+					InAppLogger.shared.log("Backup trace from previous run (\(previousTrace.count) lines):")
+					for line in previousTrace { InAppLogger.shared.log("  \(line)") }
+				}
 			}
 			
 			// Ensure the sidebar is shown on launch (iPadOS/macOS).
@@ -506,6 +524,7 @@ struct ContentView: View {
 			// Migrate existing vehicles to populate displayName from name
 			migrateVehicleDisplayNames()
 			deduplicateSettings()
+			mirrorDateDisplayPrefs()
 			
 			// Resolve the launch screen preference
 			let launchItem: SidebarItem
@@ -619,6 +638,9 @@ struct ContentView: View {
 			DebugToolsView()
 		}
 		// macOS menu fallback — see DebugCommands in LandShipApp.swift.
+		.onChange(of: (settingsRecords.first?.dateDisplayStyleRaw ?? "") + "|" + (settingsRecords.first?.timeDisplayStyleRaw ?? "")) {
+			mirrorDateDisplayPrefs()
+		}
 		.onReceive(NotificationCenter.default.publisher(for: .openDebugToolsRequested)) { _ in
 			showingDebugTools = true
 			InAppLogger.shared.log("DebugTools opened via menu")
@@ -626,6 +648,12 @@ struct ContentView: View {
 	}
 	
 	// MARK: - Actions
+
+	/// Copies the synced date/time format choice into the local mirror read by the formatters.
+	private func mirrorDateDisplayPrefs() {
+		guard let s = settingsRecords.first else { return }
+		DateDisplayPrefs.mirror(dateRaw: s.dateDisplayStyleRaw, timeRaw: s.timeDisplayStyleRaw)
+	}
 
 	/// Removes duplicate Settings1 records that can appear when multiple devices each create
 	/// a record before CloudKit sync delivers the other device's copy.
@@ -658,9 +686,13 @@ struct ContentView: View {
 				do {
 					// The actual file-system read happens off the main thread so this
 					// doesn't freeze the UI while scanning Application Support/Documents.
-					let doc = try await BackupService.makeBackupDocument(mediaSnapshots: mediaSnapshots)
+					let (doc, skippedFiles) = try await BackupService.makeBackupDocument(mediaSnapshots: mediaSnapshots)
 					self.backupDocument = doc
+					self.backupSkippedFiles = skippedFiles
 					self.isExportingBackup = true
+					if !skippedFiles.isEmpty {
+						InAppLogger.shared.log("Backup export: \(skippedFiles.count) file(s) skipped (couldn't be read)")
+					}
 				} catch {
 					self.backupErrorMessage = error.localizedDescription
 					self.isBackupErrorPresented = true
@@ -1353,6 +1385,9 @@ private struct SidebarView: View {
 					.font(.system(size: 5.5))
 					.foregroundStyle(.secondary)
 					.frame(maxWidth: .infinity, alignment: .center)
+
+				// Sits under the copyright line, sharing this block's background and padding.
+				CloudKitSyncStatusBar()
 			}
 			.frame(maxWidth: .infinity, alignment: .center)
 			.padding(.horizontal)
@@ -1600,6 +1635,7 @@ private extension ContentView {
 
 private struct DebugToolsView: View {
 	@Environment(\.dismiss) private var dismiss
+	@Environment(\.openURL) private var openURL
 	
 	private var bundleID: String { Bundle.main.bundleIdentifier ?? "(unknown)" }
 	private var version: String { AppInfo.version }
@@ -1615,6 +1651,7 @@ private struct DebugToolsView: View {
 #endif
 
 	@State private var logsText: String = InAppLogger.shared.joined()
+	@State private var showingResetConfirmation = false
 #if !os(macOS)
 	@State private var shareItem: LogShareItem?
 #endif
@@ -1625,7 +1662,6 @@ private struct DebugToolsView: View {
 
 #if DEBUG
 	@Environment(\.entitlements) private var entitlements
-	@Environment(\.modelContext) private var modelContext
 #endif
 
 	var body: some View {
@@ -1646,9 +1682,6 @@ private struct DebugToolsView: View {
 					LabeledContent("Original App Version", value: UserDefaults.standard.string(forKey: StorageKey.originalAppVersionCached) ?? "(none)")
 					LabeledContent("App Store Environment", value: UserDefaults.standard.string(forKey: StorageKey.appStoreEnvironment) ?? "(none)")
 					LabeledContent("Prior Install Detected", value: UserDefaults.standard.bool(forKey: StorageKey.priorInstallDetected) ? "Yes" : "No")
-					ForEach(Array(TrialCaps.allCapped.enumerated()), id: \.offset) { _, type in
-						LabeledContent(type.trialDisplayName, value: "\((try? type.trialFetchCount(in: modelContext)) ?? 0) / \(type.trialLimit)")
-					}
 					Button(role: .destructive) {
 						entitlements.resetTrialState()
 					} label: {
@@ -1671,14 +1704,15 @@ private struct DebugToolsView: View {
 				}
 
 				Section("Launch Log + Recent App Logs") {
-					ScrollView {
-						Text(logsText.isEmpty ? "(no log entries)" : logsText)
-							.font(.system(.footnote, design: .monospaced))
-							.frame(maxWidth: .infinity, alignment: .leading)
-							.textSelection(.enabled)
-					}
-					.frame(minHeight: 200)
-					.accessibilityLabel("In-app logs")
+					// No inner ScrollView here on purpose: nesting one inside the
+					// Form's own scroll container is what made the whole sheet stop
+					// scrolling on macOS. The Form itself scrolls; this just grows
+					// with the log's length like any other row.
+					Text(logsText.isEmpty ? "(no log entries)" : logsText)
+						.font(.system(.footnote, design: .monospaced))
+						.frame(maxWidth: .infinity, minHeight: 200, alignment: .topLeading)
+						.textSelection(.enabled)
+						.accessibilityLabel("In-app logs")
 					HStack {
 						Button {
 							logsText = InAppLogger.shared.joined()
@@ -1700,21 +1734,35 @@ private struct DebugToolsView: View {
 						} label: { Label("Share…", systemImage: "square.and.arrow.up") }
 						.buttonStyle(.borderless)
 						#endif
+						Button {
+							emailLogs()
+						} label: { Label("Email…", systemImage: "envelope") }
+						.buttonStyle(.borderless)
 						Button(role: .destructive) {
 							InAppLogger.shared.clear()
 							logsText = ""
 						} label: { Label("Clear", systemImage: "trash") }
 						.buttonStyle(.borderless)
 					}
+#if !os(macOS)
+					// Five text+icon buttons don't fit across an iPhone-width row and wrap
+					// mid-word; icons alone fit (VoiceOver still reads each label).
+					.labelStyle(.iconOnly)
+#endif
 				}
+
+				CloudKitSyncStatusSection()
 
 				Section("Troubleshooting") {
 					Button(role: .destructive) {
-						resetLocalStoreAndExit()
+						showingResetConfirmation = true
 					} label: {
 						Label("Reset Local Store", systemImage: "trash")
 					}
 					.help("Deletes Documents and Application Support, then exits. Use to simulate a clean reinstall.")
+					Text("Deletes every local record on **this device** and quits the app. On next launch, everything re-downloads fresh from iCloud. Use this to clear a stuck sync state — for example, after seeing the sync-failure banner or a \"partialFailure\" in the log above.\n\n⚠️ Any change made on this device that hasn't synced to iCloud yet (check \"Recent App Logs\" above for a recent ✅ EXPORT succeeded) will be permanently lost. Data already in iCloud is not affected and will come back after reset.")
+						.font(.footnote)
+						.foregroundStyle(.secondary)
 				}
 				
 				Section("Notes") {
@@ -1723,7 +1771,17 @@ private struct DebugToolsView: View {
 						.foregroundStyle(.secondary)
 				}
 			}
+			// macOS defaults to the "columns" form style, which doesn't scroll and clips
+			// right-aligned row labels in a narrow sheet. Grouped scrolls and wraps like iOS.
+			.formStyle(.grouped)
 			.navigationTitle("Debug Tools")
+#if os(macOS)
+			// Without a bounded frame, a macOS sheet grows to fit all of its content
+			// instead of scrolling — with a long log, that means the sheet can exceed
+			// the screen with no way to reach the rest of the Form. Fixing the size
+			// forces the Form to actually scroll internally, as intended.
+			.frame(width: 560, height: 640)
+#endif
 			.onAppear {
 				logsText = InAppLogger.shared.joined()
 				hasUnreadCloudKitFailure = false
@@ -1732,6 +1790,18 @@ private struct DebugToolsView: View {
 				ToolbarItem(placement: .cancellationAction) {
 					Button("Close") { dismiss() }
 				}
+			}
+			.confirmationDialog(
+				"Reset Local Store?",
+				isPresented: $showingResetConfirmation,
+				titleVisibility: .visible
+			) {
+				Button("Delete Local Data & Quit", role: .destructive) {
+					resetLocalStoreAndExit()
+				}
+				Button("Cancel", role: .cancel) {}
+			} message: {
+				Text("This deletes every local record on this device and quits the app. Anything not yet synced to iCloud will be permanently lost. Data already in iCloud is unaffected and will re-download on next launch.")
 			}
 			#if !os(macOS)
 			.sheet(item: $shareItem) { item in
@@ -1748,6 +1818,38 @@ private struct DebugToolsView: View {
 		#else
 		UIPasteboard.general.string = text
 		#endif
+	}
+
+	/// Opens a pre-addressed email. A mailto: body is truncated by some mail clients once it gets
+	/// long (see FeedbackView), so the full log is copied to the clipboard for pasting and only
+	/// the environment plus the latest few entries go in the body itself.
+	private func emailLogs() {
+		copyToPasteboard(logsText)
+		let recent = logsText
+			.split(separator: "\n", omittingEmptySubsequences: true)
+			.suffix(8)
+			.map { String($0.prefix(160)) }
+			.joined(separator: "\n")
+		let body = """
+		The full debug log has been copied to the clipboard - please paste it below.
+
+
+		--
+		Platform: \(platform)
+		Version: \(version)
+		Bundle ID: \(bundleID)
+		Store mode: \(storeMode)
+
+		Most recent entries:
+		\(recent)
+		"""
+		var allowed = CharacterSet.alphanumerics
+		allowed.insert(charactersIn: "-._~")
+		let subject = "Debug log - \(AppInfo.displayName) \(version)"
+		guard let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: allowed),
+			  let encodedBody = body.addingPercentEncoding(withAllowedCharacters: allowed),
+			  let url = URL(string: "mailto:\(FeedbackView.supportAddress)?subject=\(encodedSubject)&body=\(encodedBody)") else { return }
+		openURL(url)
 	}
 
 	private func exportLogs(_ text: String) {

@@ -271,6 +271,8 @@ struct DisplayRecords: View {
 									.cardStyle(backgroundColor: .blue.opacity(0.6))
 								}
 							}
+							// macOS: double-click opens the editor directly in edit mode.
+							.onDoubleClick { newRecordToEdit = record }
 						}
 					}
 					.toolbar {
@@ -406,7 +408,7 @@ struct DisplayRecords: View {
 			vehicleId: trackVehicleSelected,
 			Miles: currentMiles,
 			engHours: currentHours,
-			mxName: "(New Service Record)",
+			mxName: DefaultTitle.make(section: "Service Record", vehicleId: trackVehicleSelected, fallback: "(New Service Record)", context: modelContext),
 			mxItemId: "",
 			mxDescription: "",
 			Notes: "",

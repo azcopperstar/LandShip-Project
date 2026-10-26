@@ -158,6 +158,7 @@ struct LiveCheckListView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                             Text(date, style: .time)
+                                .timeDisplayLocale()
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -473,6 +474,7 @@ struct LiveCheckListView: View {
                                     get: { item.completedAt },
                                     set: { v in item.completedAt = v; persistChange(for: item) }
                                 ), displayedComponents: [.date, .hourAndMinute])
+                                    .timeDisplayLocale()
                                     .labelsHidden()
                             }
                         }
@@ -722,6 +724,7 @@ struct LiveCheckListView: View {
                                 get: { subItem.completedAt },
                                 set: { v in subItem.completedAt = v; persistChange(for: subItem) }
                             ), displayedComponents: [.date, .hourAndMinute])
+                                .timeDisplayLocale()
                                 .labelsHidden()
                                 .font(.caption)
                         }

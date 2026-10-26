@@ -190,6 +190,9 @@ struct EditVehicle: View {
 	@State private var componentTimesList: [ComponentTimes] = []
 	@State private var componentToEdit: ComponentTimes? = nil
 	@State private var showingAddComponent: Bool = false
+	@State private var fluidsList: [VehicleFluid] = []
+	@State private var fluidToEdit: VehicleFluid? = nil
+	@State private var showingAddFluid: Bool = false
 	@State private var numberOfEngines: Int = 1
 	@State private var showingRegulatoryReport: Bool = false
 
@@ -760,6 +763,48 @@ struct EditVehicle: View {
 									.buttonStyle(.plain)
 								}
 								.padding(.vertical, 2)
+								Divider()
+							}
+						}
+					}
+				}
+
+				CardView {
+					VStack {
+						HStack {
+							SectionText(label: "FLUIDS USED")
+							Spacer()
+							Button {
+								guard entitlements.requestCreate(VehicleFluid.self, in: modelContext) else { return }
+								showingAddFluid = true
+							} label: {
+								Image(systemName: "plus.capsule")
+							}
+						}
+						Text("Track the fluid type and quantity required for each fluid-filled component (engine, transmission, rear axle, etc.).")
+							.font(.caption)
+							.foregroundStyle(.secondary)
+						if fluidsList.isEmpty {
+							Text("No fluids recorded.")
+								.font(.subheadline)
+								.foregroundStyle(.secondary)
+						} else {
+							ForEach(fluidsList) { fl in
+								HStack(alignment: .top) {
+									VStack(alignment: .leading, spacing: 2) {
+										Text(fl.componentName).font(.subheadline).bold()
+										Text("\(fl.fluidType)\(fl.fluidBrand.isEmpty ? "" : " (\(fl.fluidBrand))") • \(fl.quantityRequired.formatted(.number.precision(.fractionLength(0...2)))) \(fl.quantityUnit)")
+											.font(.caption).foregroundStyle(.secondary)
+									}
+									Spacer()
+									Button {
+										fluidToEdit = fl
+									} label: {
+										Image(systemName: "pencil.circle").imageScale(.large)
+									}
+									.buttonStyle(.plain)
+								}
+								.padding(.vertical, 4)
 								Divider()
 							}
 						}
@@ -1391,6 +1436,7 @@ struct EditVehicle: View {
 				loadAirworthinessDirectives()
 				loadInspectionCycles()
 				loadComponentTimes()
+				loadFluids()
 				loadInstalledParts()
 				loadHaulOutRecords()
 				loadSurveyRecords()
@@ -1433,6 +1479,12 @@ struct EditVehicle: View {
 			}
 			.sheet(item: $componentToEdit, onDismiss: loadComponentTimes) { comp in
 				EditComponentTimes(vehicleId: dataSet.name, component: comp)
+			}
+			.sheet(isPresented: $showingAddFluid, onDismiss: loadFluids) {
+				EditVehicleFluid(vehicleId: dataSet.name)
+			}
+			.sheet(item: $fluidToEdit, onDismiss: loadFluids) { fl in
+				EditVehicleFluid(vehicleId: dataSet.name, fluid: fl)
 			}
 			.sheet(isPresented: $showingAddHaulOut, onDismiss: loadHaulOutRecords) {
 				EditHaulOutRecord(vehicleId: dataSet.name)
@@ -1657,6 +1709,46 @@ struct EditVehicle: View {
 					}
 				}
 
+				// Hidden when no fluids were recorded
+				if !fluidsList.isEmpty {
+					CardView {
+					VStack {
+						SectionText(label: "FLUIDS USED")
+						// Right-justified columns: component, fluid (brand beneath), quantity.
+						Grid(alignment: .topTrailing, horizontalSpacing: 12, verticalSpacing: 6) {
+							GridRow {
+								Text("Component")
+								Text("Fluid")
+								Text("Qty")
+							}
+							.font(.caption2.weight(.semibold))
+							.foregroundStyle(.secondary)
+							.multilineTextAlignment(.trailing)
+							Divider().gridCellUnsizedAxes(.horizontal)
+							ForEach(fluidsList) { fl in
+								GridRow {
+									Text(fl.componentName)
+										.font(.subheadline).bold()
+										.multilineTextAlignment(.trailing)
+										.fixedSize(horizontal: false, vertical: true)
+									VStack(alignment: .trailing, spacing: 1) {
+										Text(fl.fluidType).font(.subheadline)
+										if !fl.fluidBrand.isEmpty {
+											Text(fl.fluidBrand).font(.caption).foregroundStyle(.secondary)
+										}
+									}
+									.multilineTextAlignment(.trailing)
+									.fixedSize(horizontal: false, vertical: true)
+									Text("\(fl.quantityRequired.formatted(.number.precision(.fractionLength(0...2)))) \(fl.quantityUnit)")
+										.font(.subheadline.monospacedDigit())
+								}
+							}
+						}
+						.frame(maxWidth: .infinity, alignment: .trailing)
+					}
+					}
+				}
+
 				// Hidden when no directives or bulletins were recorded
 				if !airworthinessDirectives.isEmpty {
 					CardView {
@@ -1843,18 +1935,20 @@ struct EditVehicle: View {
 
 				// NEW: Next Service Due (Details mode)
 				CardView {
-					VStack(alignment: .leading, spacing: 8) {
+					VStack(alignment: .trailing, spacing: 8) {
 						SectionText(label: "NEXT SERVICE DUE")
 						if nextTwoDue.isEmpty {
 							Text("No upcoming service items found.")
 								.font(.subheadline)
 								.foregroundStyle(.secondary)
+								.frame(maxWidth: .infinity, alignment: .trailing)
 						} else {
 							ForEach(nextTwoDue) { due in
-								VStack(alignment: .leading, spacing: 4) {
+								VStack(alignment: .trailing, spacing: 4) {
 									Text(due.itemName).font(.subheadline).bold()
 									if !due.itemDescription.isEmpty {
 										Text(due.itemDescription).font(.caption).foregroundStyle(.secondary)
+											.multilineTextAlignment(.trailing)
 									}
 									HStack(spacing: 12) {
 										if due.intervalMiles > 0, let rm = due.remainingMiles {
@@ -1873,6 +1967,7 @@ struct EditVehicle: View {
 											.foregroundStyle(.secondary)
 									}
 								}
+								.frame(maxWidth: .infinity, alignment: .trailing)
 								.padding(.vertical, 4)
 								Divider()
 							}
@@ -2204,6 +2299,7 @@ struct EditVehicle: View {
 				loadAirworthinessDirectives()
 				loadInspectionCycles()
 				loadComponentTimes()
+				loadFluids()
 				loadInstalledParts()
 				loadHaulOutRecords()
 				loadSurveyRecords()
@@ -2341,6 +2437,15 @@ struct EditVehicle: View {
 			sortBy: [SortDescriptor(\ComponentTimes.componentName)]
 		)
 		componentTimesList = (try? modelContext.fetch(fd)) ?? []
+	}
+
+	private func loadFluids() {
+		let vehicleId = dataSet.name
+		let fd = FetchDescriptor<VehicleFluid>(
+			predicate: #Predicate { $0.vehicleId == vehicleId },
+			sortBy: [SortDescriptor(\VehicleFluid.componentName)]
+		)
+		fluidsList = (try? modelContext.fetch(fd)) ?? []
 	}
 
 	/// `comp.totalTime` when hand-entered (derivesFromMeter == false, every row for every
@@ -2677,6 +2782,15 @@ struct EditVehicle: View {
 		rename(FetchDescriptor<ProjectList>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
 		rename(FetchDescriptor<CheckList>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
 		rename(FetchDescriptor<Vehicle8>(predicate: #Predicate { $0.linkedMasterVehicleId == oldName })) { $0.linkedMasterVehicleId = newName }
+
+		// The dashboard's saved "vehicles included in totals" subset also references vehicles by
+		// name (Settings1.dashVehicleScopeRaw) — swap it too, or a renamed vehicle silently drops
+		// out of that subset even though it still exists.
+		let settingsFd = FetchDescriptor<Settings1>(predicate: #Predicate { $0.userName == "primary1" })
+		if let settings = try? modelContext.fetch(settingsFd).first,
+		   let idx = settings.dashVehicleScopeRaw.firstIndex(of: oldName) {
+			settings.dashVehicleScopeRaw[idx] = newName
+		}
 
 		do {
 			try modelContext.save()

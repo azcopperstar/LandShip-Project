@@ -59,6 +59,17 @@ extension View {
 	
 	func textModifier_ListDivider() -> some View {
 		self.modifier(TextModifier_ListDivider())}
+
+	/// macOS only: runs `action` when the row is double-clicked, without disturbing the
+	/// single-click selection/navigation. No-op on other platforms.
+	@ViewBuilder
+	func onDoubleClick(perform action: @escaping () -> Void) -> some View {
+#if os(macOS)
+		self.simultaneousGesture(TapGesture(count: 2).onEnded(action))
+#else
+		self
+#endif
+	}
 }
 
 

@@ -276,6 +276,8 @@ struct DisplayTripLog: View {
 										.cardStyle(backgroundColor: .blue.opacity(0.6))
 									}
 								}
+								// macOS: double-click opens the editor directly in edit mode.
+								.onDoubleClick { newRecordToEdit = record }
 							}
 //							.textModifier_ListDivider()
 						}
@@ -499,7 +501,7 @@ struct DisplayTripLog: View {
 		guard !trackVehicleSelected.isEmpty, trackVehicleSelected != "All Vehicles" else { return }
 		guard entitlements.requestCreate(TripLog2.self, in: modelContext) else { return }
 
-		let logName = functions.formatDate_DDMMMyy_HHmm(date: Date())
+		let logName = DefaultTitle.make(section: "Travel Log", vehicleId: trackVehicleSelected, fallback: functions.formatDate_DDMMMyy_HHmm(date: Date()), context: modelContext)
 		var odometerStart: Int = 0
 		var engHoursStart: Float = 0.0
 		var fuelStart: Float = 0.0

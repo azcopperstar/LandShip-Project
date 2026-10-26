@@ -126,6 +126,7 @@ struct LabelLocationTextview: View {
         HStack(alignment: .center, spacing: 8) {
             Text(label)
                 .textLabelModified()
+                .fixedSize()
             TextField("", text: $data, prompt: Text(label.replacingOccurrences(of: ":", with: "")))
                 .textViewModified()
                 .focused($isLocationFieldFocused)
@@ -408,16 +409,29 @@ struct LabelDataTextview_MultiLine: View {
 struct LabelDataTextview_Numberpad_Int: View {
 	let label: String
 	@Binding var data: Int
+	/// When true, uses the fixed Medium-width box instead of the default full-width field —
+	/// for fields that sit alongside other fixed-width fields in the same row (see
+	/// LabelDataTextview_Numberpad_Float.fixedWidth).
+	var fixedWidth: Bool = false
 	let functions: Functions = Functions()
 	var body: some View {
 		Text(label)
 			.textLabelModified()
-		TextField("", value: $data, formatter: functions.IntFormatter, prompt: Text(label.replacingOccurrences(of: ":", with: "")))
-			.textViewModified()
+		if fixedWidth {
+			TextField("", value: $data, formatter: functions.IntFormatter, prompt: Text(label.replacingOccurrences(of: ":", with: "")))
+				.textViewModified_Medium()
 #if os(iOS)
-			.selectAllTextOnBeginEditing()
-			.keyboardType(.numberPad)
+				.selectAllTextOnBeginEditing()
+				.keyboardType(.numberPad)
 #endif
+		} else {
+			TextField("", value: $data, formatter: functions.IntFormatter, prompt: Text(label.replacingOccurrences(of: ":", with: "")))
+				.textViewModified()
+#if os(iOS)
+				.selectAllTextOnBeginEditing()
+				.keyboardType(.numberPad)
+#endif
+		}
 	}
 }
 
@@ -544,6 +558,9 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 	/// Tank capacities used by the level pickers to show the resulting quantity.
 	var fuelCapacity: Float = 0
 	var defCapacity: Float = 0
+	/// Whether the vehicle itself (not just this stop's fuel type picker) runs on diesel —
+	/// DEF only applies to a diesel vehicle, so its fields stay hidden for anything else.
+	var isVehicleDiesel: Bool = false
 	/// `logId` of the fuel log this stop writes to. Empty means a new log is created on save.
 	var linkedLogId: Binding<String>? = nil
 	/// Existing fuel logs the stop may be linked to instead of creating a new one.
@@ -567,7 +584,7 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 	/// Stop details stay hidden until a stop reason is chosen, so a freshly-added stop doesn't show a wall of empty fields.
 	private var fieldsVisible: Bool { stopReason.map { !$0.wrappedValue.isEmpty } ?? true }
 	/// DEF only applies to a diesel vehicle, so its fields stay hidden for anything else.
-	private var isDieselStop: Bool { fuelType.map { isDieselFamilyFuelType($0.wrappedValue) } ?? false }
+	private var isDieselStop: Bool { isVehicleDiesel }
 	/// Quantity only applies to fuel stops; other stop reasons (rest, food, etc.) don't add fuel.
 	private var isFuelStop: Bool { stopReason.map { $0.wrappedValue == "Fuel" } ?? true }
 
@@ -757,9 +774,9 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 						.accessibilityHint("Choose an existing fuel log to attach to this stop, or create a new one")
 					}
 				}
-				LabelDataPicker_DateTime(label: Vertical.current.id == .aviation ? "Arrive                       " : "Start Stop                   ", data: $fuelDateTime)
+				LabelDataPicker_DateTime(label: "Arrive                       ", data: $fuelDateTime)
 				if let fuelExitTime {
-					LabelDataPicker_DateTime(label: Vertical.current.id == .aviation ? "Depart                       " : "End Stop                     ", data: fuelExitTime, notEarlierThan: fuelDateTime)
+					LabelDataPicker_DateTime(label: "Depart                       ", data: fuelExitTime, notEarlierThan: fuelDateTime)
 				}
 				LabelLocationTextview(label: "Location", data: $fuelLocation, latitude: fuelLocationLat, longitude: fuelLocationLon, coordinateLabel: "Enroute Stop Coordinates")
 				// Odometer, hours and fuel type describe the stop itself, so they come before the
@@ -822,10 +839,12 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 						Spacer()
 						Text("Fuel Type")
 							.textLabelModified()
+							.fixedSize()
 						Picker("", selection: fuelType) {
 							FuelTypePickerOptions(currentValue: fuelType.wrappedValue)
 						}
 						.pickerStyle(.automatic)
+						.frame(maxWidth: .infinity, alignment: .trailing)
 					}
 				}
 				if dataFuelLog { FuelTypePickerNote() }
@@ -864,7 +883,7 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 			}
 			HStack {
 				if isFuelStop, tankAdded == nil || tankCount <= 1 {
-					Text("Qty\(label)")
+					Text("Added\(label)")
 						.textLabelModified()
 					validatedField(isQuantityValid) {
 						TextField("", value: $dataQuantity, formatter: functions.DoubleFormatter)
@@ -903,6 +922,15 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 					}
 				}
 			}
+			if dataFuelLog {
+				HStack {
+					Spacer()
+					Text("Cost")
+						.textLabelModified()
+						.fixedSize()
+					Text(dataPrice * dataQuantity, format: .currency(code: Locale.current.currency?.identifier ?? "USD"))
+				}
+			}
 			if dataFuelLog, let fuelLevelEnd {
 				HStack {
 					Spacer()
@@ -914,36 +942,9 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 			}
 			if dataFuelLog {
 				VStack {
-					// Aviation moves Oil/Deice/Hydraulic/Brake into the "Fluids Added" popup
-					// below instead — land/marine keep the simple inline Oil field, unchanged.
-					if Vertical.current.id != .aviation {
-					HStack(alignment: .center) {
-						Text("--------- Fluids Added ---------")
-					}
-					// Oil stands on its own row; DEF gets its own amount and price so a stop records DEF
-					// cost the same way the fuel log does.
-					HStack {
-						Text("Oil \(labelOil)")
-							.textLabelModified()
-						validatedField(isOilValid) {
-							TextField("", value: $oilAdded, formatter: functions.FloatFormatter)
-								.textViewModified_Medium()
-#if !os(macOS)
-								.selectAllTextOnBeginEditing()
-								.keyboardType(.decimalPad)
-#endif
-								.accessibilityLabel("Oil Added \(labelOil)")
-						}
-						if !isOilValid {
-							Text("Oil cannot be negative")
-								.font(.caption2)
-								.foregroundStyle(.red)
-						}
-					}
-					}
 					if isDieselStop, let defLevelStart {
 						HStack {
-							Picker_FuelLevel1(label: "DEF Level Start", data: defLevelStart, data1: defCapacity, quantity: defQuantityStart)
+							Picker_FuelLevel1(label: "DEF Level", data: defLevelStart, data1: defCapacity, quantity: defQuantityStart)
 								.onChange(of: defLevelStart.wrappedValue) { _, newFraction in
 									defQuantityStart?.wrappedValue = defCapacity * newFraction
 									recalcEndDefLevelFromAdded()
@@ -953,7 +954,7 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 					// DEF amount and price sit side by side and use the same labels as the fuel row above.
 					if isDieselStop {
 						HStack {
-								Text("Qty\(labelDEF)")
+								Text("DEF Added\(labelDEF)")
 								.textLabelModified()
 							validatedField(isDEFValid) {
 								TextField("", value: $defAdded, formatter: functions.FloatFormatter)
@@ -972,7 +973,7 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 									.font(.caption2)
 									.foregroundStyle(.red)
 							}
-							if let defPrice {
+							if let defPrice, defAdded > 0 {
 								Text("Price/\(labelDEF)")
 									.textLabelModified()
 								validatedField(defPrice.wrappedValue >= 0) {
@@ -987,13 +988,37 @@ struct LabelDataTextview_Numberpad_Fuel: View {
 							}
 						}
 					}
-					if isDieselStop, let defLevel {
+					if isDieselStop, let defLevel, defAdded > 0 {
 						HStack {
 							Picker_FuelLevel1(label: "DEF Level End", data: defLevel, data1: defCapacity, quantity: defQuantity)
 								.onChange(of: defLevel.wrappedValue) { _, newFraction in
 									defQuantity?.wrappedValue = defCapacity * newFraction
 								}
 						}
+					}
+					// Aviation moves Oil/Deice/Hydraulic/Brake into the "Fluids Added" popup
+					// below instead — land/marine keep the simple inline Oil field, unchanged.
+					if Vertical.current.id != .aviation {
+					// Oil stands on its own row; DEF gets its own amount and price so a stop records DEF
+					// cost the same way the fuel log does.
+					HStack {
+						Text("Oil Added \(labelOil)")
+							.textLabelModified()
+						validatedField(isOilValid) {
+							TextField("", value: $oilAdded, formatter: functions.FloatFormatter)
+								.textViewModified_Medium()
+#if !os(macOS)
+								.selectAllTextOnBeginEditing()
+								.keyboardType(.decimalPad)
+#endif
+								.accessibilityLabel("Oil Added \(labelOil)")
+						}
+						if !isOilValid {
+							Text("Oil cannot be negative")
+								.font(.caption2)
+								.foregroundStyle(.red)
+						}
+					}
 					}
 					HStack {
 						Spacer()
@@ -1126,16 +1151,28 @@ struct LabelDataTextview_Currency_Float: View {
 struct LabelDataTextview_Numberpad_Currency: View {
 	let label: String
 	@Binding var data: Float
+	/// See LabelDataTextview_Numberpad_Float.fixedWidth — same purpose, for rows where this
+	/// field sits alongside other fixed-width fields in the same row.
+	var fixedWidth: Bool = false
 	let functions: Functions = Functions()
 	var body: some View {
 		Text(label)
 			.textLabelModified()
-		TextField("", value: $data, format: .currency(code: Locale.current.currency?.identifier ?? "USD"))
-			.textViewModified()
+		if fixedWidth {
+			TextField("", value: $data, format: .currency(code: Locale.current.currency?.identifier ?? "USD"))
+				.textViewModified_Medium()
 #if !os(macOS)
-			.selectAllTextOnBeginEditing()
-			.keyboardType(.decimalPad)
+				.selectAllTextOnBeginEditing()
+				.keyboardType(.decimalPad)
 #endif
+		} else {
+			TextField("", value: $data, format: .currency(code: Locale.current.currency?.identifier ?? "USD"))
+				.textViewModified()
+#if !os(macOS)
+				.selectAllTextOnBeginEditing()
+				.keyboardType(.decimalPad)
+#endif
+		}
 	}
 }
 

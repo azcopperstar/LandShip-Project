@@ -230,6 +230,8 @@ struct DisplaySystems: View {
 									.cardStyle(backgroundColor: .blue.opacity(0.6))
 								}
 							}
+							// macOS: double-click opens the editor directly in edit mode.
+							.onDoubleClick { newRecordToEdit = record }
 						}
 					}
 					.toolbar {
@@ -340,7 +342,7 @@ struct DisplaySystems: View {
 			createdAt: now,
 			updatedAt: now,
 			vehicleId: assignedVehicleId,
-			systemName: "New \(Vertical.current.assetSingular.lowercased()) system...",
+			systemName: DefaultTitle.make(section: "System", vehicleId: trackVehicleSelected, fallback: "New \(Vertical.current.assetSingular.lowercased()) system...", context: modelContext),
 			systemDescription: "",
 			systemType: "",
 			systemManufacturer: "",

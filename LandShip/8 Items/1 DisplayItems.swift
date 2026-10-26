@@ -246,6 +246,8 @@ struct DisplayItems: View {
 									.cardStyle(backgroundColor: record.isSubItem ? .orange.opacity(0.5) : .blue.opacity(0.6))
 								}
 							}
+							// macOS: double-click opens the editor directly in edit mode.
+							.onDoubleClick { newRecordToEdit = record }
 						}
 //						.textModifier_ListDivider()
 					}
@@ -376,7 +378,7 @@ struct DisplayItems: View {
 			updatedAt: Date(),
 			vehicleId: trackVehicleSelected.isEmpty ? "All Vehicles" : trackVehicleSelected,
 			vehicleSystem: "",
-			mxName: "(New service item)",
+			mxName: DefaultTitle.make(section: "Service Item", vehicleId: trackVehicleSelected, fallback: "(New service item)", context: modelContext),
 			mxDescription: "",
 			Notes: "",
 			vendor: "",

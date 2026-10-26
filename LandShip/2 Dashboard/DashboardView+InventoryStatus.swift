@@ -34,8 +34,10 @@ extension DashboardView {
 
 			// Resolve each part's supplier (by name, the app's usual linking convention) once,
 			// so a reorder alert can offer a direct link to that supplier's website.
+			// Vendor names aren't enforced unique, so tolerate duplicates by keeping the
+			// first match rather than crashing via Dictionary(uniqueKeysWithValues:).
 			let vendors = (try? modelContext.fetch(FetchDescriptor<Vendors1>())) ?? []
-			let vendorsByName = Dictionary(uniqueKeysWithValues: vendors.map { ($0.vendorName, $0) })
+			let vendorsByName = Dictionary(vendors.map { ($0.vendorName, $0) }, uniquingKeysWith: { first, _ in first })
 
 			let alerts = scoped.map { p in
 				let vendor = vendorsByName[p.partSupplier]
@@ -88,16 +90,11 @@ struct InventoryStatusCard: View {
 						.font(.subheadline)
 						.foregroundStyle(.green)
 				} else {
-					ForEach(lowStock.prefix(5)) { alert in
+					ForEach(lowStock) { alert in
 						InventoryAlertRow(alert: alert, vehicleDisplayName: vehicleDisplayName)
-						if alert.id != lowStock.prefix(5).last?.id {
+						if alert.id != lowStock.last?.id {
 							Divider()
 						}
-					}
-					if lowStock.count > 5 {
-						Text("+ \(lowStock.count - 5) more low-stock part(s)")
-							.font(.caption)
-							.foregroundStyle(.secondary)
 					}
 				}
 			}

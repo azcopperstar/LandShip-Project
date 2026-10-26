@@ -40,6 +40,7 @@ enum AppSchema {
 		AirworthinessDirective.self,
 		InspectionCycle.self,
 		ComponentTimes.self,
+		VehicleFluid.self,
 		HaulOutRecord.self,
 		SurveyRecord.self,
 		PilotLogbookEntry.self,
@@ -47,7 +48,8 @@ enum AppSchema {
 		SeaServiceEntry.self,
 		MarinerCredential.self,
 		PartInstallation.self,
-		RecordAttachment.self
+		RecordAttachment.self,
+		SyncHeartbeat.self
 	]
 }
 
@@ -69,6 +71,7 @@ struct BackupDocument: FileDocument {
 	}
 
 	func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+		BackupTrace.log("exporter requested the file wrapper to write")
 		return rootWrapper
 	}
 
@@ -91,6 +94,59 @@ extension FileWrapper {
 // used only to hand a finished, no-longer-mutated object back from a detached Task.
 private struct UncheckedBox<Value>: @unchecked Sendable {
 	let value: Value
+}
+
+// MARK: - BackupTrace (diagnostics that survive a hard kill)
+
+/// Appends timestamped lines (each tagged with the process's current memory footprint) to a file,
+/// synchronously and thread-safely, so the last line written before a jetsam/SIGKILL — which
+/// leaves no crash report — survives. InAppLogger can't do this: it's MainActor-only and
+/// UserDefaults persistence is lazy. The file lives in Library/, outside Documents and
+/// Application Support, so it's never swept into a backup itself. On the next launch,
+/// `drainPreviousRun()` hands the lines to InAppLogger so they show up in Debug Tools.
+enum BackupTrace {
+	private static let lock = NSLock()
+	private static let fileURL: URL? = FileManager.default
+		.urls(for: .libraryDirectory, in: .userDomainMask).first?
+		.appendingPathComponent("BackupTrace.log")
+
+	static func log(_ message: String) {
+		let line = "\(Date().formatted(.iso8601)) [\(memoryFootprintText())] \(message)\n"
+		guard let data = line.data(using: .utf8) else { return }
+		lock.lock()
+		defer { lock.unlock() }
+		guard let fileURL else { return }
+		if let handle = try? FileHandle(forWritingTo: fileURL) {
+			defer { try? handle.close() }
+			_ = try? handle.seekToEnd()
+			try? handle.write(contentsOf: data)
+			try? handle.synchronize()
+		} else {
+			try? data.write(to: fileURL, options: .atomic)
+		}
+	}
+
+	/// Returns (and deletes) the trace left by earlier runs, newest 150 lines.
+	static func drainPreviousRun() -> [String] {
+		lock.lock()
+		defer { lock.unlock() }
+		guard let fileURL, let text = try? String(contentsOf: fileURL, encoding: .utf8) else { return [] }
+		try? FileManager.default.removeItem(at: fileURL)
+		return text.split(separator: "\n").suffix(150).map(String.init)
+	}
+
+	/// Physical memory footprint — the number iOS/macOS jetsam compares against the process limit.
+	static func memoryFootprintText() -> String {
+		var info = task_vm_info_data_t()
+		var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+		let result = withUnsafeMutablePointer(to: &info) {
+			$0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+				task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+			}
+		}
+		guard result == KERN_SUCCESS else { return "mem ?" }
+		return "mem \(BackupService.formatBytes(Int(info.phys_footprint)))"
+	}
 }
 
 // MARK: - BackupBuilder builds the folder structure to export
@@ -132,6 +188,7 @@ enum BackupBuilder {
 		let parts: [MxParts1]
 		let fuelLogs: [FuelLog1]
 		let tripLogs: [TripLog2]
+		BackupTrace.log("=== collectMediaSnapshots begin")
 		do {
 			vehicles = try context.fetch(FetchDescriptor<Vehicle8>())
 			systems = try context.fetch(FetchDescriptor<VehicleSystems1>())
@@ -267,13 +324,25 @@ enum BackupBuilder {
 			MediaCategorySnapshot(folderName: "FuelLogs", records: fuelLogRecords),
 			MediaCategorySnapshot(folderName: "TripLogs", records: tripLogRecords),
 		]
-		return categories.filter { !$0.records.isEmpty }
+		let nonEmpty = categories.filter { !$0.records.isEmpty }
+		let imageCount = nonEmpty.reduce(0) { $0 + $1.records.reduce(0) { $0 + $1.images.count } }
+		let imageBytes = nonEmpty.reduce(0) { $0 + $1.records.reduce(0) { $0 + $1.images.reduce(0) { $0 + $1.data.count } } }
+		BackupTrace.log("=== collectMediaSnapshots end: \(imageCount) images, \(BackupService.formatBytes(imageBytes)) across \(nonEmpty.count) categories")
+		return nonEmpty
 	}
 
 	/// Builds the exportable folder structure. Pure FileManager/Data work — safe to call
 	/// off the main thread (e.g. from a detached Task) since it never touches SwiftData.
-	static func makeBackupWrapper(mediaSnapshots: [MediaCategorySnapshot]) throws -> FileWrapper {
+	///
+	/// Returns the skipped-file report alongside the wrapper (also embedded as
+	/// `Backup_Warnings.txt` inside the backup itself) for files that couldn't be read —
+	/// e.g. an iCloud-evicted placeholder that hasn't finished downloading. Those files are
+	/// omitted rather than failing the whole backup.
+	@discardableResult
+	static func makeBackupWrapper(mediaSnapshots: [MediaCategorySnapshot]) throws -> (wrapper: FileWrapper, skippedFiles: [String]) {
 		let root = FileWrapper(directoryWithFileWrappers: [:])
+		var skippedFiles: [String] = []
+		BackupTrace.log("=== makeBackupWrapper begin (media categories: \(mediaSnapshots.count))")
 
 		// Info file
 		let infoText = """
@@ -286,29 +355,45 @@ enum BackupBuilder {
 
 		// Include Application Support (SwiftData lives here)
 		if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-			let supportWrapper = try directoryWrapper(at: appSupport, displayName: "Application Support")
+			let supportWrapper = try directoryWrapper(at: appSupport, displayName: "Application Support", skippedFiles: &skippedFiles)
 			root.addFileWrapper(supportWrapper)
 		}
 
 		// Include Documents (your generated PDFs, etc.)
 		if let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-			let docsWrapper = try directoryWrapper(at: docs, displayName: "Documents")
+			let docsWrapper = try directoryWrapper(at: docs, displayName: "Documents", excludingTopLevel: [AutoBackupService.backupsFolderName], skippedFiles: &skippedFiles)
 			root.addFileWrapper(docsWrapper)
 		}
 
 		// Also export human-browsable media files from SwiftData image blobs
+		BackupTrace.log("building Media folder")
 		if let mediaWrapper = buildMediaFolder(from: mediaSnapshots) {
 			root.addFileWrapper(mediaWrapper)
 		}
 
-		return root
+		BackupTrace.log("=== makeBackupWrapper end (skipped: \(skippedFiles.count))")
+		if !skippedFiles.isEmpty {
+			let warningsText = """
+			The following \(skippedFiles.count) file(s) could not be read and were left out of this backup \
+			(often an iCloud file that hadn't finished downloading to this device):
+
+			\(skippedFiles.joined(separator: "\n"))
+			"""
+			root.addFile(withName: "Backup_Warnings.txt", contents: Data(warningsText.utf8))
+		}
+
+		return (root, skippedFiles)
 	}
 
 	// Recursively builds a FileWrapper from a directory on disk.
 	// Includes hidden (dot-prefixed) files/folders so the backup is a true full copy of the
 	// directory — restore's copy step doesn't skip hidden files either, so skipping them only
 	// on export would silently produce incomplete backups.
-	private static func directoryWrapper(at url: URL, displayName: String? = nil) throws -> FileWrapper {
+	//
+	// Individual files that can't be read (e.g. an iCloud-evicted placeholder that hasn't
+	// finished downloading) are skipped rather than aborting the whole backup — their relative
+	// path and error are appended to `skippedFiles` so the caller can report them afterward.
+	private static func directoryWrapper(at url: URL, displayName: String? = nil, excludingTopLevel: Set<String> = [], skippedFiles: inout [String]) throws -> FileWrapper {
 		let fm = FileManager.default
 		var isDir: ObjCBool = false
 		guard fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
@@ -321,15 +406,36 @@ enum BackupBuilder {
 		let wrapper = FileWrapper(directoryWithFileWrappers: [:])
 		if let name = displayName { wrapper.preferredFilename = name }
 
-		let resourceKeys: [URLResourceKey] = [.isDirectoryKey, .isRegularFileKey, .nameKey, .isSymbolicLinkKey]
+		let label = displayName ?? url.lastPathComponent
+		traceInventory(at: url, label: label, excludingTopLevel: excludingTopLevel)
+
+		var filesRead = 0
+		var bytesRead = 0
+		let bigFileThreshold = 5 * 1024 * 1024
+		let progressInterval = 250
+
+		let resourceKeys: [URLResourceKey] = [.isDirectoryKey, .isRegularFileKey, .nameKey, .isSymbolicLinkKey, .fileSizeKey]
 		let enumerator = fm.enumerator(at: url, includingPropertiesForKeys: resourceKeys, options: [])
 		while let itemURL = enumerator?.nextObject() as? URL {
-			let resourceValues = try itemURL.resourceValues(forKeys: Set(resourceKeys))
-
 			// Compute relative path name for placement inside this wrapper
 			let relativePath = itemURL.path.replacingOccurrences(of: url.path + "/", with: "")
 			// Skip if empty (root)
 			guard !relativePath.isEmpty else { continue }
+
+			if excludingTopLevel.contains(relativePath) {
+				enumerator?.skipDescendants()
+				BackupTrace.log("excluded \(label)/\(relativePath) from backup")
+				continue
+			}
+
+			let resourceValues: URLResourceValues
+			do {
+				resourceValues = try itemURL.resourceValues(forKeys: Set(resourceKeys))
+			} catch {
+				skippedFiles.append("\(displayName ?? "")/\(relativePath): \(error.localizedDescription)")
+				BackupTrace.log("SKIP (resourceValues) \(label)/\(relativePath): \(error.localizedDescription)")
+				continue
+			}
 
 			if resourceValues.isSymbolicLink == true {
 				// Skip symlinks inside container
@@ -340,13 +446,79 @@ enum BackupBuilder {
 				// Ensure hierarchy exists in wrapper
 				try ensureDirectory(relativePath: relativePath, under: wrapper)
 			} else if resourceValues.isRegularFile == true {
-				// Read file data and place it in the correct sub-wrapper path
-				let fileData = try Data(contentsOf: itemURL, options: .mappedIfSafe)
-				try addFile(relativePath: relativePath, data: fileData, under: wrapper)
+				// Read file data and place it in the correct sub-wrapper path. A file that can't
+				// be opened (e.g. still downloading from iCloud) is reported, not fatal.
+				//
+				// Deliberately NOT `.mappedIfSafe`: a memory-mapped read defers the actual disk
+				// I/O to whenever the mapped bytes are later touched (e.g. while the FileWrapper
+				// tree is written out). If that underlying read fails — a still-downloading
+				// iCloud placeholder, a decmpfs/APFS decompression error, anything short of the
+				// file being fully, locally present — the kernel delivers it as a SIGBUS page-fault
+				// trap instead of a thrown error, which crashes the process outright and can't be
+				// caught here. A plain, fully-materialized read surfaces the same failure as a
+				// normal thrown NSError at the point of the call instead.
+				let size = resourceValues.fileSize ?? 0
+				if size >= bigFileThreshold {
+					BackupTrace.log("reading big file \(label)/\(relativePath) (\(BackupService.formatBytes(size)))")
+				}
+				do {
+					let fileData = try Data(contentsOf: itemURL)
+					try addFile(relativePath: relativePath, data: fileData, under: wrapper)
+					filesRead += 1
+					bytesRead += fileData.count
+					if filesRead % progressInterval == 0 {
+						BackupTrace.log("progress \(label): \(filesRead) files, \(BackupService.formatBytes(bytesRead)) read; last: \(relativePath)")
+					}
+				} catch {
+					skippedFiles.append("\(displayName ?? "")/\(relativePath): \(error.localizedDescription)")
+					BackupTrace.log("SKIP (read) \(label)/\(relativePath) (\(BackupService.formatBytes(size))): \(error.localizedDescription)")
+					continue
+				}
 			}
 		}
 
+		BackupTrace.log("finished \(label): \(filesRead) files, \(BackupService.formatBytes(bytesRead)) read")
 		return wrapper
+	}
+
+	/// Logs a cheap metadata-only survey of a directory before it's read: file count, total size,
+	/// the biggest top-level subfolders, and the biggest individual files. Written before any file
+	/// contents are loaded, so it survives even if the read that follows kills the process.
+	private static func traceInventory(at url: URL, label: String, excludingTopLevel: Set<String>) {
+		let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey]
+		guard let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys, options: []) else { return }
+		let base = url.path + "/"
+		var fileCount = 0
+		var totalBytes = 0
+		var bytesByTopLevel: [String: Int] = [:]
+		var largest: [(path: String, size: Int)] = []
+
+		while let item = enumerator.nextObject() as? URL {
+			guard let values = try? item.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { continue }
+			let size = values.fileSize ?? 0
+			let relative = String(item.path.dropFirst(base.count))
+			if excludingTopLevel.contains(relative) {
+				enumerator.skipDescendants()
+				continue
+			}
+			let top = relative.split(separator: "/").first.map(String.init) ?? relative
+			fileCount += 1
+			totalBytes += size
+			bytesByTopLevel[top, default: 0] += size
+			if largest.count < 5 || size > (largest.last?.size ?? 0) {
+				largest.append((relative, size))
+				largest.sort { $0.size > $1.size }
+				if largest.count > 5 { largest.removeLast() }
+			}
+		}
+
+		BackupTrace.log("inventory \(label): \(fileCount) files, \(BackupService.formatBytes(totalBytes)) total")
+		for (top, size) in bytesByTopLevel.sorted(by: { $0.value > $1.value }).prefix(8) {
+			BackupTrace.log("  \(label)/\(top): \(BackupService.formatBytes(size))")
+		}
+		for entry in largest {
+			BackupTrace.log("  largest: \(label)/\(entry.path) (\(BackupService.formatBytes(entry.size)))")
+		}
 	}
 
 	// Ensure nested directory wrappers exist for a given relative path
@@ -478,12 +650,18 @@ enum BackupService {
 
 	/// Builds the exportable backup document. The heavy recursive file-system read is done on a
 	/// detached background task so tapping "Backup…" doesn't freeze the UI while it runs.
-	static func makeBackupDocument(mediaSnapshots: [BackupBuilder.MediaCategorySnapshot]) async throws -> BackupDocument {
-		let box = try await Task.detached(priority: .userInitiated) { () -> UncheckedBox<FileWrapper> in
-			let wrapper = try BackupBuilder.makeBackupWrapper(mediaSnapshots: mediaSnapshots)
-			return UncheckedBox(value: wrapper)
+	///
+	/// `skippedFiles` lists any files that couldn't be read and were left out of the backup
+	/// (see `BackupBuilder.makeBackupWrapper`) — surface these to the user rather than treating
+	/// the backup as having silently failed.
+	static func makeBackupDocument(mediaSnapshots: [BackupBuilder.MediaCategorySnapshot]) async throws -> (document: BackupDocument, skippedFiles: [String]) {
+		BackupTrace.log("manual backup: building document")
+		let box = try await Task.detached(priority: .userInitiated) { () -> UncheckedBox<(FileWrapper, [String])> in
+			let (wrapper, skippedFiles) = try BackupBuilder.makeBackupWrapper(mediaSnapshots: mediaSnapshots)
+			return UncheckedBox(value: (wrapper, skippedFiles))
 		}.value
-		return BackupDocument(root: box.value)
+		BackupTrace.log("manual backup: document built, handing to file exporter")
+		return (BackupDocument(root: box.value.0), box.value.1)
 	}
 
 	/// Whether the currently-running ModelContainer was created in CloudKit-backed mode at
@@ -754,6 +932,9 @@ enum BackupService {
 	/// Runs before the ModelContainer is created, so nothing else has the store open. If the
 	/// process dies mid-way, the whole operation is retried once on the next launch —
 	/// delete-all-then-reinsert is idempotent.
+	/// Records inserted per save during a restore re-import.
+	private static let restoreSaveChunkSize = 200
+
 	private static func importBackupIntoLiveStore(stagedSupport: URL, appSupport: URL) throws {
 		let fm = FileManager.default
 		let sourceStoreURL = try locateStoreFile(in: stagedSupport)
@@ -804,10 +985,16 @@ enum BackupService {
 			let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
 			request.returnsObjectsAsFaults = false
 			let rows = try sourceContext.fetch(request)
-			for row in rows {
+			for (index, row) in rows.enumerated() {
 				let clone = NSEntityDescription.insertNewObject(forEntityName: entityName, into: liveContext)
 				for attributeName in entity.attributesByName.keys {
 					clone.setValue(row.value(forKey: attributeName), forKey: attributeName)
+				}
+				// Commit in modest chunks so CloudKit's exporter sees many small
+				// transactions in persistent history instead of one enormous one per
+				// entity — the shape that gets a container rate limited.
+				if (index + 1) % restoreSaveChunkSize == 0 {
+					try liveContext.save()
 				}
 			}
 			totalCopied += rows.count
@@ -1030,6 +1217,11 @@ struct AutoBackupEntry: Identifiable, Sendable {
 /// `ManageAutoBackupsView` provides Restore/Share/Delete so these backups
 /// remain reachable and can still be copied off-device via the share sheet.
 enum AutoBackupService {
+	/// Folder inside Documents that holds automatic backups. Backups must never include it:
+	/// each backup would contain every earlier one, nesting recursively until a single export
+	/// loaded tens of GB into memory and the system killed the app.
+	static let backupsFolderName = "Backups"
+
 	/// Whether enough time has passed since the last *automatic* backup for the
 	/// currently configured interval — tracked separately from manual backups,
 	/// so a manual backup never delays or masks the automatic schedule. If no
@@ -1060,13 +1252,20 @@ enum AutoBackupService {
 	static func run(mediaSnapshots: [BackupBuilder.MediaCategorySnapshot]) async {
 		do {
 			let retain = retentionCount()
-			try await Task.detached(priority: .utility) {
-				let wrapper = try BackupBuilder.makeBackupWrapper(mediaSnapshots: mediaSnapshots)
+			let skippedCount = try await Task.detached(priority: .utility) { () -> Int in
+				let (wrapper, skippedFiles) = try BackupBuilder.makeBackupWrapper(mediaSnapshots: mediaSnapshots)
 				let folder = try autoBackupsFolder()
 				let dest = folder.appendingPathComponent(BackupService.defaultBackupFilename(), isDirectory: true)
+				BackupTrace.log("auto backup: writing wrapper to \(dest.lastPathComponent)")
 				try wrapper.write(to: dest, options: [.atomic], originalContentsURL: nil)
+				BackupTrace.log("auto backup: write complete, pruning (keeping \(retain))")
 				pruneOldBackups(keeping: retain)
+				BackupTrace.log("auto backup: done")
+				return skippedFiles.count
 			}.value
+			if skippedCount > 0 {
+				print("[LandShip] Automatic backup completed with \(skippedCount) file(s) skipped — see Backup_Warnings.txt in the backup")
+			}
 			// Only updates the automatic-backup timestamp — "last backup" (StorageKey.lastBackupDate)
 			// is reserved for manual backups, tracked separately in ContentView.
 			UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: StorageKey.lastAutoBackupDate)
@@ -1106,7 +1305,7 @@ enum AutoBackupService {
 		guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else {
 			throw NSError(domain: "AutoBackup", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to resolve the Documents directory."])
 		}
-		let folder = docs.appendingPathComponent("Backups", isDirectory: true)
+		let folder = docs.appendingPathComponent(backupsFolderName, isDirectory: true)
 		if !fm.fileExists(atPath: folder.path) {
 			try fm.createDirectory(at: folder, withIntermediateDirectories: true)
 		}
@@ -1197,6 +1396,11 @@ struct ManageAutoBackupsView: View {
 			}
 		}
 		.navigationTitle("Automatic Backups")
+#if os(macOS)
+		// Presented in a sheet (or pushed inside the Settings sheet), a macOS sheet sizes itself
+		// to its content — with no minimum it collapsed to a sliver showing one row.
+		.frame(minWidth: 520, minHeight: 440)
+#endif
 		.onAppear(perform: refresh)
 		.alert("Delete This Backup?", isPresented: $showDeleteConfirm) {
 			Button("Delete", role: .destructive) {

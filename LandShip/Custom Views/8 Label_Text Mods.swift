@@ -73,16 +73,33 @@ struct SectionText: View {
 /// — an enroute stop, say — where a plain centred label is easy to scroll past.
 struct SectionBanner: View {
 	let label: String
+	/// Fill color for the banner. Defaults to the vertical's accent color; pass one of the
+	/// `Color.tripPhase*` colors below to color-code a journey phase (start/stop/end)
+	/// consistently across verticals instead of using the accent color.
+	var color: Color = .accentColor
 	var body: some View {
 		Text(label)
 			.font(.system(size: 15, weight: .black, design: .rounded))
 			.foregroundColor(.white)
 			.frame(maxWidth: .infinity, alignment: .center)
 			.padding(.vertical, 5)
-			.background(Color.accentColor.opacity(0.85), in: RoundedRectangle(cornerRadius: 6))
+			.background(color.opacity(0.85), in: RoundedRectangle(cornerRadius: 6))
 			.padding(.top, 6)
 			.accessibilityAddTraits(.isHeader)
 	}
+}
+
+// MARK: hard-coded journey-phase banner colors
+/// Fixed colors (not tied to the vertical's accent color) so a trip's phases read the same
+/// way in every vertical: green to start, amber for an enroute stop, red on arrival —
+/// depth chosen to keep white banner text legible on both light and dark app backgrounds.
+extension Color {
+	static let tripPhaseStart = Color(red: 0.18, green: 0.49, blue: 0.20)
+	static let tripPhaseStop = Color(red: 0.78, green: 0.49, blue: 0.02)
+	static let tripPhaseEnd = Color(red: 0.78, green: 0.16, blue: 0.16)
+	/// A stop with no reason chosen yet isn't really "amber" — this neutral grey keeps the
+	/// banner from implying an active stop reason until one is actually picked.
+	static let tripPhaseStopEmpty = Color(red: 0.44, green: 0.44, blue: 0.46)
 }
 
 // MARK: label + text (string)

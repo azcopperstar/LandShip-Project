@@ -16,6 +16,7 @@ class MxParts1 {
 		var updatedAt: Date = Date()
 		var vehicleId: String = ""
 		var vehicleSystem: String = ""
+		var partCategory: String = ""
 		var partName: String = ""
 		var partNumber: String = ""
 		var partManufacture: String = ""
@@ -109,6 +110,7 @@ class MxParts1 {
 		updatedAt: Date = Date(),
 		vehicleId: String,
 		vehicleSystem: String,
+		partCategory: String = "",
 		partName: String,
 		partNumber: String,
 		partManufacture: String,
@@ -176,6 +178,7 @@ class MxParts1 {
 		self.updatedAt = updatedAt
 		self.vehicleId = vehicleId
 		self.vehicleSystem = vehicleSystem
+		self.partCategory = partCategory
 		self.partName = partName
 		self.partNumber = partNumber
 		self.partManufacture = partManufacture

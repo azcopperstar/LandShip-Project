@@ -380,6 +380,66 @@ private struct LocalOnlyBanner: View {
 	}
 }
 
+/// Shown when the CloudKit-backed store thinks it's working but repeatedly fails to
+/// actually export or import — the case a LocalOnlyBanner never catches, since the
+/// container did initialize fine. Only appears after a few consecutive failures (see
+/// RootStartupView) so a single transient network blip doesn't alarm anyone; a
+/// sustained failure (like the one that prompted this) does need to reach the user,
+/// since their changes may not be reaching iCloud at all.
+private struct SyncFailureBanner: View {
+	@AppStorage(StorageKey.cloudKitLastFailureSummary) private var lastFailureSummary: String = ""
+	@State private var visible = true
+
+	private static let supportAddress = "info@aeronauticaltrax.com"
+
+	private var supportMailURL: URL? {
+		var components = URLComponents()
+		components.scheme = "mailto"
+		components.path = Self.supportAddress
+		components.queryItems = [
+			URLQueryItem(name: "subject", value: "\(AppInfo.displayName) — iCloud sync isn't working"),
+			URLQueryItem(name: "body", value: "iCloud sync has failed repeatedly on this device.\n\nMost recent error:\n\(lastFailureSummary)")
+		]
+		return components.url
+	}
+
+	var body: some View {
+		if visible {
+			HStack(alignment: .top, spacing: 8) {
+				Image(systemName: "exclamationmark.icloud").imageScale(.medium).foregroundStyle(.orange)
+				VStack(alignment: .leading, spacing: 2) {
+					Text("iCloud sync isn't working on this device")
+						.font(.callout.weight(.semibold))
+					Text("Your changes are saved here but may not be backed up to iCloud. Try quitting and reopening the app; if this continues, contact support.")
+						.font(.caption)
+						.foregroundStyle(.secondary)
+					if let supportMailURL {
+						Link("Contact Support", destination: supportMailURL)
+							.font(.caption.weight(.semibold))
+					}
+				}
+				Spacer()
+				Button {
+					withAnimation { visible = false }
+				} label: {
+					Image(systemName: "xmark.circle.fill")
+						.imageScale(.medium)
+						.symbolRenderingMode(.hierarchical)
+				}
+				.buttonStyle(.plain)
+				.accessibilityLabel("Dismiss")
+			}
+			.padding(.horizontal, 12)
+			.padding(.vertical, 8)
+			.background(.thinMaterial)
+			.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+			.padding(.top, 8)
+			.padding(.horizontal, 12)
+			.shadow(radius: 2, y: 1)
+		}
+	}
+}
+
 private struct FatalStartupView: View {
 	let error: Error?
 
@@ -437,6 +497,13 @@ private struct RootStartupView: View {
 	let startupError: Error?
 	@State private var showChangelog = false
 	@Environment(\.entitlements) private var entitlements
+	@AppStorage(StorageKey.cloudKitConsecutiveFailures) private var consecutiveCloudKitFailures = 0
+
+	// Consecutive real failures required before SyncFailureBanner appears — high enough
+	// that one dropped network request on launch doesn't alarm anyone, low enough that
+	// the sustained failure from a broken post-update sync (the case this was built for)
+	// still surfaces on the very next launch or two.
+	private static let syncFailureBannerThreshold = 2
 
 	private let lastShownKey = "LastShownChangelogVersion"
 
@@ -448,6 +515,9 @@ private struct RootStartupView: View {
 					.overlay(alignment: .top) {
 						if isLocalOnly {
 							LocalOnlyBanner()
+								.transition(.move(edge: .top).combined(with: .opacity))
+						} else if consecutiveCloudKitFailures >= Self.syncFailureBannerThreshold {
+							SyncFailureBanner()
 								.transition(.move(edge: .top).combined(with: .opacity))
 						}
 					}
@@ -466,6 +536,11 @@ private struct RootStartupView: View {
 			await entitlements.start()
 			if let modelContainer {
 				entitlements.evaluateOverCapNet(in: modelContainer.mainContext)
+				// The heartbeat only exists to provoke an export; piling it onto a
+				// container CloudKit is already throttling would make that worse.
+				if !isLocalOnly && !CloudKitSyncState.shared.isThrottled {
+					SyncHeartbeatService.ping(in: modelContainer.mainContext)
+				}
 			}
 		}
 		.sheet(isPresented: $showChangelog) {
@@ -491,6 +566,32 @@ private struct RootStartupView: View {
 		let currentVersion = String(AppInfo.version)
 		UserDefaults.standard.set(currentVersion, forKey: lastShownKey)
 		showChangelog = false
+	}
+}
+
+// MARK: - Sync Heartbeat
+
+/// Touches the hidden SyncHeartbeat singleton once per launch, purely to generate a
+/// CloudKit export attempt even if the user hasn't entered any real data. Without this,
+/// a broken sync pipeline on a fresh install or right after an update can sit undetected
+/// until someone enters real records and only then discovers they're stranded locally.
+/// The resulting export is picked up by the same CloudKitSyncMonitor as any other save.
+enum SyncHeartbeatService {
+	static func ping(in context: ModelContext) {
+		let descriptor = FetchDescriptor<SyncHeartbeat>(predicate: #Predicate { $0.id == "primary" })
+		do {
+			let heartbeat = try context.fetch(descriptor).first ?? {
+				let new = SyncHeartbeat()
+				context.insert(new)
+				return new
+			}()
+			heartbeat.lastPingAt = Date()
+			heartbeat.pingCount += 1
+			try context.save()
+			logger.info("💓 Sync heartbeat saved (ping #\(heartbeat.pingCount, privacy: .public))")
+		} catch {
+			logger.error("💓 Sync heartbeat failed to save: \(error.localizedDescription, privacy: .public)")
+		}
 	}
 }
 
@@ -657,11 +758,17 @@ final class CloudKitSyncMonitor: @unchecked Sendable {
 		}
 
 		let kind = Self.describe(event.type)
+		let operation = CloudKitSyncState.Operation(event.type)
 
 		// Each operation posts twice: once on start (endDate == nil), once on
 		// completion. Only the completion carries succeeded/error.
-		guard event.endDate != nil else {
+		guard let endDate = event.endDate else {
 			logger.info("☁️ CloudKit \(kind, privacy: .public) started")
+			if let operation {
+				// Safe: this handler only runs from the eventObserver closure, which
+				// NotificationCenter delivers on queue: .main.
+				MainActor.assumeIsolated { CloudKitSyncState.shared.begin(operation) }
+			}
 			return
 		}
 
@@ -669,6 +776,32 @@ final class CloudKitSyncMonitor: @unchecked Sendable {
 			let message = "✅ CloudKit \(kind) succeeded at \(formatTime(Date()))"
 			print("[LandShip] \(message)")
 			logger.notice("\(message, privacy: .public)")
+			if let operation {
+				MainActor.assumeIsolated {
+					CloudKitSyncState.shared.succeeded(operation, at: endDate)
+					SyncActivityLog.shared.record(.success, operation: operation.rawValue, message: "Completed", at: endDate)
+				}
+			}
+			// Any real success clears the streak that drives SyncFailureBanner — the
+			// banner should only reflect the *current*, sustained state of sync, not
+			// a blip that has since recovered.
+			UserDefaults.standard.set(0, forKey: StorageKey.cloudKitConsecutiveFailures)
+			return
+		}
+
+		if let operation {
+			MainActor.assumeIsolated { CloudKitSyncState.shared.failed(operation, error: error) }
+		}
+
+		// Rate limiting is CloudKit asking us to slow down, not a broken pipeline.
+		// NSPersistentCloudKitContainer reschedules the work itself after the wait, so
+		// it is recorded in CloudKitSyncState (which pauses our own writes) but kept out
+		// of SyncFailureBanner's failure streak.
+		if let wait = CloudKitSyncState.retryAfter(for: error) {
+			logger.notice("⏳ CloudKit \(kind, privacy: .public) throttled — backing off \(Int(wait), privacy: .public)s")
+			MainActor.assumeIsolated {
+				SyncActivityLog.shared.record(.throttled, operation: operation?.rawValue ?? kind, message: "Paused by iCloud; retrying in about \(Int(wait))s", at: endDate)
+			}
 			return
 		}
 
@@ -682,11 +815,30 @@ final class CloudKitSyncMonitor: @unchecked Sendable {
 			return
 		}
 
+		// No network, no iCloud sign-in, or a momentarily unreachable account are expected
+		// conditions, not evidence of a broken sync pipeline — every device that opens the
+		// app in a dead zone would otherwise trip SyncFailureBanner. CloudKit already
+		// retries these on its own once connectivity/account state recovers.
+		if let reason = Self.benignConnectivityReason(error) {
+			logger.info("ℹ️ CloudKit \(kind, privacy: .public) deferred (\(reason, privacy: .public)) — will retry automatically")
+			MainActor.assumeIsolated {
+				SyncActivityLog.shared.record(.deferred, operation: operation?.rawValue ?? kind, message: "Deferred: \(reason)", at: endDate)
+			}
+			return
+		}
+
 		let message = "❌ CloudKit \(kind) FAILED at \(formatTime(Date())): \(error.localizedDescription)"
 		print("[LandShip] \(message)")
 		logger.error("\(message, privacy: .public)")
-		Self.logDetail(for: error)
-		Self.persistFailure(phase: kind, error: error)
+		MainActor.assumeIsolated {
+			SyncActivityLog.shared.record(.failure, operation: operation?.rawValue ?? kind, message: error.localizedDescription, at: endDate)
+		}
+
+		let detail = Self.detailLines(for: error)
+		for line in detail {
+			logger.error("\(line, privacy: .public)")
+		}
+		Self.persistFailure(phase: kind, error: error, detailLines: detail)
 	}
 
 	/// True only if every leaf of this error's tree is CloudKit's own internal
@@ -704,30 +856,63 @@ final class CloudKitSyncMonitor: @unchecked Sendable {
 		}
 	}
 
-	/// Appends real (non-PCS-noise) sync failures to a plain-text log in Application
-	/// Support, so a TestFlight tester who reports "it's not syncing" can locate and
-	/// share the file — Console.app isn't reachable on their device. Also mirrored into
-	/// InAppLogger so the same failure shows up in the long-press Debug Tools sheet.
-	private static func persistFailure(phase: String, error: Error) {
-		let nsError = error as NSError
-		var line = "\(Date()) [\(phase)] \(nsError.domain) code=\(nsError.code): \(nsError.localizedDescription)"
-		if let ckError = error as? CKError, let partial = ckError.partialErrorsByItemID, !partial.isEmpty {
-			let recordNames = partial.keys.compactMap { ($0 as? CKRecord.ID)?.recordName }.joined(separator: ", ")
-			line += " partialFailures=[\(recordNames)]"
+	/// Non-nil (with a human-readable reason) if this error is CloudKit reporting that
+	/// there's currently no way to reach the server — no network, no iCloud account
+	/// signed in, or the account is momentarily unavailable — rather than the server or
+	/// this app having done anything wrong.
+	private static func benignConnectivityReason(_ error: Error) -> String? {
+		guard let ckError = error as? CKError else { return nil }
+
+		func reason(for code: CKError.Code) -> String? {
+			switch code {
+				case .networkUnavailable: return "no network connection"
+				case .networkFailure: return "network request failed"
+				case .notAuthenticated: return "not signed into iCloud"
+				case .accountTemporarilyUnavailable: return "iCloud account temporarily unavailable"
+				default: return nil
+			}
 		}
+
+		if let direct = reason(for: ckError.code) { return direct }
+
+		// A partialFailure can itself be nothing but connectivity errors per item —
+		// still not worth alarming anyone about.
+		if ckError.code == .partialFailure,
+		   let partial = ckError.partialErrorsByItemID, !partial.isEmpty {
+			let reasons = partial.values.compactMap { ($0 as? CKError).flatMap { reason(for: $0.code) } }
+			if reasons.count == partial.count { return reasons.first }
+		}
+
+		return nil
+	}
+
+	/// Appends real (non-PCS-noise) sync failures — with full per-item/per-zone detail,
+	/// not just the top-level localizedDescription — to a plain-text log in Application
+	/// Support, so a TestFlight tester who reports "it's not syncing" can locate and
+	/// share the file. Also mirrored into InAppLogger so the same detail shows up in
+	/// the long-press Debug Tools sheet, without needing Console.app on their device.
+	private static func persistFailure(phase: String, error: Error, detailLines: [String]) {
+		let nsError = error as NSError
+		let header = "\(Date()) [\(phase)] \(nsError.domain) code=\(nsError.code): \(nsError.localizedDescription)"
+		let fullText = ([header] + detailLines).joined(separator: "\n   ")
 
 		// Safe: this is only ever reached from the eventObserver closure, which
 		// NotificationCenter delivers on queue: .main.
 		MainActor.assumeIsolated {
-			InAppLogger.shared.log("❌ CloudKit \(phase) FAILED: \(nsError.domain) code=\(nsError.code): \(nsError.localizedDescription)")
+			InAppLogger.shared.log("❌ CloudKit \(phase) FAILED:\n   " + detailLines.joined(separator: "\n   "))
 		}
 		UserDefaults.standard.set(true, forKey: StorageKey.hasUnreadCloudKitFailure)
 
-		line += "\n"
+		// Drives SyncFailureBanner: a running streak of consecutive real failures
+		// (reset to 0 on any real success above) plus a short summary for its
+		// "Contact Support" mail body.
+		let failureCount = UserDefaults.standard.integer(forKey: StorageKey.cloudKitConsecutiveFailures) + 1
+		UserDefaults.standard.set(failureCount, forKey: StorageKey.cloudKitConsecutiveFailures)
+		UserDefaults.standard.set(header, forKey: StorageKey.cloudKitLastFailureSummary)
 
 		guard let dir = try? FileManager.default.url(
 			for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
-		), let data = line.data(using: .utf8) else { return }
+		), let data = (fullText + "\n").data(using: .utf8) else { return }
 
 		let fileURL = dir.appendingPathComponent("cloudkit-failures.log")
 		if let handle = try? FileHandle(forWritingTo: fileURL) {
@@ -739,37 +924,54 @@ final class CloudKitSyncMonitor: @unchecked Sendable {
 		}
 	}
 
-	/// Unpacks a CloudKit error far enough to name the failing record type and
-	/// record ID, which is what the CloudKit Console hides behind "BAD_REQUEST".
-	private static func logDetail(for error: Error, indent: String = "   ") {
+	/// Unpacks a CloudKit error far enough to name the failing record type, which is
+	/// what the CloudKit Console hides behind "BAD_REQUEST" or a bare "partialFailure".
+	/// Per-item failures (the common case for record saves) are named explicitly; for
+	/// anything else — zone-level partial failures, for instance, which CloudKit doesn't
+	/// expose through partialErrorsByItemID — the raw userInfo is dumped instead of
+	/// silently producing no detail, since guessing every possible key up front is a
+	/// losing game.
+	private static func detailLines(for error: Error, indent: String = "   ") -> [String] {
+		var lines: [String] = []
 		let nsError = error as NSError
-		logger.error("\(indent, privacy: .public)domain: \(nsError.domain, privacy: .public) code: \(nsError.code, privacy: .public)")
+		lines.append("\(indent)domain: \(nsError.domain) code: \(nsError.code)")
 
 		if let ckError = error as? CKError {
-			logger.error("\(indent, privacy: .public)CKError.Code: \(String(describing: ckError.code), privacy: .public)")
+			lines.append("\(indent)CKError.Code: \(String(describing: ckError.code))")
 
 			if let retry = ckError.retryAfterSeconds {
-				logger.error("\(indent, privacy: .public)retryAfter: \(retry, privacy: .public)s")
+				lines.append("\(indent)retryAfter: \(retry)s")
 			}
 
-			// Per-item errors name the exact CKRecord.ID the server rejected.
-			if let partial = ckError.partialErrorsByItemID {
-				logger.error("\(indent, privacy: .public)partial failures: \(partial.count, privacy: .public)")
+			if let partial = ckError.partialErrorsByItemID, !partial.isEmpty {
+				lines.append("\(indent)partial item failures: \(partial.count)")
 				for (itemID, itemError) in partial {
-					logger.error("\(indent, privacy: .public)- item: \(String(describing: itemID), privacy: .public)")
-					logDetail(for: itemError, indent: indent + "   ")
+					let name = (itemID as? CKRecord.ID)?.recordName ?? String(describing: itemID)
+					lines.append("\(indent)- item: \(name)")
+					lines.append(contentsOf: detailLines(for: itemError, indent: indent + "   "))
+				}
+			} else if ckError.code == .partialFailure {
+				// No per-item detail — dump the raw userInfo so the next occurrence
+				// doesn't produce another dead-end log line.
+				lines.append("\(indent)partialFailure with no per-item detail; raw userInfo:")
+				for (key, value) in nsError.userInfo {
+					lines.append("\(indent)- \(key): \(value)")
 				}
 			}
 
 			if let serverRecord = ckError.serverRecord {
-				logger.error("\(indent, privacy: .public)serverRecord type: \(serverRecord.recordType, privacy: .public)")
+				lines.append("\(indent)serverRecord type: \(serverRecord.recordType)")
 			}
+		} else {
+			lines.append("\(indent)userInfo: \(nsError.userInfo)")
 		}
 
 		if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
-			logger.error("\(indent, privacy: .public)underlying:")
-			logDetail(for: underlying, indent: indent + "   ")
+			lines.append("\(indent)underlying:")
+			lines.append(contentsOf: detailLines(for: underlying, indent: indent + "   "))
 		}
+
+		return lines
 	}
 
 	private static func describe(_ type: NSPersistentCloudKitContainer.EventType) -> String {

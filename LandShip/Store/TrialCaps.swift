@@ -46,6 +46,7 @@ extension VehicleSerialItem:  TrialCapped { static let trialLimit = 10; static l
 extension AirworthinessDirective: TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Airworthiness Directives" }
 extension InspectionCycle:    TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Inspections" }
 extension ComponentTimes:     TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Component Times" }
+extension VehicleFluid:       TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Fluids Used" }
 extension HaulOutRecord:      TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Haul-Out Records" }
 extension SurveyRecord:       TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Survey Records" }
 extension PilotLogbookEntry:  TrialCapped { static let trialLimit = 10; static let trialDisplayName = "Logbook Entries" }
@@ -64,7 +65,7 @@ enum TrialCaps {
 		MxItems3.self, VehicleSystems1.self, Vendors1.self, Additions.self, Subscriptions.self,
 		ProjectList.self, CheckList.self, CheckListItem.self,
 		VehicleWarranty.self, VehicleScaleTicket.self, VehicleSerialItem.self,
-		AirworthinessDirective.self, InspectionCycle.self, ComponentTimes.self,
+		AirworthinessDirective.self, InspectionCycle.self, ComponentTimes.self, VehicleFluid.self,
 		HaulOutRecord.self, SurveyRecord.self,
 		PilotLogbookEntry.self, SeaServiceEntry.self,
 		PartInstallation.self, RecordAttachment.self

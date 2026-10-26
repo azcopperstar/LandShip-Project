@@ -4,7 +4,65 @@ Send suggestions for features & improvements to: [info@aeronauticaltrax.com](mai
 
 ----------------------------------
 ----------------------------------
-Version: 2026.09.02 Build: 114
+Version: 2026.12.01 Build: 139
+
+ADDED
+
+## Mac Lists
+- Double-click to edit: double-clicking an item in the second column opens its form directly in edit mode, with no need to select it and then press Edit. Works in Vehicles, Parts, Fuel Log, Trip Log, Service Records, Items, Systems, Vendors, Additions, Subscriptions and Projects.
+
+## Settings
+- New record titles: choose the default title given to anything created with the Add button. Type your own text and insert the item name, date, date and time, time or vehicle name; a live preview is shown. Off by default, and synced to all your devices.
+- Date & Time Format: choose how dates (28OCT2026, 28 Oct 2026, 10/28/2026, 28/10/2026, 2026-10-28 or System) and times (24-hour, 12-hour or System) are shown in lists, forms and reports. Synced to all your devices; the standard style is unchanged until you pick another.
+
+## iCloud Sync
+- Sync status line: a small line under the sidebar logo shows whether iCloud is idle, uploading, downloading, paused or has failed, with the time of the last successful sync.
+- Sync activity popup: tap the status line for a live clock and a scrollable log of recent uploads, downloads and problems, each showing how long ago it happened. The log is kept between launches.
+- Email Developer from the popup: copies the full sync log and opens a message to support with the version, sync state and latest entries. Copy Log and Clear Log are there too.
+
+CHANGED
+
+## iCloud Sync
+- Gentler when iCloud slows us down: if iCloud asks the app to wait, the app now pauses its own background saves and shows "Paused by iCloud" instead of counting it as a sync failure.
+- Restore saves in smaller batches: restoring a backup now writes records in chunks of 200, which is easier on iCloud when the data uploads afterward.
+
+----------------------------------
+----------------------------------
+Version: 2026.11.01 Build: 135
+
+ADDED
+
+## Vehicles
+- Fluids Used sub-form: track the fluid type and quantity required for each fluid-filled component (engine, transmission, rear axle, etc.), shown and editable from the vehicle record.
+- Component name and fluid type are user-definable: pick from your previously entered values or type your own instead of choosing from a fixed list.
+
+## Parts
+- Display Category field: assign a category to each part, picked from previously entered categories or typed fresh.
+- Parts list grouped by category: the Parts list now groups parts into category sections, with uncategorized parts collected under "NO DISPLAY CATEGORY".
+
+FIXED
+
+## Dashboard
+- Inventory Status crash: the dashboard no longer crashes when two suppliers share the same name.
+- Vehicle-scope banner could show an impossible count: "Totals limited to X of Y vehicles" now reflects your actual vehicle list instead of a stale saved list, so renaming or deleting a vehicle no longer leaves it showing the wrong numbers.
+- Inventory Status card was capped at 5 items: it now lists every low or out-of-stock part instead of truncating with a "+N more" caption.
+
+## Debug Tools
+- Debug window fixed on Mac: it now scrolls and no longer cuts off labels or log lines.
+- Email debug log: new Email… button opens a message to support with the log copied for pasting.
+
+## Backup & Restore
+- Backup crashed the app after automatic backups piled up: backups no longer include the automatic-backups folder, which had been nesting every earlier backup inside each new one until the app ran out of memory.
+- Backup could crash on large datasets: a file that couldn't be fully read (e.g. an iCloud file still downloading) no longer crashes or stops the whole backup — it's skipped and listed in a Backup_Warnings.txt file inside the backup, plus a note in the success message.
+
+CHANGED
+
+## Dashboard
+- Vehicle-scope banner now shows how to change it: a short note below it points to the slider icon for adjusting which vehicles count toward totals.
+
+----------------------------------
+----------------------------------
+Version: 2026.09.20 Build: 125
 NOTES
 - This is a major revision with many fixes and new features.  
 - Email us (using the above link or the link on the Resouces tab) with suggestions for improvements, application features or issues with the application.

@@ -550,11 +550,13 @@ struct LabelDataPicker_DateTime: View {
 				.textLabelModified()
 			if let lower = notEarlierThan {
 				DatePicker("", selection: $data, in: lower..., displayedComponents: [.date, .hourAndMinute])
+					.timeDisplayLocale()
 					.pickerModifier()
 					// Follow the lower bound up if the entry time moves past the exit time.
 					.onChange(of: lower) { _, _ in data = clamped(data) }
 			} else {
 				DatePicker("", selection: $data, displayedComponents: [.date, .hourAndMinute])
+					.timeDisplayLocale()
 					.pickerModifier()
 			}
 		}

@@ -91,7 +91,10 @@ struct ChooseVehicle: View {
 
 	/// When set during creation, triggers navigation to the editor for the new vehicle.
 	@State private var newRecordToEdit: Vehicle8?
-	
+
+	/// Set by double-clicking a row; opens the editor for an existing vehicle in edit mode.
+	@State private var vehicleToEdit: Vehicle8?
+
 	/// Edit mode for manual reordering
 	@State private var isEditMode: Bool = false
 	
@@ -212,6 +215,8 @@ struct ChooseVehicle: View {
 							.accessibilityLabel("\(vehicle.displayName), \(yearDescription(vehicle))")
 							.accessibilityHint("Opens \(Vertical.current.assetSingular.lowercased()) details")
 						}
+						// macOS: double-click opens the editor directly in edit mode.
+						.onDoubleClick { vehicleToEdit = vehicle }
 					}
 					// Map deletions from the filtered view back to the underlying model objects.
 					.onDelete(perform: deleteFilteredVehicles)
@@ -321,6 +326,11 @@ struct ChooseVehicle: View {
 			EditVehicle(dataSet: vehicle, trackVehicleSelected: $trackVehicleSelected, startEditing: true, isNewRecord: true)
 				.id(vehicle.id)
 		}
+		// Navigation destination for double-click editing of an existing record.
+		.navigationDestination(item: $vehicleToEdit) { vehicle in
+			EditVehicle(dataSet: vehicle, trackVehicleSelected: $trackVehicleSelected, startEditing: true)
+				.id(vehicle.id)
+		}
 	}
 
 	/// Builds a concise, human-readable vehicle description for accessibility and row subtitles.
@@ -354,7 +364,7 @@ struct ChooseVehicle: View {
 		let newRecord = Vehicle8(
 			inactive: false,
 			name: UUID().uuidString,
-			displayName: "New \(Vertical.current.assetSingular.lowercased())",
+			displayName: DefaultTitle.make(section: "\(Vertical.current.assetSingular)", vehicleId: nil, fallback: "New \(Vertical.current.assetSingular.lowercased())", context: modelContext),
 			manufacturer: "",
 			model: "",
 			year: Calendar.current.component(.year, from: Date()),
@@ -422,8 +432,16 @@ struct ChooseVehicle: View {
 			guard filteredVehicles.indices.contains(idx) else { return nil }
 			return filteredVehicles[idx]
 		}
+		let deletedNames = Set(toDelete.map(\.name))
 		for vehicle in toDelete {
 			modelContext.delete(vehicle)
+		}
+		// Drop deleted vehicles from the dashboard's saved "vehicles included in totals" subset
+		// (Settings1.dashVehicleScopeRaw references vehicles by name), or their names linger as
+		// orphaned entries that silently shrink the dashboard's scope.
+		let settingsFd = FetchDescriptor<Settings1>(predicate: #Predicate<Settings1> { $0.userName == "primary1" })
+		if let settings = try? modelContext.fetch(settingsFd).first, !settings.dashVehicleScopeRaw.isEmpty {
+			settings.dashVehicleScopeRaw.removeAll { deletedNames.contains($0) }
 		}
 		do {
 			try modelContext.save()

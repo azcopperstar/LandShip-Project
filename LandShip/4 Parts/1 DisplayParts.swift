@@ -135,6 +135,39 @@ struct DisplayParts: View {
     /// Currently selected sort option.
     @AppStorage("sort_parts") private var selectedSort: PartsSort = .dateDesc
 
+    // MARK: - Category Grouping
+
+    /// Label used for parts with no assigned category.
+    private static let noCategoryLabel = "NO DISPLAY CATEGORY"
+
+    /// One category bucket of parts, used to drive grouped `Section`s in the list.
+    private struct CategoryGroup: Identifiable {
+        let id: String
+        let items: [MxParts1]
+    }
+
+    /// Buckets the already-sorted `records` by `partCategory`, preserving the incoming
+    /// sort order within each bucket. Named categories are sorted alphabetically; parts
+    /// with no category are grouped last under `noCategoryLabel`.
+    private func groupedByCategory(_ records: [MxParts1]) -> [CategoryGroup] {
+        var order: [String] = []
+        var buckets: [String: [MxParts1]] = [:]
+        for record in records {
+            let trimmed = record.partCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+            let key = trimmed.isEmpty ? Self.noCategoryLabel : trimmed
+            if buckets[key] == nil {
+                buckets[key] = []
+                order.append(key)
+            }
+            buckets[key]?.append(record)
+        }
+        let namedKeys = order
+            .filter { $0 != Self.noCategoryLabel }
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        let keys = order.contains(Self.noCategoryLabel) ? namedKeys + [Self.noCategoryLabel] : namedKeys
+        return keys.map { CategoryGroup(id: $0, items: buckets[$0] ?? []) }
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -204,7 +237,9 @@ struct DisplayParts: View {
                         // Main list of parts with navigation to edit each record.
                         Section {
                             List(selection: $selectedRecord) {
-                                ForEach(records) { record in
+                                ForEach(groupedByCategory(records)) { group in
+                                Section(header: Text(group.id)) {
+                                ForEach(group.items) { record in
                                     NavigationLink {
                                         // The `.id(record.id)` workaround ensures that SplitView updates
                                         // its detail when a new record is selected.
@@ -267,6 +302,10 @@ struct DisplayParts: View {
                                         .accessibilityElement(children: .combine)
                                         .accessibilityLabel("\(record.partName), \(Vertical.current.assetSingular.lowercased()) \(record.vehicleId)")
                                     }
+                                    // macOS: double-click opens the editor directly in edit mode.
+                                    .onDoubleClick { newRecordToEdit = record }
+                                }
+                                }
                                 }
 //                                .textModifier_ListDivider()
                             }
@@ -438,7 +477,7 @@ struct DisplayParts: View {
             updatedAt: Date(),
             vehicleId: trackVehicleSelected == "All Vehicles" ? "" : trackVehicleSelected,
             vehicleSystem: "",
-            partName: "(New Part)",
+            partName: DefaultTitle.make(section: "Part", vehicleId: trackVehicleSelected, fallback: "(New Part)", context: modelContext),
             partNumber: "",
             partManufacture: "",
             partDescription: "",

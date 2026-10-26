@@ -107,9 +107,36 @@ struct SettingsEditorView: View {
 		return String(format: "%.4f°%@, %.4f°%@", abs(latitude), latDirection, abs(longitude), lonDirection)
 	}
 
-	private func bindBool(_ keyPath: ReferenceWritableKeyPath<Settings1, Bool>) -> Binding<Bool> {
+	/// Like `bind`, but also refreshes the local date/time format mirror immediately so the
+	/// whole app picks up the change without waiting on a background sync.
+	private func bindDisplayFormat(_ keyPath: ReferenceWritableKeyPath<Settings1, String>) -> Binding<String> {
 		Binding(
-			get: { settings?[keyPath: keyPath] ?? true },
+			get: { settings?[keyPath: keyPath] ?? "" },
+			set: { newValue in
+				if settings == nil { ensureSettings() }
+				guard let s = settings else { return }
+				s[keyPath: keyPath] = newValue
+				DateDisplayPrefs.mirror(dateRaw: s.dateDisplayStyleRaw, timeRaw: s.timeDisplayStyleRaw)
+			}
+		)
+	}
+
+	/// Appends a placeholder (with a separating space) to the default-title template.
+	private func appendDefaultTitleToken(_ token: DefaultTitle.Token) {
+		if settings == nil { ensureSettings() }
+		guard let s = settings else { return }
+		let separator = s.defaultTitleTemplate.isEmpty || s.defaultTitleTemplate.hasSuffix(" ") ? "" : " "
+		s.defaultTitleTemplate += separator + token.rawValue
+	}
+
+	/// Sample of the current template, shown using a Fuel Log title.
+	private var defaultTitlePreview: String {
+		DefaultTitle.resolve(template: settings?.defaultTitleTemplate ?? DefaultTitle.defaultTemplate, section: "Fuel Log", context: modelContext)
+	}
+
+	private func bindBool(_ keyPath: ReferenceWritableKeyPath<Settings1, Bool>, default defaultValue: Bool = true) -> Binding<Bool> {
+		Binding(
+			get: { settings?[keyPath: keyPath] ?? defaultValue },
 			set: { newValue in
 				if settings == nil { ensureSettings() }
 				settings?[keyPath: keyPath] = newValue
@@ -212,6 +239,49 @@ struct SettingsEditorView: View {
 				Text("Checklists").tag("displayChecklist")
 				Text("Last Section Open").tag("lastSection")
 			}
+		}
+
+		Section {
+			Picker("Date", selection: bindDisplayFormat(\.dateDisplayStyleRaw)) {
+				ForEach(DateDisplayStyle.allCases) { style in
+					Text(style.label).tag(style.rawValue)
+				}
+			}
+			Picker("Time", selection: bindDisplayFormat(\.timeDisplayStyleRaw)) {
+				ForEach(TimeDisplayStyle.allCases) { style in
+					Text(style.label).tag(style.rawValue)
+				}
+			}
+		} header: {
+			Text("Date & Time Format")
+		} footer: {
+			Text("How dates and times are shown in lists, forms and reports. Synced to all your devices. Screens already open may need to be reopened to update.")
+		}
+
+		Section {
+			Toggle("Use Custom Default Titles", isOn: bindBool(\.defaultTitleEnabled, default: false))
+			if settings?.defaultTitleEnabled ?? false {
+				TextField("Title", text: bind(\.defaultTitleTemplate))
+				ScrollView(.horizontal, showsIndicators: false) {
+					HStack {
+						ForEach(DefaultTitle.Token.allCases) { token in
+							Button(token.label) {
+								appendDefaultTitleToken(token)
+							}
+							.buttonStyle(.bordered)
+						}
+					}
+				}
+				LabeledContent("Preview", value: defaultTitlePreview)
+				Button("Reset to Standard") {
+					if settings == nil { ensureSettings() }
+					settings?.defaultTitleTemplate = DefaultTitle.defaultTemplate
+				}
+			}
+		} header: {
+			Text("New Record Titles")
+		} footer: {
+			Text("Sets the title given to a new record created with the Add button, in every section. Type your own text and tap the buttons to insert the item name, date, time or \(Vertical.current.assetSingular.lowercased()) name. Synced to all your devices. When off, each section uses its own standard title.")
 		}
 
 		Section {
@@ -421,6 +491,7 @@ struct SettingsEditorView: View {
 		} footer: {
 			Text("Resets the app’s first-run onboarding so it will be shown again on next launch.")
 		}
+
 	}
 	
 	// Cross-platform content that we can attach navigation/toolbar to
@@ -433,7 +504,9 @@ struct SettingsEditorView: View {
 			}
 			.padding()
 		}
-		.frame(minWidth: 520)
+		// The sheet sizes itself from this root view and doesn't resize when a screen like
+		// Manage Auto-Backups is pushed onto the stack, so the minimum height is set here.
+		.frame(minWidth: 560, minHeight: 620)
 		#else
 		Form {
 			formContent

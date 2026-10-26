@@ -17,6 +17,7 @@ class VehicleFluid {
 	var vehicleId: String = ""
 	var componentName: String = ""
 	var fluidType: String = ""
+	var fluidBrand: String = ""
 	var quantityRequired: Float = 0
 	var quantityUnit: String = ""
 	var createdAt: Date = Date()
@@ -26,6 +27,7 @@ class VehicleFluid {
 		vehicleId: String = "",
 		componentName: String = "",
 		fluidType: String = "",
+		fluidBrand: String = "",
 		quantityRequired: Float = 0,
 		quantityUnit: String = "",
 		createdAt: Date = Date(),
@@ -34,6 +36,7 @@ class VehicleFluid {
 		self.vehicleId = vehicleId
 		self.componentName = componentName
 		self.fluidType = fluidType
+		self.fluidBrand = fluidBrand
 		self.quantityRequired = quantityRequired
 		self.quantityUnit = quantityUnit
 		self.createdAt = createdAt

@@ -302,6 +302,8 @@ struct DisplayFuelLog: View {
 										.cardStyle(backgroundColor: .blue.opacity(0.6))
 									}
 								}
+								// macOS: double-click opens the editor directly in edit mode.
+								.onDoubleClick { newRecordToEdit = record }
 							}
 						}
 						.toolbar {
@@ -508,7 +510,7 @@ struct DisplayFuelLog: View {
 		}
 
 		// Compose a default name and instantiate the new `FuelLog1` with prefilled values.
-		let logName = "Fuel Log: " + functions.formatDate_DDMMMyy_HHmm(date: Date())
+		let logName = DefaultTitle.make(section: "Fuel Log", vehicleId: trackVehicleSelected, fallback: "Fuel Log: " + functions.formatDate_DDMMMyy_HHmm(date: Date()), context: modelContext)
 		let newRecord = FuelLog1(
 			vehicleId: trackVehicleSelected,
 			logName: logName,

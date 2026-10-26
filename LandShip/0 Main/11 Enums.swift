@@ -409,6 +409,11 @@ enum LandFuelType: String, CaseIterable, Identifiable, Hashable {
 
 	// Biodiesel and renewable diesel
 	case biodieselBlend = "Biodiesel Blend (B5–B30)"
+	case biodieselB5 = "Biodiesel B5"
+	case biodieselB10 = "Biodiesel B10"
+	case biodieselB15 = "Biodiesel B15"
+	case biodieselB20 = "Biodiesel B20"
+	case biodieselB30 = "Biodiesel B30"
 	case b100 = "B100"
 	case hvo100 = "HVO100 (Renewable Diesel)"
 	case xtl = "XTL (GTL/BTL/CTL)"
@@ -459,7 +464,7 @@ enum LandFuelType: String, CaseIterable, Identifiable, Hashable {
 			case .regularGasoline, .midGrade, .premium, .superPlus, .leadedHistoric: return .gasoline
 			case .e5, .e10, .e15, .e20, .e25e30, .e85, .e100: return .ethanolBlends
 			case .dieselULSD, .dieselLowHighSulfur, .no1D, .no2D, .no4D, .winterArcticDiesel, .dyedDiesel: return .diesel
-			case .biodieselBlend, .b100, .hvo100, .xtl, .svoWvo: return .biodieselRenewable
+			case .biodieselBlend, .biodieselB5, .biodieselB10, .biodieselB15, .biodieselB20, .biodieselB30, .b100, .hvo100, .xtl, .svoWvo: return .biodieselRenewable
 			case .lpgAutogas, .cng, .lng, .biomethane, .hydrogen: return .gaseous
 			case .acLevel1, .acLevel2, .dcFastCharge, .batterySwap, .phev: return .electric
 			case .methanol, .keroseneParaffin, .dme, .ammonia: return .alcohols
@@ -489,6 +494,11 @@ enum LandFuelType: String, CaseIterable, Identifiable, Hashable {
 			case .winterArcticDiesel: return "CFPP-graded blends, sold seasonally."
 			case .dyedDiesel: return "Chemically identical to regular diesel, tax-marked for off-road, agricultural, and construction use."
 			case .biodieselBlend: return "FAME biodiesel — B5 through B30; mandated levels climbing fast (Indonesia B40, Brazil B15)."
+			case .biodieselB5: return "5% FAME biodiesel blended with diesel — the common European/US pump-diesel ceiling."
+			case .biodieselB10: return "10% FAME biodiesel blend — France's standard diesel since 2022."
+			case .biodieselB15: return "15% FAME biodiesel blend — Brazil's mandated on-road diesel standard."
+			case .biodieselB20: return "20% FAME biodiesel blend — common threshold for fleet/agricultural use requiring engine compatibility checks."
+			case .biodieselB30: return "30% FAME biodiesel blend — used in some fleet and off-road applications with compatible engines."
 			case .b100: return "Pure FAME biodiesel."
 			case .hvo100: return "Hydrotreated vegetable oil, a drop-in paraffinic fuel to EN 15940 — chemically unlike FAME."
 			case .xtl: return "EN 16942 umbrella label for synthetic paraffinic diesel: GTL, BTL, CTL."
@@ -523,7 +533,7 @@ enum LandFuelType: String, CaseIterable, Identifiable, Hashable {
 	var isDieselFamily: Bool {
 		switch self {
 			case .dieselULSD, .dieselLowHighSulfur, .no1D, .no2D, .no4D, .winterArcticDiesel, .dyedDiesel,
-				 .biodieselBlend, .b100, .hvo100, .xtl:
+				 .biodieselBlend, .biodieselB5, .biodieselB10, .biodieselB15, .biodieselB20, .biodieselB30, .b100, .hvo100, .xtl:
 				return true
 			default:
 				return false
@@ -1141,6 +1151,14 @@ enum StorageKey {
 	// cleared when Debug Tools is opened. Drives the badge on AppTitleView so a
 	// sync problem doesn't go unnoticed until a customer reports it.
 	static let hasUnreadCloudKitFailure = "hasUnreadCloudKitFailure"
+
+	// Consecutive real (non-PCS-noise) EXPORT/IMPORT failures since the last success,
+	// and a short summary of the most recent one. Reset to 0 on any real success.
+	// Drives SyncFailureBanner, shown to all users (not just via Debug Tools) once
+	// this crosses a threshold, so a broken pipeline doesn't go unnoticed until a
+	// customer loses data and files a support ticket.
+	static let cloudKitConsecutiveFailures = "cloudKitConsecutiveFailures"
+	static let cloudKitLastFailureSummary = "cloudKitLastFailureSummary"
 #if DEBUG
 	static let debugForcedEntitlement = "debugForcedEntitlement"
 #endif

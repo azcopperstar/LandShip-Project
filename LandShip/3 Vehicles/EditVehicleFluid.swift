@@ -36,6 +36,26 @@ struct EditVehicleFluid: View {
 		fluidTypeSelection == addNewFluidTypeOption ? customFluidTypeText.trimmingCharacters(in: .whitespaces) : fluidTypeSelection
 	}
 
+	// Brand is linked to MxParts1.partName: pick an existing part (this vehicle's, or
+	// "All Vehicles"/unassigned) or type a new name, optionally saving it as a part.
+	@State private var brandSelection: String = ""
+	@State private var customBrandText: String = ""
+	@State private var brandOptions: [String] = []
+	@State private var saveNewBrandAsPart: Bool = false
+	private let noBrandOption = "None"
+	private let addNewBrandOption = "Enter New Part..."
+	private var fluidBrand: String {
+		switch brandSelection {
+		case addNewBrandOption: return customBrandText.trimmingCharacters(in: .whitespaces)
+		case noBrandOption: return ""
+		default: return brandSelection
+		}
+	}
+	private var isNewUnsavedBrand: Bool {
+		brandSelection == addNewBrandOption && !fluidBrand.isEmpty
+			&& !brandOptions.contains { $0.caseInsensitiveCompare(fluidBrand) == .orderedSame }
+	}
+
 	@State private var quantityRequired: Float = 0
 	private let unitOptions = ["qt", "L", "gal", "oz", "mL"]
 	@State private var quantityUnit: String = "qt"
@@ -49,6 +69,7 @@ struct EditVehicleFluid: View {
 		self.fluid = fluid
 		self._componentSelection = State(initialValue: fluid?.componentName.isEmpty == false ? fluid!.componentName : "Engine")
 		self._fluidTypeSelection = State(initialValue: fluid?.fluidType.isEmpty == false ? fluid!.fluidType : "Engine Oil")
+		self._brandSelection = State(initialValue: fluid?.fluidBrand.isEmpty == false ? fluid!.fluidBrand : "None")
 		self._quantityRequired = State(initialValue: fluid?.quantityRequired ?? 0)
 		self._quantityUnit = State(initialValue: fluid?.quantityUnit.isEmpty == false ? fluid!.quantityUnit : "qt")
 	}
@@ -88,6 +109,25 @@ struct EditVehicleFluid: View {
 						}
 						if fluidTypeSelection == addNewFluidTypeOption {
 							HStack { LabelDataTextview(label: "New Fluid Type", data: $customFluidTypeText) }
+						}
+						HStack {
+							Text("Brand / Part")
+								.textLabelModified()
+							Picker("", selection: $brandSelection) {
+								Text(noBrandOption).tag(noBrandOption)
+								ForEach(brandOptions, id: \.self) { name in
+									Text(name).tag(name)
+								}
+								Text(addNewBrandOption).tag(addNewBrandOption)
+							}
+							.pickerStyle(.automatic)
+							.frame(maxWidth: .infinity, alignment: .trailing)
+						}
+						if brandSelection == addNewBrandOption {
+							HStack { LabelDataTextview(label: "New Brand / Part Name", data: $customBrandText) }
+							if isNewUnsavedBrand {
+								Toggle("Save as a part for this vehicle", isOn: $saveNewBrandAsPart)
+							}
 						}
 						HStack { LabelDataTextview_Numberpad_Float(label: "Quantity Required", data: $quantityRequired) }
 						HStack {
@@ -154,6 +194,7 @@ struct EditVehicleFluid: View {
 		.task {
 			loadComponentNames()
 			loadFluidTypes()
+			loadBrandOptions()
 		}
 	}
 
@@ -179,10 +220,46 @@ struct EditVehicleFluid: View {
 		}
 	}
 
+	/// Parts for this vehicle plus "All Vehicles" parts (stored as "All Vehicles" or unassigned).
+	private func loadBrandOptions() {
+		let id = vehicleId
+		let descriptor = FetchDescriptor<MxParts1>(
+			predicate: #Predicate<MxParts1> { $0.vehicleId == id || $0.vehicleId == "All Vehicles" || $0.vehicleId == "" },
+			sortBy: [SortDescriptor(\.partName)]
+		)
+		let parts = (try? modelContext.fetch(descriptor)) ?? []
+		var seen = Set<String>()
+		brandOptions = parts.map(\.partName).filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+		// A saved brand not in the list (e.g. free text from before) is shown in the text field.
+		if brandSelection != noBrandOption, !brandOptions.contains(brandSelection) {
+			customBrandText = brandSelection
+			brandSelection = addNewBrandOption
+		}
+	}
+
 	private func saveFluid() {
+		if isNewUnsavedBrand && saveNewBrandAsPart {
+			modelContext.insert(MxParts1(
+				vehicleId: vehicleId,
+				vehicleSystem: "",
+				partName: fluidBrand,
+				partNumber: "",
+				partManufacture: "",
+				partDescription: "",
+				Notes: "",
+				costPerUnit: 0,
+				partUnit: "",
+				partSource: "",
+				partQuantity: 0,
+				partLocation: "",
+				partStatus: "",
+				partSupplier: ""
+			))
+		}
 		if let existing = fluid {
 			existing.componentName = componentName
 			existing.fluidType = fluidType
+			existing.fluidBrand = fluidBrand.trimmingCharacters(in: .whitespaces)
 			existing.quantityRequired = quantityRequired
 			existing.quantityUnit = quantityUnit
 			existing.updatedAt = Date()
@@ -191,6 +268,7 @@ struct EditVehicleFluid: View {
 				vehicleId: vehicleId,
 				componentName: componentName,
 				fluidType: fluidType,
+				fluidBrand: fluidBrand.trimmingCharacters(in: .whitespaces),
 				quantityRequired: quantityRequired,
 				quantityUnit: quantityUnit
 			)

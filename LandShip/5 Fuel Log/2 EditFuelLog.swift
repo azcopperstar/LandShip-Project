@@ -65,6 +65,7 @@ struct EditFuelLog: View {
 	// MARK: - User Preferences & Units
 
 	@AppStorage("showInactiveVehicles") private var showInactiveVehicles: Bool = false
+	@AppStorage(StorageKey.trackVehicleSelected) private var trackVehicleSelected: String = "All Vehicles"
 
 	// Cache settings (units) once; keep access helper simple and safe.
 	@State private var units: [String] = Array(repeating: "", count: 13)
@@ -447,17 +448,20 @@ struct EditFuelLog: View {
 						
 						HStack{LabelLocationTextview(label: "Location", data: $location)}
 						
-						if Vertical.current.visibleFieldGroups.contains(.odometer) {
-							HStack{LabelDataTextview_Numberpad_Int(label: Vertical.current.distanceMeterLabel, data: $odometer)}
-							// Keep distance/economy up to date when odometer changes.
-								.onChange(of: odometer) { _, _ in
-									computeFuelStats()
-								}
+						HStack{
+							if Vertical.current.visibleFieldGroups.contains(.odometer) {
+								LabelDataTextview_Numberpad_Int(label: Vertical.current.distanceMeterLabel, data: $odometer, fixedWidth: true)
+									// Keep distance/economy up to date when odometer changes.
+									.onChange(of: odometer) { _, _ in
+										computeFuelStats()
+									}
+							}
+							LabelDataTextview_Numberpad_Float(label: Vertical.current.hoursMeterLabel, data: $engHours, fixedWidth: true)
 						}
-						HStack{LabelDataTextview_Numberpad_Float(label: Vertical.current.hoursMeterLabel, data: $engHours)}
 						HStack{
 							Text("Fuel Type")
 								.textLabelModified()
+								.fixedSize()
 							Picker("", selection: $fuelType) {
 								FuelTypePickerOptions(currentValue: fuelType)
 							}
@@ -520,30 +524,26 @@ struct EditFuelLog: View {
 								fuelQuantityStart = Float(vehicleDetails?.fuelCapacity ?? 0) * newFraction
 								recalcFuelEndFromAdded()
 							}
-							HStack{
-								LabelDataTextview_Numberpad_Float(label: "Fuel Added (\(unit(UnitIndex.fuel)))", data: $fuelAdded)
-								// Maintain total cost, the end level, and dependent stats as the amount added changes.
+						}
+						HStack{
+							if vehicleFuelTankCount <= 1 {
+								LabelDataTextview_Numberpad_Float(label: "Added (\(unit(UnitIndex.fuel)))", data: $fuelAdded, fixedWidth: true)
+									// Maintain total cost, the end level, and dependent stats as the amount added changes.
 									.onChange(of: fuelAdded) {_, _ in
 										fuelCost = fuelPrice * fuelAdded
 										recalcFuelEndFromAdded()
 										computeFuelStats()
 									}
 							}
-						}
-						HStack{
-							LabelDataTextview_Numberpad_Currency(label: "Price/\(unit(UnitIndex.fuel))", data: $fuelPrice)
-							// Maintain total cost and dependent stats as price changes.
+							LabelDataTextview_Numberpad_Currency(label: "Price/\(unit(UnitIndex.fuel))", data: $fuelPrice, fixedWidth: true)
+								// Maintain total cost and dependent stats as price changes.
 								.onChange(of: fuelPrice) {_, _ in
 									fuelCost = fuelPrice * fuelAdded
 									computeFuelStats()
 								}
 						}
 						HStack{
-							LabelDataTextview_Numberpad_Currency(label: "Cost", data: $fuelCost)
-							// Update dependent stats when total cost changes.
-								.onChange(of: fuelCost) { _, _ in
-									computeFuelStats()
-								}
+							LabelDataCurrency(label: "Cost", data: fuelPrice * fuelAdded, unit: "")
 						}
 						if vehicleFuelTankCount <= 1 {
 							HStack{
@@ -560,6 +560,34 @@ struct EditFuelLog: View {
 					CardView {
 						VStack {
 							SectionText(label: "FLUIDS ADDED")
+						// DEF only applies to a diesel vehicle, so its fields stay hidden for anything else.
+						if isDieselFamilyFuelType(vehicleDetails?.fuelType ?? "") {
+							HStack{
+								Picker_FuelLevel1(label: "DEF Level", data: $defLevelStart1, data1: Float(vehicleDetails?.defCapacity ?? 0), quantity: $defQuantityStart)
+									.onChange(of: defLevelStart1) { _, newFraction in
+										defQuantityStart = Float(vehicleDetails?.defCapacity ?? 0) * newFraction
+										defLevelStartFraction = functions.getFuelLevel(unit: newFraction)
+										recalcDefEndFromAdded()
+									}
+							}
+							HStack{
+								LabelDataTextview_Numberpad_Float(label: "DEF Added (\(unit(UnitIndex.def)))", data: $defAdded, fixedWidth: true)
+									.onChange(of: defAdded) { _, _ in
+										recalcDefEndFromAdded()
+									}
+							}
+							if defAdded > 0 {
+								HStack{LabelDataTextview_Numberpad_Currency(label: "DEF Price/\(unit(UnitIndex.def))", data: $defPrice)}
+							}
+							if defAdded > 0 {
+								HStack{
+									Picker_FuelLevel1(label: "DEF Level End", data: $defLevel1, data1: Float(vehicleDetails?.defCapacity ?? 0), quantity: $defQuantity)
+										.onChange(of: defLevel1) { _, newFraction in
+											defQuantity = Float(vehicleDetails?.defCapacity ?? 0) * newFraction
+											defLevelFraction = functions.getFuelLevel(unit: newFraction)
+										}
+							}
+							}
 						if Vertical.current.id == .aviation {
 							if engineComponents.isEmpty {
 								HStack{LabelDataTextview_Numberpad_Float(label: "Engine Oil Added (\(unit(UnitIndex.oil)))", data: $oilAddedEngine1)}
@@ -573,32 +601,8 @@ struct EditFuelLog: View {
 							HStack{LabelDataTextview_Numberpad_Float(label: "Hydraulic Fluid Added (\(unit(UnitIndex.oil)))", data: $hydraulicFluidAdded)}
 							HStack{LabelDataTextview_Numberpad_Float(label: "Brake Fluid Added (\(unit(UnitIndex.oil)))", data: $brakeFluidAdded)}
 						} else {
-							HStack{LabelDataTextview_Numberpad_Float(label: "Oil Added (\(unit(UnitIndex.oil)))", data: $oilAdded)}
+							HStack{LabelDataTextview_Numberpad_Float(label: "Oil Added (\(unit(UnitIndex.oil)))", data: $oilAdded, fixedWidth: true)}
 						}
-						// DEF only applies to a diesel vehicle, so its fields stay hidden for anything else.
-						if isDieselFamilyFuelType(fuelType) {
-							HStack{
-								Picker_FuelLevel1(label: "DEF Level Start", data: $defLevelStart1, data1: Float(vehicleDetails?.defCapacity ?? 0), quantity: $defQuantityStart)
-									.onChange(of: defLevelStart1) { _, newFraction in
-										defQuantityStart = Float(vehicleDetails?.defCapacity ?? 0) * newFraction
-										defLevelStartFraction = functions.getFuelLevel(unit: newFraction)
-										recalcDefEndFromAdded()
-									}
-							}
-							HStack{
-								LabelDataTextview_Numberpad_Float(label: "DEF Added (\(unit(UnitIndex.def)))", data: $defAdded)
-									.onChange(of: defAdded) { _, _ in
-										recalcDefEndFromAdded()
-									}
-							}
-							HStack{LabelDataTextview_Numberpad_Currency(label: "DEF Price/\(unit(UnitIndex.def))", data: $defPrice)}
-							HStack{
-								Picker_FuelLevel1(label: "DEF Level End", data: $defLevel1, data1: Float(vehicleDetails?.defCapacity ?? 0), quantity: $defQuantity)
-									.onChange(of: defLevel1) { _, newFraction in
-										defQuantity = Float(vehicleDetails?.defCapacity ?? 0) * newFraction
-										defLevelFraction = functions.getFuelLevel(unit: newFraction)
-									}
-							}
 						}
 						HStack {
 							Button {
@@ -889,10 +893,8 @@ struct EditFuelLog: View {
 								computeFuelStats()
 								linkedTravelLog = linkedTravelLogSummary()
 							}
-						HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
-						HStack{LabelDataText(label: Vertical.current.id == .aviation ? "Arrival Time" : "Date/Time", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.fuelDateTime))")}
-						if let exit = dataSet.fuelExitTime, exit > dataSet.fuelDateTime {
-							HStack{LabelDataText(label: Vertical.current.id == .aviation ? "Departure Time" : "Exit Time", data: "\(functions.formatDate_DDMMMyy_HHmm(date: exit))")}
+						if trackVehicleSelected == "All Vehicles" {
+							HStack{LabelDataText(label: Vertical.current.assetSingular, data: Functions().getVehicleDisplayName(vehicleId: dataSet.vehicleId, context: modelContext))}
 						}
 						HStack{LabelDataText(label: "Log Name", data: "\(dataSet.logName)")}
 						if !linkedTravelLog.isEmpty {
@@ -900,6 +902,11 @@ struct EditFuelLog: View {
 						}
 						if dataSet.location != "" {
 							HStack{LabelDataText(label: "Location", data: "\(dataSet.location)")}
+						}
+						HStack{LabelDataText(label: "Arrive", data: "\(functions.formatDate_DDMMMyy_HHmm(date:dataSet.fuelDateTime))")}
+						if let exit = dataSet.fuelExitTime, exit > dataSet.fuelDateTime {
+							HStack{LabelDataText(label: "Depart", data: "\(functions.formatDate_DDMMMyy_HHmm(date: exit))")}
+							HStack{LabelDataText(label: "Stopped Time", data: stoppedTimeText(from: dataSet.fuelDateTime, to: exit))}
 						}
 						if Vertical.current.visibleFieldGroups.contains(.odometer) {
 							HStack{LabelDataText(label: Vertical.current.distanceMeterLabel, data: "\(dataSet.odometer) \(unit(UnitIndex.distance))")}
@@ -912,14 +919,8 @@ struct EditFuelLog: View {
 				
 				CardView {
 					VStack {
-						SectionText(label: "FUELING DETAILS")
-						HStack{LabelDataText(label: "Fuel Type", data: "\(dataSet.fuelType)")}
-					}
-				}
-
-				CardView {
-					VStack {
 						SectionText(label: "FUEL ADDED & COST")
+						HStack{LabelDataText(label: "Fuel Type", data: "\(dataSet.fuelType)")}
 						if vehicleFuelTankCount > 1 {
 							ForEach(1...vehicleFuelTankCount, id: \.self) { tankNumber in
 								let capacity = fuelTankCapacity(tankNumber)
@@ -930,25 +931,25 @@ struct EditFuelLog: View {
 									VStack(alignment: .leading, spacing: 2) {
 										Text(fuelTankName(tankNumber))
 											.font(.subheadline).fontWeight(.semibold)
-										HStack{LabelDataText(label: "Level Start", data: "\(startQty.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.fuel)) \(functions.getFuelLevel(unit: tankLevelStartBinding(tankNumber).wrappedValue))")}
+										HStack{LabelDataText(label: "Level Start", data: "\(startQty.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.fuel))")}
 										if added > 0 {
 											HStack{LabelDataNumber(label: "Added (\(unit(UnitIndex.fuel)))", data: added, fractionalLength: 1)}
 										}
-										HStack{LabelDataText(label: "Level End", data: "\(endQty.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.fuel)) \(functions.getFuelLevel(unit: tankLevelEndBinding(tankNumber).wrappedValue))")}
+										HStack{LabelDataText(label: "Level End", data: "\(endQty.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.fuel))")}
 									}
 									.padding(.vertical, 2)
 								}
 							}
 						} else {
 							if dataSet.fuelLevelStartFraction != "" {
-								HStack{LabelDataText(label: "Fuel Level Start", data: "\(fuelQuantityStartForDisplay.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.fuel)) \(dataSet.fuelLevelStartFraction)")}
+								HStack{LabelDataText(label: "Fuel Level Start", data: "\(fuelQuantityStartForDisplay.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.fuel))")}
 							}
 							if dataSet.fuelLevelEndFraction != "" {
-								HStack{LabelDataText(label: "Fuel Level End", data: "\(fuelQuantityEndForDisplay.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.fuel)) \(dataSet.fuelLevelEndFraction)")}
+								HStack{LabelDataText(label: "Fuel Level End", data: "\(fuelQuantityEndForDisplay.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.fuel))")}
 							}
 						}
-						HStack{LabelDataCurrency(label: "Price/\(unit(UnitIndex.fuel))", data: dataSet.fuelPrice, unit: "/ \(unit(UnitIndex.fuel))")}
 						HStack{LabelDataNumber(label: "Fuel Added (\(unit(UnitIndex.fuel)))", data: dataSet.fuelAdded, fractionalLength: 1)}
+						HStack{LabelDataCurrency(label: "Price/\(unit(UnitIndex.fuel))", data: dataSet.fuelPrice, unit: "")}
 						HStack{LabelDataCurrency(label: "Cost", data: dataSet.fuelCost, unit: "")}
 					}
 				}
@@ -956,6 +957,22 @@ struct EditFuelLog: View {
 				CardView {
 					VStack {
 						SectionText(label: "FLUIDS ADDED")
+						if dataSet.defAdded > 0.0 {
+							if dataSet.defLevelStartFraction != "" {
+								HStack{LabelDataText(label: "DEF Level Start", data: "\(defQuantityStartForDisplay.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.def))")}
+							}
+							if dataSet.defLevelFraction != "" {
+								HStack{LabelDataText(label: "DEF Level End", data: "\(defQuantityForDisplay.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.def))")}
+							}
+							HStack{LabelDataNumber(label: "DEF Added (\(unit(UnitIndex.def)))", data: dataSet.defAdded, fractionalLength: 1)}
+							if dataSet.defPrice > 0.0 {
+								HStack{LabelDataCurrency(label: "DEF Price/\(unit(UnitIndex.def))", data: dataSet.defPrice, unit: "")}
+								// DEF cost isn't stored — it's the amount added times its price, as fuel Cost is.
+								HStack{LabelDataCurrency(label: "DEF Cost", data: dataSet.defAdded * dataSet.defPrice, unit: "")}
+							}
+						} else if dataSet.defLevelFraction != "" {
+							HStack{LabelDataText(label: "DEF Level", data: "\(defQuantityForDisplay.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.def))")}
+						}
 						if Vertical.current.id == .aviation {
 							if engineComponents.isEmpty {
 								if dataSet.oilAddedEngine1 > 0.0 {
@@ -981,20 +998,6 @@ struct EditFuelLog: View {
 							}
 						} else if dataSet.oilAdded > 0.0 {
 							HStack{LabelDataNumber(label: "Oil Added (\(unit(UnitIndex.oil)))", data: dataSet.oilAdded, fractionalLength: 1)}
-						}
-						if dataSet.defAdded > 0.0 {
-							HStack{LabelDataNumber(label: "DEF Added (\(unit(UnitIndex.def)))", data: dataSet.defAdded, fractionalLength: 1)}
-							if dataSet.defPrice > 0.0 {
-								HStack{LabelDataCurrency(label: "DEF Price/\(unit(UnitIndex.def))", data: dataSet.defPrice, unit: "")}
-								// DEF cost isn't stored — it's the amount added times its price, as fuel Cost is.
-								HStack{LabelDataCurrency(label: "DEF Cost", data: dataSet.defAdded * dataSet.defPrice, unit: "")}
-							}
-						}
-						if dataSet.defLevelStartFraction != "" {
-							HStack{LabelDataText(label: "DEF Level Start", data: "\(defQuantityStartForDisplay.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.def)) \(dataSet.defLevelStartFraction)")}
-						}
-						if dataSet.defLevelFraction != "" {
-							HStack{LabelDataText(label: "DEF Level End", data: "\(defQuantityForDisplay.formatted(.number.precision(.fractionLength(1)))) \(unit(UnitIndex.def)) \(dataSet.defLevelFraction)")}
 						}
 					}
 				}
@@ -1677,6 +1680,22 @@ struct EditFuelLog: View {
 	}
 
 	/// Computes statistics for the current record and vehicle, including:
+	/// How long the stop lasted, from arrival to departure — mirrors the days/hours/minutes
+	/// breakdown used for a trip's total elapsed time.
+	private func stoppedTimeText(from start: Date, to end: Date) -> String {
+		let secs = Int(max(0, end.timeIntervalSince(start)))
+		let days = secs / 86400
+		let hours = (secs % 86400) / 3600
+		let mins = (secs % 3600) / 60
+		if days != 0 {
+			return "\(days) days, \(hours) hours, \(mins) minutes"
+		} else if hours != 0 {
+			return "\(hours) hours, \(mins) minutes"
+		} else {
+			return "\(mins) minutes"
+		}
+	}
+
 	/// - Since-previous metrics (distance, days, economy, price change)
 	/// - Totals up to and including this record (distance, fuel, cost, averages)
 	/// Applies filters based on showInactiveVehicles.

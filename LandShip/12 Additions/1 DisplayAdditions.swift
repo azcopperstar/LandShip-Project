@@ -302,6 +302,8 @@ struct DisplayAdditions: View {
 												}
 												.padding(.vertical, 1)
 											}
+											// macOS: double-click opens the editor directly in edit mode.
+											.onDoubleClick { newRecordToEdit = record }
 										}
 									}
 								}
@@ -392,6 +394,8 @@ struct DisplayAdditions: View {
 											}
 											.padding(.vertical, 1)
 										}
+										// macOS: double-click opens the editor directly in edit mode.
+										.onDoubleClick { newRecordToEdit = record }
 									}
 								}
 							}
@@ -478,7 +482,7 @@ struct DisplayAdditions: View {
 			vehicleId: trackVehicleSelected == "All Vehicles" ? "" : trackVehicleSelected,
 			miles: 0,
 			engHours: 0,
-			itemName: "(New Addition)",
+			itemName: DefaultTitle.make(section: "Improvement", vehicleId: trackVehicleSelected, fallback: "(New Addition)", context: modelContext),
 			itemDescription: "",
 			itemNotes: "",
 			itemVendor: "",
