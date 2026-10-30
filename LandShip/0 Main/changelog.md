@@ -4,7 +4,7 @@ Send suggestions for features & improvements to: [info@aeronauticaltrax.com](mai
 
 ----------------------------------
 ----------------------------------
-Version: 2026.12.01 Build: 139
+Version: 2026.12.01 Build: 141
 
 ADDED
 
@@ -19,6 +19,14 @@ ADDED
 - Sync status line: a small line under the sidebar logo shows whether iCloud is idle, uploading, downloading, paused or has failed, with the time of the last successful sync.
 - Sync activity popup: tap the status line for a live clock and a scrollable log of recent uploads, downloads and problems, each showing how long ago it happened. The log is kept between launches.
 - Email Developer from the popup: copies the full sync log and opens a message to support with the version, sync state and latest entries. Copy Log and Clear Log are there too.
+
+## Vehicles
+- Fluid brand: each fluid entry now has a Brand / Part field. Pick from the parts for that vehicle (plus any marked All Vehicles) or enter a new name, with an option to save the new name as a part for that vehicle.
+
+FIXED
+
+## Vehicles
+- Renaming a vehicle keeps its data linked: fluids, airworthiness directives, inspection cycles, component times, haul-outs, surveys, pilot logbook and sea service entries now follow the new name when you choose to update linked records.
 
 CHANGED
 

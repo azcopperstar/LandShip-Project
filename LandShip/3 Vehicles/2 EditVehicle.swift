@@ -2781,6 +2781,14 @@ struct EditVehicle: View {
 		rename(FetchDescriptor<Subscriptions>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
 		rename(FetchDescriptor<ProjectList>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
 		rename(FetchDescriptor<CheckList>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<VehicleFluid>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<AirworthinessDirective>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<InspectionCycle>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<ComponentTimes>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<HaulOutRecord>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<SurveyRecord>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<PilotLogbookEntry>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
+		rename(FetchDescriptor<SeaServiceEntry>(predicate: #Predicate { $0.vehicleId == oldName })) { $0.vehicleId = newName }
 		rename(FetchDescriptor<Vehicle8>(predicate: #Predicate { $0.linkedMasterVehicleId == oldName })) { $0.linkedMasterVehicleId = newName }
 
 		// The dashboard's saved "vehicles included in totals" subset also references vehicles by
